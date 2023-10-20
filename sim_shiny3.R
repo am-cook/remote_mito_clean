@@ -32,10 +32,11 @@ library(phylogram)
 
 # conda_list()
 
-setwd('/dartfs/rc/lab/M/McKennaLab/projects/Aidan/simulations/r_cell_scripts')
+setwd('/dartfs/rc/lab/M/McKennaLab/projects/Aidan/simulations/r_sim_clean')
 
 source('./import_mutation_functions2.R')
-source('./fit_plot_parameters.R')
+source('./fit_plot_parameters.R') # this should go in an if statement or event (don't always need to do it)
+# for example, if we want static heatmap/dendrogram, then source
 
 # initialize empty vectors to avoid having to delay page appearance below
 poss_trim_depths <- c()
@@ -109,7 +110,8 @@ server <- function(input, output, session){
     # }
     
     cluster_startup_start <- Sys.time()
-    one_cluster <<- makeCluster(num_clusters, outfile = 'outfile.txt')
+    # one_cluster <<- makeCluster(num_clusters, outfile = 'outfile.txt')
+    one_cluster <<- makeCluster(num_clusters)
     clusterEvalQ(cl = one_cluster, c(library('Matrix')))
     clusterExport(cl = one_cluster, c('perform_all_mt_mutations', 'perform_all_bc_mutations', 'transition_func', 'transversion_func',
                                       'insertion_func', 'deletion_func', 'bases', 'transition_matches',
@@ -135,13 +137,49 @@ server <- function(input, output, session){
     
     
   multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parents, timepoint){
+    
+    old_cells_at_timept <- function(timept, cc_length){
+      
+      if(timept == cc_length){
+        return(0)
+      }
+      lb <- sum(sapply(seq(0, timept-2*cc_length, cc_length), function(t){
+        return(2^(t)*init_pop_size)
+      }))
+      return(lb)
+    }
+    
+    # past_length <- 0 # initialize variable that will help to index mutation profile list
     if((timepoint %% cell_cycle_length == 0) & (timepoint > 0)){
       print(paste('allowing cells to divide at ', timepoint, sep = ''))
-      copy_profiles <- unlist(mt_profiles)
+      
+      # if(timepoint == cell_cycle_length){
+      #   # i think we're probably going to need some kind of initial condition here
+      #   print('a')
+      # }
+      
+      num_old_cells <- old_cells_at_timept(timept = timepoint, cc_length = cell_cycle_length)
+      
+      copy_profiles <- rep(unlist(mt_profiles[(num_old_cells + 1):(num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)]), 2) 
       mt_profiles <- append(mt_profiles, copy_profiles)
-      copy_profiles <- unlist(bc_profiles)
+      copy_profiles <- rep(unlist(bc_profiles[(num_old_cells + 1):(num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)]), 2) 
       bc_profiles <- append(bc_profiles, copy_profiles)
-      parents <- append(parents, seq(1, init_pop_size * 2^(timepoint-cell_cycle_length))) # check to make sure this should be cell cycle length
+      
+      
+      
+      # under new framework, have to assign two new parents each division because we're not treating one cell as dividing into two new cells
+      # as opposed to one cell dividing into one new cell while also remaining in the population itself
+      # parents <- append(parents, rep(seq(1, init_pop_size * 2^(timepoint-cell_cycle_length)), 2)) # check to make sure this should be cell cycle length
+      # print(paste0('past_length = ', past_length))
+      
+      print(paste0('at timepoint ', timepoint, ', length(mt_profiles) == ', length(mt_profiles)))
+      parents <- append(parents, rep(seq((num_old_cells + 1), (num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)), 2))
+      print('parents = ')
+      print(parents)
+      
+      # past_length <- length(bc_profiles) - length(copy_profiles) # could have also used mt_profiles for this
+      
+      
     }
     
     print(paste('now beginning ', timepoint, ' mt', sep = ''))
@@ -458,7 +496,7 @@ server <- function(input, output, session){
     stopCluster(one_cluster)
     
     bound_simtime_df <- data.frame(cbind(poss_times, sim_time_vec_mt, sim_time_vec_bc))
-    saveRDS(bound_simtime_df, paste('./timing/shiny_test/rearrange3_sim_time_', savename, 'NUMCORES', num_clusters, '.rds', sep = ''))
+    # saveRDS(bound_simtime_df, paste('./timing/shiny_test/rearrange3_sim_time_', savename, 'NUMCORES', num_clusters, '.rds', sep = ''))
     
     # c(cell_lineage2, bc_profiles) %<-% simulate_modality(num_clusters = input$input_num_cores, 
     #                                                      init_pop_size = as.integer(input$input_init_num_cells), 
@@ -493,7 +531,7 @@ server <- function(input, output, session){
     edge_from <- integer(length = length(cell_lineage))
     edge_to <- integer(length = length(cell_lineage))
     node_sizes <- rep(1, length(cell_lineage)) # default node size is 1
-    print(paste('cell lineage = ', cell_lineage))
+    # print(paste('cell lineage = ', cell_lineage))
     # cell_lineage
     lineage_strings <<- character(length = length(cell_lineage))
     for(i in seq_len(length(cell_lineage))){
@@ -504,25 +542,44 @@ server <- function(input, output, session){
       
       else{ # if the cell has a parent
         
-        node_sizes[cell_lineage[i]] <- node_sizes[cell_lineage[i]] + 1 # add 1 to parent's size
+        node_sizes[cell_lineage[i]] <- node_sizes[cell_lineage[i]] + 1 # add 1 to parent's size, eventually want to shrink nodes with time not grow
         edge_from[i] <- as.integer(cell_lineage[i]) # relative position of parent cell
         edge_to[i] <- i # relative position of the daughter cell
         
         temp_traceback <- cell_lineage[i] # look at the position of the parent cell in the founder parents list
         
-        num_occur <- length(which(cell_lineage[1:i] == cell_lineage[i]))
-        if(num_occur == 0){ # skip altogether if num_occur == 0
-          new_addition <- paste('.', as.character(num_occur+1), sep = '')
-          
+        # num_occur <- length(which(cell_lineage[1:i] == cell_lineage[i]))
+        # if(num_occur == 0){ # skip altogether if num_occur == 0
+        #   new_addition <- paste('.', as.character(num_occur+1), sep = '')
+        #   
+        # }
+        # else{
+        #   new_addition <- paste('.', as.character(num_occur), sep = '')
+        #   
+        # }
+        
+        num_occur <- length(which(lineage_strings[1:i] == paste0(lineage_strings[temp_traceback], '.1')))
+        # print(paste('i =', i))
+        # print(paste0('lineage_strings[temp_traceback] = ', lineage_strings[temp_traceback]))
+        # print(paste('num_occur =', num_occur))
+        if(num_occur == 0){ # if this is the first daughter cell of cell_lineage[i]:
+          lineage_strings[i] <- paste0(lineage_strings[temp_traceback], '.1')
         }
-        else{
-          new_addition <- paste('.', as.character(num_occur), sep = '')
-          
+        else if(num_occur == 1){ # if this is the second daughter cell. because each cell will now split into two daughters
+          lineage_strings[i] <- paste0(lineage_strings[temp_traceback], '.2')
         }
-        lineage_strings[i] <- paste(lineage_strings[temp_traceback], new_addition, sep = '')
+        # lineage_strings[i] <- paste0(lineage_strings[temp_traceback], '.1')
+        # lineage_strings[temp_traceback] <- paste0(lineage_strings[temp_traceback], '.2')
         
       }
     }
+    
+    
+    print('lineage strings= ')
+    print(lineage_strings)
+
+    print('cell lineage = ')
+    print(cell_lineage)
     
     edge_df <<- data.frame(cbind(edge_from, edge_to, rep('to', length(edge_from))))
     colnames(edge_df) <- c('from', 'to', 'arrows')
@@ -564,7 +621,7 @@ server <- function(input, output, session){
     node_df <<- data.frame(seq(1, length(cell_lineage)), lineage_strings, node_sizes)
     colnames(node_df) <- c('id', 'label', 'value')
     
-    print(edge_df)
+    # print(edge_df)
     
     # print(lineage_strings)
     # print(node_df)
