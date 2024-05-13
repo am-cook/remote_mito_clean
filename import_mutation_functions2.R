@@ -33,14 +33,19 @@ library(zeallot)
 # num_cores_stop <- args[3]
 
 
-transition_func <- function(mut_mat, num_rows, num_cols, transition_prob, baseline_ints, uniform = TRUE){
+transition_func <- function(mut_mat, num_rows, num_cols, transition_prob, baseline_ints, dist = 'uniform'){
   
   # Accepts sparse matrix as input, and adds to it the transitions that occur
   
-  if(uniform){
+  if(dist == 'uniform'){
     time_num_transitions <- rbinom(n = 1, size = num_rows*num_cols, prob = transition_prob)
     temp_i_coords <- sample(seq(1, num_rows), size = time_num_transitions, replace = TRUE)
     temp_j_coords <- sample(seq(1, num_cols), size = time_num_transitions, replace = TRUE)  
+  }
+  
+  else{
+    # we'll pass in the sampling distribution as uniform
+    time_num_transitions <- c()
   }
   
   coords <- unique(mapply(list, temp_i_coords, temp_j_coords, SIMPLIFY=F))
@@ -63,36 +68,22 @@ transition_func <- function(mut_mat, num_rows, num_cols, transition_prob, baseli
                                               return(bases[match(baseline_ints[x], transition_matches)]
                                               )})))
   
-  # cat('right before sapply in transition_func()\n', file = 'outfile.txt', append = TRUE)
-  # cat('right after sapply in transition_func()\n', file = 'outfile.txt', append = TRUE)
-  # cat(paste('length(transition_i_coords) = ',length(transition_i_coords), '\n', sep = ''), file = 'outfile.txt', append = TRUE)
-  # cat(paste('length(transition_j_coords) = ', length(transition_j_coords), '\n',sep = ''), file = 'outfile.txt', append = TRUE)
-  # cat(paste('length(transition_x_vals) = ', length(transition_x_vals), '\n',sep = ''), file = 'outfile.txt', append = TRUE)
-  # 
-  # cat(paste('class(transition_i_coords) = ', class(transition_i_coords), '\n', sep = ''), file = 'outfile.txt', append = TRUE)
-  # cat(paste('transition_i_coords = ', transition_i_coords, '\n', sep = ''), file = 'outfile.txt', append = TRUE)
-  # cat(paste('class(transition_j_coords) = ', class(transition_j_coords), '\n',sep = ''), file = 'outfile.txt', append = TRUE)
-  # cat(paste('transition_j_coords = ', transition_j_coords, '\n', sep = ''), file = 'outfile.txt', append = TRUE)
-  # cat(paste('class(transition_x_vals) = ', class(transition_x_vals), '\n',sep = ''), file = 'outfile.txt', append = TRUE)
-  # cat(paste('transition_x_vals = ', transition_x_vals, '\n', sep = ''), file = 'outfile.txt', append = TRUE)
+
   
   new_muts <- sparseMatrix(i = transition_i_coords, j = transition_j_coords, 
                            x = transition_x_vals, dims = c(num_rows, num_cols))
-  # cat(paste(dim(new_muts), '\n', sep = ''), file = 'outfile.txt', append = TRUE)
-  
-  # cat('right before mut mat addition in transition_func()\n', file = 'outfile.txt', append = TRUE)
+
   mut_mat <- mut_mat + new_muts
-  # cat('right after mut mat addition in transition_func()\n', file = 'outfile.txt', a  ppend = TRUE)
   return(mut_mat)
 }
 
 
-transversion_func <- function(mut_mat, num_rows, num_cols, transversion_prob, baseline_ints, uniform = TRUE){
+transversion_func <- function(mut_mat, num_rows, num_cols, transversion_prob, baseline_ints, dist = 'uniform'){
   
   
   # Accepts sparse matrix as input, and adds to it the tranversions that occur
   
-  if(uniform){
+  if(dist == 'uniform'){
     time_num_transversions <- rbinom(n = 1, size = num_rows*num_cols, prob = transversion_prob)
     temp_i_coords <- sample(seq(1, num_rows), size = time_num_transversions, replace = TRUE)
     temp_j_coords <- sample(seq(1, num_cols), size = time_num_transversions, replace = TRUE)  
@@ -120,11 +111,11 @@ transversion_func <- function(mut_mat, num_rows, num_cols, transversion_prob, ba
 
 
 
-insertion_func <- function(mut_mat, num_rows, num_cols, insertion_prob, uniform = TRUE){
+insertion_func <- function(mut_mat, num_rows, num_cols, insertion_prob, dist = 'uniform'){
   
   # Accepts sparse matrix as input, and adds to it the insertions that occur
   
-  if(uniform){
+  if(dist == 'uniform'){
     time_num_insertions <- rbinom(n = 1, size = num_rows*num_cols, prob = insertion_prob)
     temp_i_coords <- sample(seq(1, num_rows), size = time_num_insertions, replace = TRUE)
     temp_j_coords <- sample(seq(1, num_cols), size = time_num_insertions, replace = TRUE)  
@@ -228,11 +219,11 @@ all_deletions_one_mat <- function(i, j, d, old_mat, num_cols){
   
 }
 
-deletion_func <- function(mut_mat, num_rows, num_cols, deletion_prob = deletion_prob, uniform = TRUE){
+deletion_func <- function(mut_mat, num_rows, num_cols, deletion_prob = deletion_prob, dist = 'uniform'){
   
   # Accepts sparse matrix as input, and adds to it the deletions that occur
   
-  if(uniform){
+  if(dist == 'uniform'){
     time_num_deletions <- rbinom(n = 1, size = num_rows*num_cols, prob = deletion_prob)
     temp_i_coords <- sample(seq(1, num_rows), size = time_num_deletions, replace = TRUE)
     temp_j_coords <- sample(seq(1, num_cols), size = time_num_deletions, replace = TRUE)  
@@ -257,15 +248,14 @@ deletion_func <- function(mut_mat, num_rows, num_cols, deletion_prob = deletion_
 
 
 perform_all_mt_mutations <- function(incoming_mut_mat){
-  # get_num_rows <- get(paste('num_rows_', modality, sep = ''))
-  # get_num_cols <- get(paste('num_cols_', modality, sep = ''))
-  # cat('starting perform_all_mutations at ', Sys.time(), '\n', file = 'outfile.txt', append = FALSE)
+
+  
   incoming_mut_mat <- transition_func(mut_mat = incoming_mut_mat, 
                                       num_rows = num_rows_mt, 
                                       num_cols = num_cols_mt, 
                                       transition_prob = transition_prob_mt,
                                       baseline_ints = baseline_seq_ints_mt,
-                                      uniform = TRUE)
+                                      dist = 'uniform')
   
   # cat('finished transition_func\n', file = 'outfile.txt', append = TRUE)
   incoming_mut_mat <- transversion_func(mut_mat = incoming_mut_mat, 
@@ -273,48 +263,46 @@ perform_all_mt_mutations <- function(incoming_mut_mat){
                                         num_cols = num_cols_mt,
                                         transversion_prob = transversion_prob_mt,
                                         baseline_ints = baseline_seq_ints_mt,
-                                        uniform = TRUE)
+                                        dist = 'uniform')
   
   # cat('finished transversion_func\n', file = 'outfile.txt', append = TRUE)
   incoming_mut_mat <- insertion_func(mut_mat = incoming_mut_mat, 
                                      num_rows = num_rows_mt, 
                                      num_cols = num_cols_mt, 
-                                     insertion_prob = insertion_prob_mt)
+                                     insertion_prob = insertion_prob_mt,
+                                     dist = 'uniform')
   # cat('finished insertion_func\n', file = 'outfile.txt', append = TRUE)
   incoming_mut_mat <- deletion_func(mut_mat = incoming_mut_mat, 
                                     num_rows = num_rows_mt, 
                                     num_cols = num_cols_mt, 
-                                    deletion_prob = deletion_prob_mt)
+                                    deletion_prob = deletion_prob_mt,
+                                    dist = 'uniform')
   return(incoming_mut_mat)
   
 }
 
 perform_all_bc_mutations <- function(incoming_mut_mat){
-  # get_num_rows <- get(paste('num_rows_', modality, sep = ''))
-  # get_num_cols <- get(paste('num_cols_', modality, sep = ''))
-  # cat('starting perform_all_mutations at ', Sys.time(), '\n', file = 'outfile.txt', append = FALSE)
+
   incoming_mut_mat <- transition_func(mut_mat = incoming_mut_mat, 
                                       num_rows = num_rows_bc, 
                                       num_cols = num_cols_bc, 
                                       transition_prob = transition_prob_bc, 
                                       baseline_ints = baseline_seq_ints_bc,
-                                      uniform = TRUE)
+                                      dist = 'uniform')
   
-  # cat('finished transition_func\n', file = 'outfile.txt', append = TRUE)
   incoming_mut_mat <- transversion_func(mut_mat = incoming_mut_mat, 
                                         num_rows = num_rows_bc, 
                                         num_cols = num_cols_bc,
                                         transversion_prob = transversion_prob_bc, 
                                         baseline_ints = baseline_seq_ints_bc,
-                                        uniform = TRUE)
+                                        dist = 'uniform')
   
-  # cat('finished transversion_func\n', file = 'outfile.txt', append = TRUE)
   incoming_mut_mat <- insertion_func(mut_mat = incoming_mut_mat, 
                                      num_rows = num_rows_bc, 
                                      num_cols = num_cols_bc, 
                                      insertion_prob = insertion_prob_bc)
-  # cat('finished insertion_func\n', file = 'outfile.txt', append = TRUE)
-  incoming_mut_mat <- deletion_func(mut_mat = incoming_mut_mat, 
+
+    incoming_mut_mat <- deletion_func(mut_mat = incoming_mut_mat, 
                                     num_rows = num_rows_bc, 
                                     num_cols = num_cols_bc, 
                                     deletion_prob = deletion_prob_bc)
@@ -322,187 +310,4 @@ perform_all_bc_mutations <- function(incoming_mut_mat){
   
 }
 
-# print_size <- function(mat){
-#   print(dim(mat))
-# }
 
-##################################################################################################################
-# simulate_modality <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length,
-#                               num_rows_mt, num_cols_mt, num_rows_bc, num_cols_bc, time_inc,
-#                               transition_prob_mt, transversion_prob_mt, insertion_prob_mt, deletion_prob_mt,
-#                               transition_prob_bc, transversion_prob_bc, insertion_prob_bc, deletion_prob_bc,
-#                               savename, progress_indicator, transition_mut_dist_mt = NULL,
-#                               transversion_mut_dist_mt = NULL, insertion_mut_dist_mt = NULL, deletion_mut_dist_mt = NULL,
-#                               transition_mut_dist_bc = NULL,
-#                               transversion_mut_dist_bc = NULL, insertion_mut_dist_bc = NULL, deletion_mut_dist_bc = NULL){
-#   
-#   poss_times <- seq(0, sim_length, time_inc)
-#   # incoming_profiles <- lapply(seq(1, num_cells), function(x){return(sparseMatrix(i = c(), j = c(), 
-#   #                                                                                dims = c(num_rows, num_cols)))})
-#   incoming_mt_profiles <- lapply(seq(1, init_pop_size), function(x){return(sparseMatrix(i = c(), j = c(), 
-#                                                                                      dims = c(num_rows_mt, num_cols_mt)))})
-#   incoming_bc_profiles <- lapply(seq(1, init_pop_size), function(x){return(sparseMatrix(i = c(), j = c(), 
-#                                                                                         dims = c(num_rows_bc, num_cols_bc)))})
-#   # print(paste('length(incoming_profiles) = ', length(incoming_profiles), sep = ''))
-#   
-#   baseline_seq_ints_mt <- sample(seq(1,4), size = num_cols_mt, replace = TRUE)
-#   baseline_seq_ints_bc <- sample(seq(1,4), size = num_cols_bc, replace = TRUE)  
-#   
-#   # t <- 0
-#   sim_time_vec_mt <- numeric()
-#   sim_time_vec_bc <- numeric()
-#   # cluster_startup_times <- c()
-#   
-#   # here, we'll implement the parent list as being pre-defined, which is fine so long as we always allow all cells to divide (I think)
-#   # will have to change this if i eventually change the logic of having cells divide once before mutating
-#   parent_vec <- rep(0, init_pop_size)
-#   
-#   # working on this .......
-#   # for(t in 1:length(poss_times)){
-#   #   for(val in seq(2^t * init_pop_size + 1, ))
-#   # }
-#   
-#   
-#   one_cluster <- makeCluster(num_clusters, outfile = 'outfile.txt')
-#   clusterEvalQ(cl = one_cluster, c(library('Matrix')))
-#   clusterExport(cl = one_cluster, c('perform_all_mutations', 'transition_func', 'transversion_func',
-#                                     'insertion_func', 'deletion_func', 'bases', 'transition_matches',
-#                                     'transversion_matches', 'baseline_seq_ints_mt', 'baseline_seq_ints_bc',
-#                                     'incoming_mt_profiles', 'incoming_bc_profiles', 
-#                                     'num_deletable_bases', 'perform_deletion', 'all_deletions_one_mat',
-#                                     'num_rows_bc', 'num_cols_bc', 'num_rows_mt', 'num_cols_mt',
-#                                     'init_pop_size', 'transition_prob_bc', 'transversion_prob_bc', 
-#                                     'insertion_prob_bc', 'deletion_prob_bc', 'transition_mut_dist_bc', 
-#                                     'transversion_mut_dist_bc', 'insertion_mut_dist_bc', 'deletion_mut_dist_bc',
-#                                     'transition_prob_mt', 'transversion_prob_mt', 
-#                                     'insertion_prob_mt', 'deletion_prob_mt', 'transition_mut_dist_mt', 
-#                                     'transversion_mut_dist_mt', 'insertion_mut_dist_mt', 'deletion_mut_dist_mt',
-#                                     'cell_cycle_length'),
-#                 envir = environment())
-#   
-#   
-#   
-#   
-#   for(t in 1:length(poss_times)){
-#     
-#     if((poss_times[t] %% cell_cycle_length == 0) & (poss_times[t] > 0)){
-#       print(paste('allowing cells to divide at ', poss_times[t], sep = ''))
-#       copy_profiles <- unlist(incoming_mt_profiles)
-#       incoming_mt_profiles <- append(incoming_mt_profiles, copy_profiles)
-#       copy_profiles <- unlist(incoming_bc_profiles)
-#       incoming_bc_profiles <- append(incoming_bc_profiles, copy_profiles)
-#       parent_vec <- append(parent_vec, seq(1, init_pop_size * 2^(poss_times[t]-cell_cycle_length))) # check to make sure this should be cell cycle length
-#     }
-#     
-#     print(paste('now beginning ', poss_times[t], ' mt', sep = ''))
-#     
-#     # progress_indicator <<- t
-#     
-#     mt_start_time <- Sys.time()
-#     # have to replicate both mt and bc info (for identical cells)
-#     
-#     # print('right before the parLapply')
-#     incoming_mt_profiles <- parLapply(cl = one_cluster, X = seq(1, length(incoming_mt_profiles)), fun = function(x){
-#       
-#       return(perform_all_mutations(incoming_mt_profiles[[x]], num_rows_mt, num_cols_mt))
-#       
-#     })
-#     
-#     mt_end_time <- Sys.time()
-#     
-#     mt_mutation_time <- difftime(mt_end_time, mt_start_time, units = 'secs')
-#     
-#     sim_time_vec_mt <- c(sim_time_vec_mt, mt_mutation_time)
-#     
-#     print(paste('now beginning ', poss_times[t], ' bc', sep = ''))
-#     bc_start_time <- Sys.time()
-#     incoming_bc_profiles <- parLapply(cl = one_cluster, X = seq(1, length(incoming_bc_profiles)), fun = function(x){
-#       return(perform_all_mutations(incoming_bc_profiles[[x]], num_rows_bc, num_cols_bc))
-#     })
-#     bc_end_time <- Sys.time()
-#     
-#     bc_mutation_time <- difftime(bc_end_time, bc_start_time, units = 'secs')
-#     
-#     sim_time_vec_bc <- c(sim_time_vec_bc, bc_mutation_time)
-#     # temp_end_time <- Sys.time()
-#     # sim_timepoint_timing <- difftime(temp_end_time, temp_start_time, units = 'secs')
-#     # sim_time_vec <- c(sim_time_vec, sim_timepoint_timing)
-#     # print(sim_time_vec)
-#     
-#   }
-#   stopCluster(one_cluster)
-#   
-#   bound_simtime_df <- data.frame(cbind(poss_times, sim_time_vec))
-#   saveRDS(bound_simtime_df, paste('./timing/shiny_test/rearrange_sim_time_', savename, 'NUMCORES', num_clusters, '.rds', sep = ''))
-#   
-#   # could so something like
-#   return_list <- list('lineage_info' = parent_vec, 'mutated_profiles' = incoming_profiles)
-#   return(return_list)
-#   
-#   # return(incoming_profiles)
-#   
-# }
-######################################################################################
-
-############################################################### 9/12
-# mt_start_time <- Sys.time()
-# mt_profiles <- simulate_modality(num_clusters = num_cores, init_pop_size = num_instances, sim_length = sim_length,
-#                                  cell_cycle_length = cell_cycle_length,
-#                                  num_rows = 500, num_cols = 16500, time_inc = time_inc,
-#                                  transition_prob = 0.00003, transversion_prob = 0.00001,
-#                                  insertion_prob = 0.000005, deletion_prob = 0.000005,
-#                                  mut_profiles = list(), savename = paste('mt_profiles_', num_instances, '_cells_', sim_length, '_simlength', sep = ''),
-#                                  num_cells = num_instances,
-#                                  transition_mut_dist = NULL,
-#                                  transversion_mut_dist = NULL, insertion_mut_dist = NULL, deletion_mut_dist = NULL, modality = 'mt')
-# mt_end_time <- Sys.time()
-# tot_mt_time <- difftime(mt_end_time, mt_start_time, units = 'secs')
-# print(paste('total mt time = ', tot_mt_time))
-# print(paste('length of mt_profiles = ', length(mt_profiles), sep = ''))
-
-
-###############################################################
-# print(class(mt_profiles[[1]][1,1]))
-# print(paste('mt_profiles[[1]]' = mt_profiles[[1]], sep = ''))
-# print(paste('sum(mt_profiles[[1]]) = ', sum(mt_profiles[[1]]), sep = ''))
-# saveRDS(mt_profiles, './profiles/new_framework_still_works.rds')
-
-################################################################## 9/12
-# bc_profiles <- simulate_modality(num_clusters = num_cores, init_pop_size = num_instances, sim_length = sim_length,
-#                                  cell_cycle_length = cell_cycle_length,
-#                                  num_rows = 10, num_cols = 300, time_inc = time_inc,
-#                                  transition_prob = 0.03, transversion_prob = 0.01,
-#                                  insertion_prob = 0.05, deletion_prob = 0.05,
-#                                  mut_profiles = list(), savename = paste('bc_profiles_', num_instances, '_cells_', sim_length, '_simlength', sep = ''),
-#                                  num_cells = num_instances,
-#                                  transition_mut_dist = NULL,
-#                                  transversion_mut_dist = NULL, insertion_mut_dist = NULL, deletion_mut_dist = NULL, modality = 'bc')
-##################################################################
-
-##################################################################
-# bc_start_time <- Sys.time()
-
-# bc_profiles <- simulate_modality(num_clusters = num_cores, init_pop_size = num_instances, sim_length = sim_length,
-#                                  cell_cycle_length = cell_cycle_length,
-#                                  num_rows = 10, num_cols = 300, time_inc = time_inc,
-#                                  transition_prob = 0.00003, transversion_prob = 0.00001,
-#                                  insertion_prob = 0.000005, deletion_prob = 0.000005,
-#                                  mut_profiles = list(), savename = paste('bc_profiles_', num_instances, '_cells_', sim_length, '_simlength', sep = ''),
-#                                  num_cells = num_instances,
-#                                  transition_mut_dist = NULL,
-#                                  transversion_mut_dist = NULL, insertion_mut_dist = NULL, deletion_mut_dist = NULL, modality = 'bc')
-
-# bc_profiles <- simulate_modality(num_clusters = num_cores, init_pop_size = num_instances, sim_length = sim_length,
-#                                  cell_cycle_length = cell_cycle_length,
-#                                  num_rows = 10, num_cols = 300, time_inc = time_inc,
-#                                  transition_prob = 0.03, transversion_prob = 0.01,
-#                                  insertion_prob = 0.05, deletion_prob = 0.05,
-#                                  mut_profiles = list(), savename = paste('bc_profiles_', num_instances, '_cells_', sim_length, '_simlength', sep = ''),
-#                                  num_cells = num_instances,
-#                                  transition_mut_dist = NULL,
-#                                  transversion_mut_dist = NULL, insertion_mut_dist = NULL, deletion_mut_dist = NULL, modality = 'bc')
-
-# bc_end_time <- Sys.time()
-# bc_tot_time <- difftime(bc_end_time, bc_start_time, units = 'secs')
-# print(paste('with different edit rate params, tot bc time = ', bc_tot_time, sep = ''))
-# print(paste('length of bc_profiles = ', length(bc_profiles), sep = ''))

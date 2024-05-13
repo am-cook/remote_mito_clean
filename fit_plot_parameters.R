@@ -43,13 +43,15 @@ legend(x = 'top',
 dev.off()
 # the splines fit better than the loess curves
 
-get_heatmap_params <- function(num_cells){
+get_heatmap_params <- function(num_cells, num_muts){
   y_est <- predict(y_spline, num_cells)$y
   height_est <- predict(height_spline, num_cells)$y
-  font_est <- predict(font_size_spline, num_cells)$y
+  font_est_y <- predict(font_size_spline, num_cells)$y
+  font_est_x <- (predict(font_size_spline, num_muts)$y)/2
   x_in <- 10+(0.01*num_cells)
   y_in <- x_in
-  return_list <- list('y' = y_est, 'height' = height_est, 'font' = font_est, 
+  return_list <- list('y' = y_est, 'height' = height_est, 'font_y' = font_est_y, 
+                      'font_x' = font_est_x,
                       'x_inches' = x_in, 'y_inches' = y_in)
   return(return_list)
 }
