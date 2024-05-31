@@ -51,10 +51,12 @@ option_list <- list(
               help = 'cell cylce length'),
   make_option(c('-t', '--time_inc'), type = 'numeric', default = 0.5,
               help = 'simulation time increment'),
-  make_option(c('-m', '--mito_per_cell'), type = 'numeric', default = 100,
-              help = 'mitochondria per cell'),
-  make_option(c('-g', '--genomes_per_mito'), type = 'numeric', default = 5,
-              help = 'genomes per mitochondrion'),
+  make_option('--max_mito_genomes_per_cell', type = 'integer', default = 500,
+              help = 'mito genomes per cell (if multiple: "num_genomes1; num_genomes2; etc.")'),
+  # make_option(c('-m', '--mito_per_cell'), type = 'numeric', default = 100,
+  #             help = 'mitochondria per cell'),
+  # make_option(c('-g', '--genomes_per_mito'), type = 'numeric', default = 5,
+  #             help = 'genomes per mitochondrion'),
   make_option(c('-b', '--bc_length'), type = 'integer', default = 300,
               help = 'barcode length'),
   make_option(c('-I', '--max_bc_ints_per_cell'), type = 'integer', default = 10,
@@ -147,7 +149,7 @@ option_list <- list(
               'beast' = use BEAST to reconstruct lineage"),
   # can allow -S here to equal af or bin, for example
   make_option(c('-S', '--score_approach'), type = 'character', default = NULL,
-              help = 'only relevant if reconstruction_method == "score": mutation score approach {"af", "bin", "both"}'),
+              help = 'relevant if reconstruction_method == "score": mutation score approach {"af", "bin"} (if both: "both" or "af; bin"'),
   make_option(c('-F', '--sampling_fractions'), type = 'character', default = '1',
               help = 'cell sampling fraction (if multiple: "frac1; frac2; etc.")'),
   make_option(c('-l', '--mt_allelic_fractions'), type = 'character', default = '0',
@@ -156,6 +158,11 @@ option_list <- list(
               help = 'bc allelic fraction threshold, filter out mutations occurring at fraction below this thresh (if multiple: "frac1; frac2; etc.")'),
   make_option(c('-R', '--filter_binary_with_af'), type = 'logical', default = TRUE,
               help = 'if true, will only consider mutations with allelic fractions greater than provided thresholds prior to generating binary score matrices'),
+  
+  make_option('--mt_genome_recovery_prob', type = 'numeric', default = 1,
+              help = 'independent probability of recovering a given copy of the mito genome at the end of the experiment (prior to allelic fraction generation)'),
+  make_option('--bc_integration_recovery_prob', type = 'numeric', default = 1,
+              help = 'independent probability of recovering a given integration fo the barcode at the end of the experiment (prior to allelic fraction generation)'),
   
   make_option(c('-o', '--recon_modality'), type = 'character', default = 'integrated',
               help = 'score modalities used for tree construction {mt, bc, integrated} (if multiple: "modality1; modality2; etc.")'),
@@ -218,17 +225,17 @@ option_list <- list(
   gamma_shape_param is a numeric. num_discrete_bins is an int. bin_agg_metric is mean or median.
   If num_discrete_bins == 0, gamma distribution is not discretized.
   Example (if heterogeneity desired): '0.5; 5; mean'"),
-  make_option('--bc_target_heterogeneitiy_gamma', type = 'character', default = NULL,
+  make_option('--bc_target_heterogeneity_gamma', type = 'character', default = NULL,
               help = "Simultaneously assign mutation rates and add heterogeneity to target positions by estimating a gamma distribution,\n
   discretizing it into classes for HML edit rate classes, and sampling mutation rates from bootstrapped edit-rate-class distributions.\n
   Form: 'shape_param; scale_param"), 
   
   make_option('--jitter_fraction', type = 'numeric', default = 0.05,
-              help = 'Mitochondiral profile jitter probab')
+              help = 'Mitochondiral profile jitter probability (ie independent probability a given mito genome is lost at division timepoint')
+  
 
   #######################################
 )
-
 opt_parser <- OptionParser(option_list = option_list, add_help_option = FALSE)
 input_args <- parse_args(opt_parser)
 
@@ -1862,6 +1869,7 @@ poss_sampling_fracs <- process_cla_string(input_args$sampling_fractions, outputt
 poss_mt_afs <- process_cla_string(input_args$mt_allelic_fractions, outputted_type = 'numeric')
 poss_bc_afs <- process_cla_string(input_args$bc_allelic_fractions, outputted_type = 'numeric')
 poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, outputted_type = 'integer')
+poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
 
 # if sim lengths are specified using start:stop:inc, define sim lengths accordingly
 if(grepl(pattern = ':', x = input_args$sim_length)){
@@ -1875,10 +1883,11 @@ if(grepl(pattern = ':', x = input_args$sim_length)){
 poss_recon_modals <- process_cla_string(input_args$recon_modality, outputted_type = 'character')
 
 # score_types:
-poss_score_types <- c(str_replace_all(input_args$score_approach, ' ', ''))
 # only have to rewrite if both was chosen
 if(input_args$score_approach == 'both'){
   poss_score_types <- c('af', 'bin')
+} else{
+  poss_score_types <- process_cla_string(input_args$score_approach, outputted_type = 'character')
 }
 
 
@@ -2094,9 +2103,9 @@ add_mito_jitter <- function(mt_mutation_mat, frac_copies_lost){
   #     file = 'no_strings.txt', append = TRUE)
   
   if(frac_copies_lost > 0){
-    # Poisson draw to determine how many rows of the mt_mutation_mat will be lost
+    # binomial draw to determine how many rows of the mt_mutation_mat will be lost
     # the remainder will be amplified at random
-    num_copies_lost <- rpois(n = 1, lambda = nrow(mt_mutation_mat)*frac_copies_lost)
+    num_copies_lost <- rbinom(size = nrow(mt_mutation_mat), n = 1, prob = frac_copies_lost)
     rows_lost <- sample(x = seq(1, nrow(mt_mutation_mat)), size = num_copies_lost, replace = FALSE)
     
     # here we allow some rows to be duplicated more than once
@@ -2533,7 +2542,7 @@ const_sim_arglist <- list(num_clusters = input_args$num_cores,
                           init_pop_size = input_args$num_init_cells,
                           sim_length = max(sim_length_stopping_points),
                           cell_cycle_length = input_args$cell_cycle_length,
-                          num_rows_mt = round(input_args$mito_per_cell * input_args$genomes_per_mito),
+                          num_rows_mt = max(poss_num_mito_genomes),
                           num_cols_mt = input_args$mito_genome_length,
                           num_rows_bc = max(poss_num_bc_integrations),
                           num_cols_bc = input_args$bc_length,
@@ -2631,6 +2640,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                    sim_time_vec_mt = sim_time_vec_mt, 
                                    sim_time_vec_bc = sim_time_vec_bc)
   
+  cat('\npast describe_mutation_process_timing()\n', file = 'no_strings.txt', append = TRUE)
+  
   save_mutation_profiles <- function(mt_profiles, bc_profiles){
     # create mut_profiles subdirectory if it doesn't exist
     if(!dir.exists(file.path('output', 'mut_profiles', unique_run_id))){
@@ -2651,7 +2662,15 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   save_mutation_profiles(mt_profiles = mt_profiles,
                          bc_profiles = bc_profiles)
   
-  summarize_allelic_scores_indexing <- function(mut_profiles, num_cores, linstrings, num_integrations = NULL){ 
+  cat('\npast save_mutation_profiles()\n', file = 'no_strings.txt', append = TRUE)
+  
+  summarize_allelic_scores_indexing <- function(mut_profiles, num_cores, linstrings, recovery_prob, num_integrations = NULL){ 
+    
+    # mut_profiles is incoming list of mutation profiles
+    # num_cores is number of cpu cores
+    # linstrings is cell name identifiers
+    # recovery_prob is the expected fraction of bc integrations or mito genome copies that are "recovered" at the end of the experiment
+    # num_integrations is the max possible number of bc integrations or mito genome copies that can be recovered
     
     if(is.null(num_integrations)){
       num_integrations <- nrow(mut_profiles[[1]])
@@ -2670,7 +2689,11 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
       
     })
     
-    clusterExport(cl = allelic_scores_cluster, varlist = c('mut_profiles', 'num_integrations'), envir = environment())
+    clusterExport(cl = allelic_scores_cluster, 
+                  varlist = c('mut_profiles', 'num_integrations', 'recovery_prob'), 
+                  envir = environment())
+    
+    cat('\nafter clusterExport SASI', file = 'no_strings.txt', append = TRUE)
     
     cluster_startup_end_time <- Sys.time()
     
@@ -2694,10 +2717,47 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         
       }
       else{
-        mut_mat <- mut_profiles[[mut_mat_num]][1:num_integrations, ]    
+        # we want to get number of recovered sequences by sampling from num_integrations according to probability recovery_prob
+        # as well as WHICH of the integrations/genomes were actually recovered
+        num_recovered_ints <- rbinom(size = num_integrations, n = 1, prob = recovery_prob)
+        cat(paste0('\nfor mut_mat_num == ', mut_mat_num, 'num_recovered_ints == ', num_recovered_ints, ' for recovery_prob == ', recovery_prob), 
+            file = 'no_strings.txt', append = TRUE)
+        which_ints_recovered <- sample(seq(1, num_integrations), size = num_recovered_ints, replace = FALSE)
+        
+        cat('\n which_ints_recovered == \n', file = 'no_strings.txt', append = TRUE)
+        cat(which_ints_recovered, file = 'no_strings.txt', append = TRUE)
+        
+        
+        
+        mut_mat <- mut_profiles[[mut_mat_num]][which_ints_recovered, ]
+        cat(paste0('\nclass(mut_mat) prior to conversion == ', class(mut_mat), '\n'), file = 'no_strings.txt', append = TRUE)
+        
+        
+        if(num_recovered_ints == 1){
+          cat('\n is the problem in here when ints == 1 \n', file = 'no_strings.txt', append = TRUE)
+          # have to reformat (as above) if only 1 integration is recovered
+          mut_mat <- matrix(mut_mat, nrow = 1)  
+        }
+        
+        
+        
+        cat('\n class(mut_profiles[[mut_mat_num]]) == \n', file = 'no_strings.txt', append = TRUE)
+        cat(class(mut_profiles[[mut_mat_num]]), file = 'no_strings.txt', append = TRUE)
+        
+        cat('\n dim(mut_profiles[[mut_mat_num]]) == \n', file = 'no_strings.txt', append = TRUE)
+        cat(dim(mut_profiles[[mut_mat_num]]), file = 'no_strings.txt', append = TRUE)
       }
       
+      # cat('\n class(mut_coords) == \n', file = 'no_strings.txt', append = TRUE)
+      # cat(class(mut_coords), file = 'no_strings.txt', append = TRUE)
+      # 
+      # cat('\n dim(mut_coords) == \n', file = 'no_strings.txt', append = TRUE)
+      # cat(dim(mut_coords), file = 'no_strings.txt', append = TRUE)
+      
       mut_coords <- which(mut_mat != 0, arr.ind = TRUE) # new 3/11
+      
+      cat('\n mut_coords == \n', file = 'no_strings.txt', append = TRUE)
+      cat(mut_coords, file = 'no_strings.txt', append = TRUE)
       
       if(nrow(mut_coords) > 0){ # new if statement 1/15 -- changed length to nrow on 2/20, != to > 
         
@@ -2714,6 +2774,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         
       }
     })
+    
+    cat('\nafter all_mut_combos SASI', file = 'no_strings.txt', append = TRUE)
     
     mut_combos_end_time <- Sys.time()
     
@@ -2814,6 +2876,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
   }
   
+  cat('\npast summarize_allelic_scores_indexing()\n', file = 'no_strings.txt', append = TRUE)
+  
   convert_af_to_binary <- function(af_score_mat){
     return(apply(X = af_score_mat, MARGIN = 2, function(x){
       return(ifelse(x > 0, 1, 0))
@@ -2898,6 +2962,9 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   create_raw_score_matrices <- function(mito_profiles,
                                         barcode_profiles,
                                         bc_integrations,
+                                        mito_genomes,
+                                        mito_recovery_prob,
+                                        bc_recovery_prob,
                                         which_linstrings = lineage_strings,
                                         num_cores = input_args$num_cores,
                                         timept_savename = timept_savename){
@@ -2907,17 +2974,35 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     for(num_bc_ints in bc_integrations){
       print(paste0('Now scoring for ', num_bc_ints, ' barcode integrations ...'))  
       bc_score_assign_name <- paste0('distinct_mut_scores_mat_bc_', num_bc_ints, '_integrations')
+      cat(paste0('\nbefore SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)
       assign(x = bc_score_assign_name, value = summarize_allelic_scores_indexing(mut_profiles = barcode_profiles, 
                                                                                  num_cores = num_cores,
                                                                                  linstrings = which_linstrings,
-                                                                                 num_integrations = num_bc_ints),
+                                                                                 num_integrations = num_bc_ints,
+                                                                                 recovery_prob = bc_recovery_prob),
              envir = .GlobalEnv)
+      cat(paste0('\nafter SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)
     }
     
+    
     print(paste0('Now computing mt score matrices'))
-    distinct_mut_scores_mat_mt <<- summarize_allelic_scores_indexing(mut_profiles = mito_profiles, 
-                                                                     num_cores = num_cores,
-                                                                     linstrings = which_linstrings)
+    for(num_mito_genomes in mito_genomes){
+      print(paste0('Now scoring for ', num_mito_genomes, ' mito genome copies ...'))
+      mt_score_assign_name <- paste0('distinct_mut_scores_mat_mt_', num_mito_genomes, '_copies')
+      cat(paste0('\nbefore SASI bc for num_mito_genomes == ', num_mito_genomes), file = 'no_strings.txt', append = TRUE)
+      assign(x = mt_score_assign_name, value = summarize_allelic_scores_indexing(mut_profiles = mito_profiles, 
+                                                                                 num_cores = num_cores,
+                                                                                 linstrings = which_linstrings,
+                                                                                 num_integrations = num_mito_genomes,
+                                                                                 recovery_prob = mito_recovery_prob),
+             envir = .GlobalEnv)
+      cat(paste0('\nafter SASI bc for num_mito_genomes == ', num_mito_genomes), file = 'no_strings.txt', append = TRUE)
+    }
+    
+    
+    # distinct_mut_scores_mat_mt <<- summarize_allelic_scores_indexing(mut_profiles = mito_profiles, 
+    #                                                                  num_cores = num_cores,
+    #                                                                  linstrings = which_linstrings)
     
     
     
@@ -2928,9 +3013,22 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
   }
   
+  
+  
+  cat(paste0('\nSCOPE mito_recovery_prob == ', input_args$mt_genome_recovery_prob, '\n'), file = 'no_strings.txt', append = TRUE)
+  cat(paste0('\nSCOPE bc_recovery_prob == ', input_args$bc_integration_recovery_prob, '\n'), file = 'no_strings.txt', append = TRUE)
+  
+  cat('\npos_num_mito_genomes == \n', file = 'no_strings.txt', append = TRUE)
+  cat(paste0('\n', poss_num_mito_genomes, '\n'), file = 'no_strings.txt', append = TRUE)
+  
   create_raw_score_matrices(mito_profiles = mt_profiles,
                             barcode_profiles = bc_profiles,
-                            bc_integrations = poss_num_bc_integrations)
+                            bc_integrations = poss_num_bc_integrations,
+                            mito_genomes = poss_num_mito_genomes,
+                            mito_recovery_prob = input_args$mt_genome_recovery_prob,
+                            bc_recovery_prob = input_args$bc_integration_recovery_prob)
+  
+  cat('\npast create_raw_score_matrices()\n', file = 'no_strings.txt', append = TRUE)
   
   
   ################################### new approach to reconstructing ground truth tree
@@ -3148,7 +3246,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   
   
   
-  calc_total_params_num_trees <- function(sampling_fracs, score_types, mt_afs, bc_afs, bc_integrations, 
+  calc_total_params_num_trees <- function(sampling_fracs, score_types, mt_afs, bc_afs, bc_integrations, mito_genomes,
                                           filt_bin_w_af = input_args$filter_binary_with_af){
     # perform subrun-specific computations on unique_run data to assess recon accuracy
     # # the sub_run_ids will reflect that some parameters can be changed on the same underlying mutational data
@@ -3157,14 +3255,14 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
     # the total number of parameters depends on whether we filter by af before generating binary scores
     if(filt_bin_w_af == TRUE){
-      total_param_combos <- length(sampling_fracs)*length(score_types)*(length(mt_afs)+(length(bc_afs)*length(bc_integrations))) # mt_afs and bc_afs are not nested  
+      total_param_combos <- length(sampling_fracs)*length(score_types)*(length(mt_afs)*length(mito_genomes)+(length(bc_afs)*length(bc_integrations))) # mt_afs and bc_afs are not nested  
     } else{
       total_param_combos <- 0
       if('af' %in% score_types){
-        total_param_combos <- total_param_combos + length(sampling_fracs)*(length(mt_afs)+(length(bc_afs)*length(bc_integrations)))
+        total_param_combos <- total_param_combos + length(sampling_fracs)*(length(mt_afs)*length(mito_genomes)+(length(bc_afs)*length(bc_integrations)))
       }
       if('bin' %in% score_types){
-        total_param_combos <- total_param_combos + length(sampling_fracs)*(1 + length(bc_integrations))
+        total_param_combos <- total_param_combos + length(sampling_fracs)*(length(mito_genomes) + length(bc_integrations))
       }
     }
     
@@ -3173,17 +3271,17 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     # the total number of reconstructed trees also epends on whether we're filtering by af prior to binary score generation
     if(filt_bin_w_af == TRUE){
       # determine how many trees will be reconstructed and compared to ground truth
-      mt_contribution <- length(sampling_fracs)*length(score_types)*length(mt_afs)
+      mt_contribution <- length(sampling_fracs)*length(score_types)*length(mt_afs)*length(mito_genomes)
       bc_contribution <- length(sampling_fracs)*length(score_types)*length(bc_afs)*length(bc_integrations)
     } else{
       mt_contribution <- 0
       bc_contribution <- 0
       if('af' %in% score_types){
-        mt_contribution <- mt_contribution + length(sampling_fracs)*length(mt_afs)
+        mt_contribution <- mt_contribution + length(sampling_fracs)*length(mt_afs)*length(mito_genomes)
         bc_contribution <- bc_contribution + length(sampling_fracs)*length(bc_afs)*length(bc_integrations)
       }
       if('bin' %in% score_types){
-        mt_contribution <- mt_contribution + length(sampling_fracs)
+        mt_contribution <- mt_contribution + length(sampling_fracs)*length(mito_genomes)
         bc_contribution <- bc_contribution + length(sampling_fracs)*length(bc_integrations)
       }
     }
@@ -3212,6 +3310,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                                                             mt_afs = poss_mt_afs, 
                                                                             bc_afs = poss_bc_afs,
                                                                             bc_integrations = poss_num_bc_integrations,
+                                                                            mito_genomes = poss_num_mito_genomes,
                                                                             filt_bin_w_af = input_args$filter_binary_with_af)
   
   create_all_refined_score_matrices <- function(total_param_combos,
@@ -3220,9 +3319,10 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                                 mt_afs,
                                                 bc_afs,
                                                 bc_integrations,
+                                                mito_genomes,
                                                 temp_endpoint = this_endpoint,
                                                 lineage_strings = lineage_strings,
-                                                raw_mt_scores = distinct_mut_scores_mat_mt,
+                                                # raw_mt_scores = distinct_mut_scores_mat_mt,
                                                 unique_run_id = unique_run_id,
                                                 timept_savename = timept_savename,
                                                 filt_bin_w_af = input_args$filter_binary_with_af){
@@ -3230,13 +3330,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     param_combos_made <- 0
     
     # create a matrix that will store the parameter details of each run
-    param_matrix <- matrix(data = NA, nrow = total_param_combos, ncol = 7)
-    
-    # diletters_grid <- expand.grid(LETTERS, LETTERS)
-    # diletters_vec <- apply(diletters_grid, MARGIN = 1, function(x){return(paste0(x[1], x[2]))})
-    # triletters_vec <- expand.grid(LETTERS, LETTERS, LETTERS)
-    # triletters_vec <- apply(triletters_vec, MARGIN = 1, function(x){return(paste0(x[1], x[2], x[3]))})
-    # mono_di_triletters <- append(LETTERS, diletters_vec, triletters_vec)
+    # there is probably a better way to implement this than to manually change ncol every time a new parameter is added ...
+    param_matrix <- matrix(data = NA, nrow = total_param_combos, ncol = 8)
     
     mt_sub_id_vec <- c()
     bc_sub_id_vec <- c()
@@ -3269,38 +3364,47 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         
         for(this_mt_af in iterate_mt_afs){ # compute score matrices for all mt allelic fraction thresholds
           
-          refined_mut_scores_mat_mt <- create_refined_scores(score_matrix_type = this_score_type, modality_type = 'mt', 
-                                                             threshold = this_mt_af, score_mat1 = raw_mt_scores,
-                                                             downsample_inds = downsample_inds)
-          
-          # assign both the bc and mt scores an id. these ids will be joined to ultimately form the sub_run_id
-          while(TRUE){ # ensures we don't generate identical sub_ids within mt or between mt/bc
-            mt_sub_id <- sample(1:10000, size = 1)
-            if(!(mt_sub_id %in% mt_sub_id_vec) & (!(mt_sub_id %in% bc_sub_id_vec))){
-              break
+          for(this_num_mito_genomes in mito_genomes){
+            
+            refined_mut_scores_mat_mt <- create_refined_scores(score_matrix_type = this_score_type, modality_type = 'mt', 
+                                                               threshold = this_mt_af, 
+                                                               # score_mat1 = raw_mt_scores,
+                                                               score_mat1 = get(paste0('distinct_mut_scores_mat_mt_', this_num_mito_genomes, '_copies')),
+                                                               downsample_inds = downsample_inds)
+            
+            # assign both the bc and mt scores an id. these ids will be joined to ultimately form the sub_run_id
+            while(TRUE){ # ensures we don't generate identical sub_ids within mt or between mt/bc
+              mt_sub_id <- sample(1:10000, size = 1)
+              if(!(mt_sub_id %in% mt_sub_id_vec) & (!(mt_sub_id %in% bc_sub_id_vec))){
+                break
+              }
             }
+            mt_sub_id_vec <- append(mt_sub_id_vec, mt_sub_id)
+            
+            # update hash of sub_id: downsampled_inds, which will be needed in create_heatmap_wrapper()
+            mt_sub_id_to_downsample_inds[[mt_sub_id]] <- downsample_inds
+            
+            # create modality_scores subdirectory if it doesn't exist
+            if(!dir.exists(file.path('output', 'modality_scores', unique_run_id))){
+              dir.create(file.path('output', 'modality_scores', unique_run_id), recursive = TRUE)
+            }
+            
+            # note that it's possible refined_mut_scores_mat_mt == NULL
+            # in this case, the RDS that's saved won't be a sparse matrix; it'll just be NULL
+            saveRDS(refined_mut_scores_mat_mt, file.path('output', 'modality_scores', unique_run_id,
+                                                         paste0('simresults_mt_scores_',
+                                                                timept_savename,
+                                                                '_', unique_run_id,
+                                                                '_', mt_sub_id, '.rds')))
+            
+            param_combos_made <- param_combos_made + 1
+            # NA for number of bc integrations
+            param_matrix[param_combos_made, ] <- c(temp_endpoint, mt_sub_id, 'mt', this_sampling_frac, this_score_type, this_mt_af, NA, this_num_mito_genomes)
+            print(paste0('Finished generating score matrices for parameter combination ', param_combos_made, ' of ', total_param_combos))  
+            
           }
-          mt_sub_id_vec <- append(mt_sub_id_vec, mt_sub_id)
           
-          # update hash of sub_id: downsampled_inds, which will be needed in create_heatmap_wrapper()
-          mt_sub_id_to_downsample_inds[[mt_sub_id]] <- downsample_inds
           
-          # create modality_scores subdirectory if it doesn't exist
-          if(!dir.exists(file.path('output', 'modality_scores', unique_run_id))){
-            dir.create(file.path('output', 'modality_scores', unique_run_id), recursive = TRUE)
-          }
-          
-          # note that it's possible refined_mut_scores_mat_mt == NULL
-          # in this case, the RDS that's saved won't be a sparse matrix; it'll just be NULL
-          saveRDS(refined_mut_scores_mat_mt, file.path('output', 'modality_scores', unique_run_id,
-                                                       paste0('simresults_mt_scores_',
-                                                              timept_savename,
-                                                              '_', unique_run_id,
-                                                              '_', mt_sub_id, '.rds')))
-          
-          param_combos_made <- param_combos_made + 1
-          param_matrix[param_combos_made, ] <- c(temp_endpoint, mt_sub_id, 'mt', this_sampling_frac, this_score_type, this_mt_af, NA)
-          print(paste0('Finished generating score matrices for parameter combination ', param_combos_made, ' of ', total_param_combos))
           
         }
         
@@ -3336,7 +3440,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
             
             
             param_combos_made <- param_combos_made + 1
-            param_matrix[param_combos_made, ] <- c(temp_endpoint, bc_sub_id, 'bc', this_sampling_frac, this_score_type, this_bc_af, this_num_bc_ints)
+            # NA at the end is for number of mito genomes
+            param_matrix[param_combos_made, ] <- c(temp_endpoint, bc_sub_id, 'bc', this_sampling_frac, this_score_type, this_bc_af, this_num_bc_ints, NA)
             print(paste0('Finished generating score matrices for parameter combination ', param_combos_made, ' of ', total_param_combos))
             
           }
@@ -3360,9 +3465,10 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                                            mt_afs = poss_mt_afs,
                                                            bc_afs = poss_bc_afs,
                                                            bc_integrations = poss_num_bc_integrations,
+                                                           mito_genomes = poss_num_mito_genomes,
                                                            lineage_strings = lineage_strings,
                                                            unique_run_id = unique_run_id,
-                                                           raw_mt_scores = distinct_mut_scores_mat_mt,
+                                                           # raw_mt_scores = distinct_mut_scores_mat_mt,
                                                            timept_savename = timept_savename)
   
   # R equivalent to multiple assignment
@@ -3375,11 +3481,11 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   
   format_param_matrix <- function(param_matrix, temp_endpoint = this_endpoint){
     # write the parameter combinations to a table in a txt file:
-    param_matrix_colnames <- c('endpoint', 'sub_id', 'modality', 'sampling_frac', 'score_type', 'af_thresh', 'num_bc_integrations')
+    param_matrix_colnames <- c('endpoint', 'sub_id', 'modality', 'sampling_frac', 'score_type', 'af_thresh', 'num_bc_integrations', 'num_mito_genomes')
     param_matrix <- rbind(param_matrix_colnames, param_matrix)
     colnames(param_matrix) <- param_matrix_colnames
-    param_matrix[2:nrow(param_matrix), c('endpoint', 'sampling_frac', 'af_thresh', 'num_bc_integrations')] <- as.numeric(param_matrix[2:nrow(param_matrix), 
-                                                                                                                                      c('endpoint', 'sampling_frac', 'af_thresh', 'num_bc_integrations')])
+    param_matrix[2:nrow(param_matrix), c('endpoint', 'sampling_frac', 'af_thresh', 'num_bc_integrations', 'num_mito_genomes')] <- as.numeric(param_matrix[2:nrow(param_matrix), 
+                                                                                                                                      c('endpoint', 'sampling_frac', 'af_thresh', 'num_bc_integrations', 'num_mito_genomes')])
     param_df <- as.data.frame(param_matrix)
     
     colnames(param_df) <- param_matrix_colnames
@@ -3654,17 +3760,17 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     mt_section <- mt_results %>%
       left_join(bc_specs, by = c('bc_sub_run_id' = 'sub_id_bc')) %>% # this intentionally will add empty columns with the correct colnames, data will be NA
       left_join(mt_specs, by = c('mt_sub_run_id' = 'sub_id_mt')) %>%
-      select(-c(modality_mt, modality_bc, num_bc_integrations_mt))
+      select(-c(modality_mt, modality_bc, num_bc_integrations_mt, num_mito_genomes_bc))
     
     bc_section <- bc_results %>%
       left_join(bc_specs, by = c('bc_sub_run_id' = 'sub_id_bc')) %>% 
       left_join(mt_specs, by = c('mt_sub_run_id' = 'sub_id_mt')) %>% # this will add empty columns with the correct colnames
-      select(-c(modality_mt, modality_bc, num_bc_integrations_mt))
+      select(-c(modality_mt, modality_bc, num_bc_integrations_mt, num_mito_genomes_bc))
     
     integrated_section <- integrated_results %>%
       left_join(bc_specs, by = c('bc_sub_run_id' = 'sub_id_bc')) %>% # in integrated, both of these joins will bring in new info
       left_join(mt_specs, by = c('mt_sub_run_id' = 'sub_id_mt')) %>% 
-      select(-c(modality_mt, modality_bc, num_bc_integrations_mt))
+      select(-c(modality_mt, modality_bc, num_bc_integrations_mt, num_mito_genomes_bc))
     
     merged_results <- data.frame(rbind(mt_section, bc_section, integrated_section))
     
@@ -3791,7 +3897,7 @@ make_lineplot <- function(run_id, save_plots = TRUE){
   res <- res %>%
     filter(!is.na(rf_dist)) %>%
     group_by(sampling_frac_bc, af_thresh_bc, af_thresh_mt,
-             score_type_bc, score_type_mt, num_bc_integrations_bc) %>%
+             score_type_bc, score_type_mt, num_bc_integrations_bc, num_mito_genomes_mt) %>%
     mutate(param_combo = cur_group_id(),
            subrun_id = paste(mt_sub_run_id, bc_sub_run_id, sep = '_')) %>%
     arrange(endpoint)
@@ -3838,13 +3944,18 @@ make_lineplot <- function(run_id, save_plots = TRUE){
   # only keep the first occurrence of each unique set of param combos
   group_table <- res %>%
     select(param_combo, group, subrun_id, sampling_frac_bc, af_thresh_bc, af_thresh_mt,
-           score_type_bc, score_type_mt, num_bc_integrations_bc) %>%
+           score_type_bc, score_type_mt, num_bc_integrations_bc, num_mito_genomes_mt) %>%
     group_by(param_combo) %>%
     slice(1) %>%
     arrange(group)
   
   # renumber param combos to align with sorted group numbers
   group_table$param_combo <- seq(1, nrow(group_table))
+  
+  # cat('\ncolnames(group_table) == \n', file = 'no_strings.txt', append = TRUE)
+  # cat(paste0(colnames(group_table), '\n'), file = 'no_strings.txt', append = TRUE)
+  
+  
   
   group_table <- group_table %>%
     rename(`Param Combo` = param_combo,
@@ -3855,7 +3966,9 @@ make_lineplot <- function(run_id, save_plots = TRUE){
            `MT AF \nThresh` = af_thresh_mt,
            `BC Score \nType` = score_type_bc,
            `MT Score \nType` = score_type_mt,
-           `BC Ints` = num_bc_integrations_bc)
+           `BC Ints` = num_bc_integrations_bc,
+           `MT \nGenomes` = num_mito_genomes_mt)
+  
   
   
   set.seed(0)
@@ -3890,6 +4003,7 @@ make_lineplot <- function(run_id, save_plots = TRUE){
   
   unique_plot_groups <- unique(group_table$`Plot Group`)
   line_cols <- rand_col_pal[1:length(unique_plot_groups)]
+  cat(paste0('\nlength(line_cols) == ', length(line_cols), '\n'), file = 'no_strings.txt', append = TRUE)
   cols <- matrix(NA, nrow = nrow(group_table), ncol = ncol(group_table))
   for(i in seq_len(nrow(group_table))){
     cols[i, ] <- line_cols[which(unique_plot_groups == group_table$`Plot Group`[i])]
