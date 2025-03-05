@@ -2,7 +2,7 @@
 
 library(docstring)
 
-
+ 
 generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, be_target_count){
   #' @title Generate barcode sequence not including BE targets
   #' @description This function returns a sequence of non-BE-target nucleotides into which
@@ -43,6 +43,8 @@ generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, b
   # subtract out the number of specified BE targets from the originally-inferred number of occurrences of the BE target base
   # repeat this process for each of the four possible BE targets
   if(target_from == 'A'){
+    
+    cat('\nin target from A\n', file = 'no_strings.txt', append = TRUE)
     num_required_as <- num_required_as - be_target_count
     # if there are more BE targets of a specific nuc than allotted, we'll have to take away from other bases' counts
     if(num_required_as < 0){ 
@@ -50,18 +52,23 @@ generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, b
       num_required_as <- 0
     }
   } else if(target_from == 'G'){
+    cat('\nin target from G\n', file = 'no_strings.txt', append = TRUE)
     num_required_gs <- num_required_gs - be_target_count
     if(num_required_gs < 0){ 
       leftover_bases <- abs(num_required_gs)
       num_required_gs <- 0
     }
   } else if(target_from == 'C'){
+    cat('\nin target from C\n', file = 'no_strings.txt', append = TRUE)
     num_required_cs <- num_required_cs - be_target_count
     if(num_required_cs < 0){ 
       leftover_bases <- abs(num_required_cs)
       num_required_cs <- 0
     }
+    cat(paste0('\nnum_required_cs == ', num_required_cs, '\n'), file = 'no_strings.txt', append = TRUE)
+    cat(paste0('\nleftover_bases == ', leftover_bases, '\n'), file = 'no_strings.txt', append = TRUE)
   } else if(target_from == 'T'){
+    cat('\nin target from T\n', file = 'no_strings.txt', append = TRUE)
     num_required_ts <- num_required_ts - be_target_count
     if(num_required_ts < 0){ 
       leftover_bases <- abs(num_required_ts)
@@ -192,6 +199,13 @@ generate_target_indices <- function(config, num_targets, target_pos_1, bc_length
     
   } else if(config == 'R'){ # if config is Random, we want random target indices
     all_inds <- sample(seq(1, bc_length_with_targets), size = num_targets, replace = FALSE)
+    
+    # ################################################ 2/6
+    # cat('\ntarget_inds:\n', file = 'no_strings.txt', append = TRUE)
+    # for(ind in all_inds){
+    #   cat(paste0(ind, '\n'), file = 'no_strings.txt', append = TRUE)
+    # }
+    # ################################################ 2/6
   } else if(config == 'S'){
     # if config is Spaced, we have a position of the first BE target as well as an increment
     # such that each subsequent target is increment bases after the first BE target
@@ -265,14 +279,51 @@ add_intervening_be_targets <- function(target_pos_config, target_from, be_target
   # force target_from at each index in all_inds
   seq_with_targets[all_inds] <- target_from
   
+  # ################################################ 2/6
+  # cat(paste0('\nseq_with_targets == ', seq_with_targets, '\n'), file = 'no_strings.txt', append = TRUE)
+  # ################################################ 2/6
+  
+  
   # fill in the remaining non-target positions with the existing sequence
   non_target_inds <- setdiff(seq(1, length(seq_with_targets)), all_inds)
   seq_with_targets[non_target_inds] <- non_target_sequence
+  
+  # ################################################ 2/6
+  # 
+  # cat(paste0('\n###############################################\nAFTER ADDING IN NONTARGET SEQ\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nseq_with_targets == ', seq_with_targets, '\n'), file = 'no_strings.txt', append = TRUE)
+  # 
+  # cat(paste0('\n###############################################\nNUC COUNTS AT TARGET INDS\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\ntable(seq_with_targets[all_inds]) == ', table(seq_with_targets[all_inds]), '\n'), file = 'no_strings.txt', append = TRUE)
+  # 
+  # 
+  # cat(paste0('\nlength(non_target_sequence) == ', length(non_target_sequence), '\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nlength(non_target_inds) == ', length(non_target_inds), '\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nlength(seq_with_targets) == ', length(seq_with_targets), '\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nlength(all_inds) == ', length(all_inds), '\n'), file = 'no_strings.txt', append = TRUE)
+  # ################################################ 2/6
   
   # we want to return the indices of the targets, as well as the sequence with the targets
   return_list <- list()
   return_list[['target_inds']] <- all_inds
   return_list[['seq_with_targets']] <- seq_with_targets
+  
+  frac_a <- length(which(seq_with_targets == 'A'))/length(seq_with_targets)
+  frac_g <- length(which(seq_with_targets == 'G'))/length(seq_with_targets)
+  frac_c <- length(which(seq_with_targets == 'C'))/length(seq_with_targets)
+  frac_t <- length(which(seq_with_targets == 'T'))/length(seq_with_targets)
+  
+  
+  # ################################################ 2/6
+  # cat(paste0('\nfrac a == ', frac_a, '\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nfrac g == ', frac_g, '\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nfrac c == ', frac_c, '\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nfrac t == ', frac_t, '\n'), file = 'no_strings.txt', append = TRUE)
+  # 
+  # print('####################################')
+  # print('inside add_intervening_be_targets(), return_list[["seq_with_targets"]] == ')
+  # print(return_list[['seq_with_targets']])
+  # ################################################ 2/6
   
   
   return(return_list)

@@ -1,8 +1,10 @@
 # allow for heterogeneous rates within HMLB classes:
-
-library(parallel)
-library(Matrix)
-library(zeallot)
+suppressPackageStartupMessages({
+  library(parallel)
+  library(Matrix)
+  library(zeallot)  
+})
+ 
 
 
 set.seed(42)
@@ -118,7 +120,14 @@ set.seed(42)
 # returns c(i_coords, j_coords) which can be used to build new mutation matrix
 # this function only operates on High/Medium/Low bases; the background is encoded with uniform!
 # have to make sure we pass in the correct bg edit rate on non-uniform
-non_uniform_editing <- function(pos_er_list, num_integrations, eligible_ints){
+non_uniform_editing <- function(pos_er_list, num_integrations, eligible_ints, timepoint_savename = '', length1_positions = NULL){
+  
+  
+  # ################################################ 2/6
+  # nu_outfile_name <- paste0('nu_editing', timepoint_savename, '.txt')
+  # 
+  # close(file(nu_outfile_name, open = 'w'))
+  # ################################################ 2/6
   # eligible integrations will specify those integrations that have not yet been edited
   
   # print('IN NON UNIFORM EDITING')
@@ -132,33 +141,82 @@ non_uniform_editing <- function(pos_er_list, num_integrations, eligible_ints){
     #     file = 'outfile_nummuts.txt',
     #     append = TRUE)
     
+    char_x <- as.character(x)
+    
+    if(char_x %in% length1_positions){
+      verbose = TRUE
+    }else{
+      verbose = FALSE
+    }
     
     # er <- er_df[pos_er_list[[x]], mutation_type] # get numeric edit rate for that position based on editing level
-    er <- pos_er_list[[x]]
+    # er <- pos_er_list[[x]]
+    er <- pos_er_list[[char_x]]
     
     if(!is.null(eligible_ints)){ # if we pass in eligible integrations, max number that can be edited is num unedited
       
-      if(length(eligible_ints[[x]]) == 0){ # if we are fully saturated, return no edits
+      # if(length(eligible_ints[[x]]) == 0){ # if we are fully saturated, return no edits
+      #   return(0)
+      # }
+      if(length(eligible_ints[[char_x]]) == 0){ # if we are fully saturated, return no edits
         return(0)
       }
+      
       # cat('\npost check eligints', file = 'no_strings.txt', append = TRUE)
       
       # if there are still eligible integrations that can be edited:
-      # num_ints_edited <- rbinom(n = 1, size = length(eligible_ints[[x]]), prob = er) 
-      num_ints_edited <- rpois(n = 1, lambda = length(eligible_ints[[x]])*er)
+      num_ints_edited <- rbinom(n = 1, size = length(eligible_ints[[char_x]]), prob = er)
+      
+      if(verbose){
+        cat('\n#########################################\n', file = 'no_strings.txt', append = TRUE)
+        cat(paste0('\nnum_ints_edited at pos ', char_x, ' == ', num_ints_edited, '\n'), file = 'no_strings.txt', append = TRUE) # this should always be 1 at most, 0 many other times
+        
+      }
+      # num_ints_edited <- rpois(n = 1, lambda = length(eligible_ints[[x]])*er)
+      # num_ints_edited <- rpois(n = 1, lambda = length(eligible_ints[[char_x]])*er) # 3/3 led to num_ints_edited > elig_ints
       
       # we still sample from a uniform distribution (replace = TRUE), but we later remove duplicate (i,j) positions if they arise
       if(num_ints_edited > 0){
-        # FALSE should remove need for unique, but keeping TRUE to be more faithful to edit rate
-        which_ints_edited <- sample(x = eligible_ints[[x]], size = num_ints_edited, replace = TRUE)
-
-        return(which_ints_edited)
-      }
-      else{ # if num_ints_edited == 0
+        
+        # because R is very dumb and cannot sample() an element from a length 1 integer vector, need to take an extra step if there's only one eligible integration to edit
+        if(length(eligible_ints[[char_x]]) == 1){
+          
+          if(num_ints_edited == 1){ # this should always fire if we've entered the first if
+            which_ints_edited <- as.numeric(eligible_ints[[char_x]])
+          } else{ # should never fire
+            cat('\nERROR: MORE THAN 1 INT EDITED WHEN ONLY 1 IS ELIGIBLE\n', file = 'no_strings.txt', append = TRUE)
+            quit(save = 'no', status = 1)
+          }
+          
+        } else{
+          
+          # FALSE should remove need for unique, but keeping TRUE to be more faithful to edit rate
+          # which_ints_edited <- sample(x = eligible_ints[[x]], size = num_ints_edited, replace = TRUE)
+          which_ints_edited <- sample(x = eligible_ints[[char_x]], size = num_ints_edited, replace = TRUE)
+          
+          if(verbose){
+            cat(paste0('\n#####start of ', char_x, '\n'), file = 'no_strings.txt', append = TRUE)
+            for(edited_int in which_ints_edited){
+              cat(paste0('\nedited_int == ', edited_int, '\n'), file = 'no_strings.txt', append = TRUE)
+            }
+            for(elig_int in eligible_ints[[char_x]]){
+              cat(paste0('\nelig_int == ', elig_int, '\n'), file = 'no_strings.txt', append = TRUE)
+            }
+            cat(paste0('\n#####end of ', char_x, '\n'), file = 'no_strings.txt', append = TRUE)
+          }
+          
+          return(which_ints_edited)
+          
+        }
+        
+        
+        
+      } else{ # if num_ints_edited == 0
         return(0) # no edits made
-      }
+      } 
     }
     else{ # if no list of eligible ints was passed in 
+      cat('\nno list of eligible ints was passed in\n', file = 'no_strings.txt', append = TRUE)
       num_ints_edited <- rpois(n = 1, lambda = num_integrations*er)
       # num_ints_edited <- rbinom(n = 1, size = num_integrations, prob = er) 
       if(num_ints_edited > 0){ # if any edits occur
@@ -172,15 +230,27 @@ non_uniform_editing <- function(pos_er_list, num_integrations, eligible_ints){
     
   })
   
-  
+   
   # which integrations were edited for respective base positions, correspond to row values in mutation matrix
   temp_i_coords <- unname(unlist(pos_int_list))
   # i_coords <- as.integer(unname(unlist(sapply(names(pos_int_list), 
   #                                             function(x){return(rep(x, length(pos_int_list[[x]])))}))))
   
   # which positions were edited, repeated the number of times equal to number of edited integrations at that position
-  temp_j_coords <- as.integer(unname(unlist(sapply(names(pos_int_list), 
-                                                   function(x){return(rep(x, length(pos_int_list[[x]])))}))))
+  # temp_j_coords <- as.integer(unname(unlist(sapply(names(pos_int_list),
+  #                                                  function(x){return(rep(x, length(pos_int_list[[x]])))}))))
+  temp_j_coords <- as.integer(unname(unlist(sapply(names(pos_int_list),
+                                                   function(x){return(rep(x, length(pos_int_list[[as.character(x)]])))}))))
+  
+  # ################################################ 2/6
+  # cat(paste0('\nlength(temp_i_coords) == length(temp_j_coords) == ', length(temp_i_coords) == length(temp_j_coords), '\n'), file = nu_outfile_name, append = TRUE)
+  # 
+  # for(i in 1:length(temp_i_coords)){
+  #   cat(paste0('\nicoord == ', temp_i_coords[i]), file = nu_outfile_name, append = TRUE)
+  #   cat(paste0('\njcoord == ', temp_j_coords[i]), file = nu_outfile_name, append = TRUE)
+  #   # cat(paste0(paste(i, temp_i_coords[i], temp_j_coords[i], sep = ', '), '\n'), file = nu_outfile_name, append = TRUE)
+  # }
+  # ################################################ 2/6
   
   
   # remove duplicates
@@ -195,8 +265,7 @@ non_uniform_editing <- function(pos_er_list, num_integrations, eligible_ints){
     
     return_list <- list('i_coords' = FALSE, 'j_coords' = FALSE)
     
-  }
-  else{ # if some of the positions were edited
+  } else{ # if some of the positions were edited
     if(length(zero_inds) > 0){ # at least one zero, but not all zeros, # remove elements that were set to 0 by default (no edits)
       i_coords <- i_coords[-zero_inds]
       j_coords <- j_coords[-zero_inds]
@@ -317,7 +386,8 @@ get_background_edit_inds <- function(num_rows, num_cols, bg_pos_er_list, sample_
 
 transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints, 
                             bg_transition_pos_er_list,
-                            target_transition_pos_er_list = NULL){
+                            target_transition_pos_er_list = NULL,
+                            timepoint_filename = ''){
   # we only accept the BE pos er list in transitions because there shouldn't be elevated rates of indels with BE
   
   
@@ -346,23 +416,39 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   
   post_indices_transition_func <- function(i_coords, j_coords, incoming_mat, match_transition_bases){
     
+    # cat('\nentering post_indices_transition_func here\n', file = 'no_strings.txt', append = TRUE)
+    
+    
     # deletion_inds <- which()
     # will look something like: also have to create a vector of length i_coords == length j_coords 
     # with the existing incoming_mat values at those i, j pairs
     
     # cat('this is the problem\n', file = 'no_strings.txt', append = TRUE)
     
+    
+    # # log the positions which are supposed to be edited ... 
+    # cat('\n#########################\nPOST_INDICES_TRANSITION_FUNC\n')
+    # cat(j_coords, file = 'no_strings.txt', append = TRUE)
+    
+    
     # get the current values at that position in the incoming_mat. these will influence mutation outcome
     existing_mat_vals <- sapply(seq(1, length(i_coords)), function(x){
       return(incoming_mat[i_coords[x], j_coords[x]])
     })
     
-    # COMMENT 2/23
+    # cat(paste0('\nlength(which(i_coords == 0)) == ', length(which(i_coords == 0)), '\n'), file = 'no_strings.txt', append = TRUE)
+    
+    # cat(paste0('existing mat vals == ', existing_mat_vals, '\n'), file = 'no_strings.txt', append = TRUE)
+    
     # x_vals <- unlist(unname(sapply(i_coords,
     #                                           function(x){
     #                                             return(bases[match(baseline_ints[x], match_transition_bases)]
     #                                             )})))
+    # cat(paste0('length(i_coords) == ', length(i_coords), '\n'), file = 'no_strings.txt', append = TRUE)
     x_vals <- sapply(seq(1, length(i_coords)), function(x){
+
+      # cat(paste0('class(existing_mat_vals[x]) == ', class(existing_mat_vals[x]), '\n'), file = 'no_strings.txt', append = TRUE)
+      # cat(paste0('existing_mat_vals[x] == ', existing_mat_vals[x], '\n'), file = 'no_strings.txt', append = TRUE)
       if(existing_mat_vals[x] == 0){ # if no mutation already exists at this position
         
         # can refer to the unedited baseline sequence for the base at this position
@@ -416,7 +502,8 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
         # cat(paste0('class(existing_mat_vals[x])', class(existing_mat_vals[x]),  '\n'), file = 'no_strings.txt', append = TRUE)
         # old:
         # return(match(existing_mat_vals[x], match_transition_bases))
-        return(match_transition_bases[existing_mat_vals[x]])
+        # return(match_transition_bases[existing_mat_vals[x]])
+        return(match_transition_bases[existing_mat_vals[x]] - existing_mat_vals[x]) # 1/27
       }
     })
     
@@ -491,7 +578,7 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
     # iterate through each position that is High/Medium/Low, and see which integrations haven't been edited at that position yet
     unedited_rowvals <- which(mut_mat[, as.integer(pos)] == 0)
     # cat('POSLOOP1\n', file = 'no_strings.txt', append = TRUE)
-    elig_ints_list[[pos]] <- unedited_rowvals
+    elig_ints_list[[as.character(pos)]] <- unedited_rowvals
     # cat('POSLOOP2\n\n', file = 'no_strings.txt', append = TRUE)
   }
   # cat(paste0('after that loop', '\n'),
@@ -502,7 +589,8 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   nu_res <- non_uniform_editing(pos_er_list = target_transition_pos_er_list,
                                 # mutation_type = 'Transition', 
                                 eligible_ints = elig_ints_list,
-                                num_integrations = NULL
+                                num_integrations = NULL,
+                                timepoint_savename = timepoint_filename
   )
   
   # cat('\nmade it here1.6\n', file = 'no_strings.txt', append = TRUE)
@@ -514,6 +602,11 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   nu_transition_i_coords <- nu_res[['i_coords']]
   nu_transition_j_coords <- nu_res[['j_coords']]
   
+  # cat(paste0('\nnu_transition_i_coords: ', nu_transition_i_coords), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nnu_transition_j_coords: ', nu_transition_j_coords), file = 'no_strings.txt', append = TRUE)
+  
+  # cat('\nmade it here1.6.5\n', file = 'no_strings.txt', append = TRUE)
+  
   # cat(paste0('inside NU transition_func, (nu_i_coords) == ', (nu_transition_i_coords), '\n'),
   #     file = 'outfile_nummuts.txt',
   #     append = TRUE)
@@ -521,7 +614,7 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   # cat(paste0('inside NU transition_func, length(nu_i_coords) == ', length(nu_transition_i_coords), '\n'),
   #     file = 'outfile_nummuts.txt',
   #     append = TRUE)
-  
+   
   # cat(paste0('total number of non-uniform muts transition = ', length(nu_transition_i_coords), '\n'),
   #     file = 'outfile_nummuts.txt',
   #     append = TRUE)
@@ -530,12 +623,14 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   #                                                                            num_integrations = num_rows)
   # if(nu_transition_i_coords == TRUE){ # if no edits were made (raised by FALSE flag)
   # if((nu_transition_i_coords != FALSE) & (length(nu_transition_i_coords) > 0)){
-  if(nu_transition_i_coords != FALSE){
+  if(nu_transition_i_coords[1] != FALSE){
+    # cat('\nmade it here1.6.5.1\n', file = 'no_strings.txt', append = TRUE)
     mut_mat <- post_indices_transition_func(i_coords = nu_transition_i_coords,
                                             j_coords = nu_transition_j_coords,
                                             incoming_mat = mut_mat,
                                             match_transition_bases = transition_matches)
   }
+  # cat('\nmade it here1.7\n', file = 'no_strings.txt', append = TRUE)
   # mut_mat <- post_indices_transition_func(i_coords = nu_transition_i_coords,
   #                                          j_coords = nu_transition_j_coords,
   #                                          incoming_mat = mut_mat)
@@ -689,7 +784,8 @@ transversion_func <- function(mut_mat, num_rows, num_cols, bg_transversion_pos_e
           # return(forced_transversion_matches[[existing_mat_vals[x]]])
         # }
         # else if(!force_transversions){
-        return(bases_going_to[j_coords[x]])
+        # return(bases_going_to[j_coords[x]])
+        return(bases_going_to[j_coords[x]] - j_coords[x]) # 1/27
         # }
         # cat('\ntransversion last else post\n', file = 'no_strings.txt', append = TRUE)
       }
@@ -832,7 +928,7 @@ transversion_func <- function(mut_mat, num_rows, num_cols, bg_transversion_pos_e
     unedited_rowvals <- which(mut_mat[, as.integer(pos)] == 0)
     
     # create a new list with names == column (genomic) position, and values == non-edited integrations
-    elig_ints_list[[pos]] <- unedited_rowvals
+    elig_ints_list[[as.character(pos)]] <- unedited_rowvals
   }
   
   # cat(paste0('before non_uniform_editing in trasnversion'), file = 'no_strings.txt', append = TRUE)
@@ -871,7 +967,7 @@ transversion_func <- function(mut_mat, num_rows, num_cols, bg_transversion_pos_e
   #                                                                            num_integrations = num_rows)
   # if(nu_transversion_i_coords == TRUE){ 
   # if((nu_transversion_i_coords[1] != FALSE) & (length(nu_transversion_i_coords) > 0)){
-  if(nu_transversion_i_coords != FALSE){
+  if(nu_transversion_i_coords[1] != FALSE){
     # nu_transversion_i_coords == FALSE when no edit coordinates were generated
     # cat(paste0('PRE inside NU nu_transversion_i_coords == TRUE, sum(mut_mat) ==  ', sum(mut_mat), '\n'),
     #     file = 'outfile_nummuts.txt',
@@ -904,11 +1000,13 @@ transversion_func <- function(mut_mat, num_rows, num_cols, bg_transversion_pos_e
   # mut_mat <- mut_mat + new_muts
   # return(mut_mat)
 }
-
+ 
 
 
 insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
-                           target_ins_pos_er_list = NULL
+                           target_ins_pos_er_list = NULL,
+                           run_id = NULL,
+                           this_cell_num = NULL
                            # pos_er_nuc_list = NULL
                            ){
   # we accept both the BE pos er list AND nuc pos er list in insertions because there may be elevated substitution rates at cut sites
@@ -969,7 +1067,7 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
   
   # Accepts sparse matrix as input, and adds to it the insertions that occur
   
-  post_indices_insertion_func <- function(i_coords, j_coords, incoming_mat){
+  post_indices_insertion_func <- function(i_coords, j_coords, incoming_mat, elig_ints = NULL){
     
     
     insertion_lengths <- sapply(rgamma(n = length(i_coords), shape = 1, rate = 1), ceiling)
@@ -999,6 +1097,10 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
       # check if any of the new insertions occur at positions where insertions already exist
       if(any((ins_pos[,1] == i_coords[x]) & (ins_pos[,2] == j_coords[x])) == TRUE){ # if insertion already exists at this location
         old_insertion <- incoming_mat[i_coords[x], j_coords[x]]
+        
+        
+        
+        
         if(old_insertion > 0){
           curr_ins_length <- nchar(old_insertion) - 2
         }
@@ -1011,6 +1113,47 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
         
       }
       else{ # if this position doesn't yet have an insertion
+        
+        if(incoming_mat[i_coords[x], j_coords[x]] == -1){
+          
+          cat(paste0('\ntrying to add an insertion to a deletion site at ', i_coords[x], ', ', j_coords[x], '!!\n'), file = 'no_strings.txt', append = TRUE)
+          
+          
+          i_coords_path <- paste0('i_coords_', run_id, '.rds')
+          j_coords_path <- paste0('j_coords_', run_id, '.rds')
+          elig_ints_path <- paste0('elig_ints_', run_id, '.rds')
+          mutmat_path <- paste0('pre_insertion_mutmat_', run_id, '.rds')
+          
+          
+          # using i_coords_path as a proxy for whether the other files were also written 
+          if(!file.exists(i_coords_path)){
+            saveRDS(i_coords, file = i_coords_path)
+            saveRDS(j_coords, file = j_coords_path)
+            saveRDS(elig_ints, file = elig_ints_path)
+            saveRDS(incoming_mat, file = mutmat_path)
+            
+          }
+          
+          
+          
+          # cat(paste0('\nlength(elig_ints[j_coords[x]] == ', length(elig_ints[j_coords[x]]), '\n'), file = 'no_strings.txt', append = TRUE)
+          cat(paste0('\nlength(elig_ints[j_coords[x]] == ', length(elig_ints[[as.character(j_coords[x])]]), '\n'), file = 'no_strings.txt', append = TRUE)
+          cat(paste0('\nclass(elig_ints) == ', class(elig_ints), '\n'), file = 'no_strings.txt', append = TRUE)
+          cat(paste(elig_ints[[as.character(j_coords[x])]], collapse = '\n'), file = 'no_strings.txt', append = TRUE)
+          
+          # cat(paste0('\nlength(elig_ints[[j_coords[x]]] == ', length(elig_ints[[j_coords[x]]]), '\n'), file = 'no_strings.txt', append = TRUE)
+          
+          cat('\nelig ints list at elig_ints[j_coords[x]] position ...\n', file = 'no_strings.txt', append = TRUE)
+          for(elig_int in elig_ints[[as.character(j_coords[x])]]){
+            cat(paste0(elig_int, '\n'), file = 'no_strings.txt', append = TRUE)  
+          }
+          
+          # cat('\nelig ints list at elig_ints[[j_coords[x]]] position ...\n', file = 'no_strings.txt', append = TRUE)
+          # for(elig_int in elig_ints[[j_coords[x]]]){
+          #   cat(paste0(elig_int, '\n'), file = 'no_strings.txt', append = TRUE)  
+          # }
+          
+        }
         
         # only return the decimal, no need to shift
         return(as.numeric(paste(c(0, '.', sample(seq(1,4), insertion_lengths[x], replace = TRUE)), collapse = '')))
@@ -1057,19 +1200,28 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
   # else if(!uniform){ # if non-uniform, undergo another round of edits
     
   elig_ints_list <<- list()
+  
+  len1_pos <- c()
   # cat('\nInsertion names:\n', file = 'no_strings.txt', append = TRUE)
   # cat(names(pos_er_nuc_list), file = 'no_strings.txt', append = TRUE)
   for(pos in names(target_ins_pos_er_list)){
     # iterate through each position that is High/Medium/Low, and see which integrations haven't been edited at that position yet
     unedited_rowvals <- which(mut_mat[, as.integer(pos)] == 0)
-    elig_ints_list[[pos]] <- unedited_rowvals
+    elig_ints_list[[as.character(pos)]] <- unedited_rowvals
+    
+    if(length(unedited_rowvals) == 1){
+      cat(paste0('\ncell ', this_cell_num, ': unedited rowvals at pos ', pos, ' == ', unedited_rowvals), file = 'no_strings.txt', append = TRUE)
+      len1_pos <- append(len1_pos, as.character(pos))
+      # this_verbose = 
+    }
   }
   
   
   nu_res <- non_uniform_editing(pos_er_list = target_ins_pos_er_list,
                                 # mutation_type = 'Insertion', 
                                 num_integrations = NULL,
-                                eligible_ints = elig_ints_list)
+                                eligible_ints = elig_ints_list,
+                                length1_positions = len1_pos)
   nu_insertion_i_coords <- nu_res[['i_coords']]
   nu_insertion_j_coords <- nu_res[['j_coords']]
   # c(nu_insertion_i_coords, nu_insertion_j_coords) %<-% non_uniform_editing(pos_er_list = pos_er_list, er_df = er_df, 
@@ -1077,10 +1229,11 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
   #                                                                                num_integrations = num_rows)
   # if(nu_insertion_i_coords == TRUE){ # if no edits were made (raised by FALSE flag)
   # if((nu_insertion_i_coords[1] != FALSE) & (length(nu_insertion_i_coords) > 0)){
-  if(nu_insertion_i_coords != FALSE){
+  if(nu_insertion_i_coords[1] != FALSE){
     mut_mat <- post_indices_insertion_func(i_coords = nu_insertion_i_coords,
                                            j_coords = nu_insertion_j_coords,
-                                           incoming_mat = mut_mat)
+                                           incoming_mat = mut_mat,
+                                           elig_ints = elig_ints_list)
   }
   # mut_mat <- post_indices_insertion_func(i_coords = nu_insertion_i_coords,
   #                                          j_coords = nu_insertion_j_coords,
@@ -1238,7 +1391,7 @@ deletion_func <- function(mut_mat, num_rows, num_cols, bg_del_pos_er_list, unifo
   for(pos in names(target_del_pos_er_list)){
     # iterate through each position that is High/Medium/Low, and see which integrations haven't been edited at that position yet
     unedited_rowvals <- which(mut_mat[, as.integer(pos)] == 0)
-    elig_ints_list[[pos]] <- unedited_rowvals
+    elig_ints_list[[as.character(pos)]] <- unedited_rowvals
   }
   
   nu_res <- non_uniform_editing(pos_er_list = target_del_pos_er_list,
@@ -1253,7 +1406,7 @@ deletion_func <- function(mut_mat, num_rows, num_cols, bg_del_pos_er_list, unifo
   #                                                                          num_integrations = num_rows)
   # if(nu_deletion_i_coords == TRUE){ # if no edits were made (raised by FALSE flag)
   # if((nu_transition_i_coords[1] != FALSE) & (length(nu_deletion_i_coords) > 0)){
-  if(nu_deletion_i_coords != FALSE){
+  if(nu_deletion_i_coords[1] != FALSE){
     mut_mat <- post_indices_deletion_func(i_coords = nu_deletion_i_coords,
                                           j_coords = nu_deletion_j_coords,
                                           incoming_mat = mut_mat)
@@ -1340,13 +1493,79 @@ perform_all_bc_mutations <- function(incoming_mut_mat,
                                      target_transversion_list,
                                      target_insertion_list,
                                      target_deletion_list,
-                                     prob_sub_mat
+                                     prob_sub_mat,
+                                     timepoint_for_label = '',
+                                     urid = NULL,
+                                     cell_num = NULL
                                      # uniform_sub_edits = TRUE, 
                                      # uniform_indel_edits = TRUE,
                                      # basepos_be_list = NULL, basepos_nuc_list = NULL,
                                      # force_all_transversions = FALSE
                                      
                                      ){
+  
+  this_timepoint_write_file <- paste0('bc_mutations_log', timepoint_for_label, '.txt')
+  
+  ################################################ 2/6
+  # close(file(this_timepoint_write_file, open = 'w'))
+  ################################################ 2/6
+
+  # ################################################ 2/6
+  # cat('\ntarget transition list ==\n', file = this_timepoint_write_file, append = TRUE)
+  # for(i in 1:length(target_transition_list)){
+  #   cat(paste0(paste(names(target_transition_list[i]), as.vector(target_transition_list)[i], sep = ','), '\n'), 
+  #       file = this_timepoint_write_file, append = TRUE)
+  # }
+  # 
+  # # cat(target_transition_list)
+  # 
+  # cat('\n#################################\ntarget transversion_list ==\n ', file = this_timepoint_write_file, append = TRUE)
+  # for(i in 1:length(target_transversion_list)){
+  #   cat(paste0(paste(names(target_transversion_list[i]), as.vector(target_transversion_list)[i], sep = ','), '\n'), 
+  #       file = this_timepoint_write_file, append = TRUE)
+  # }
+  # # cat(target_transversion_list)
+  # 
+  # cat('\n#################################\ntarget insertion list ==\n ', file = this_timepoint_write_file, append = TRUE)
+  # for(i in 1:length(target_insertion_list)){
+  #   cat(paste0(paste(names(target_insertion_list[i]), as.vector(target_insertion_list)[i], sep = ','), '\n'), 
+  #       file = this_timepoint_write_file, append = TRUE)
+  # }
+  # # cat(target_insertion_list)
+  # 
+  # cat('\n#################################\ntarget deletion list ==\n ', file = this_timepoint_write_file, append = TRUE)
+  # for(i in 1:length(target_deletion_list)){
+  #   cat(paste0(paste(names(target_deletion_list[i]), as.vector(target_deletion_list)[i], sep = ','), '\n'), 
+  #       file = this_timepoint_write_file, append = TRUE)
+  # }
+  # ################################################ 2/6
+  # cat(target_deletion_list)
+  
+  # cat('\n target_transition_list == \n', file = 'no_strings.txt', append = TRUE)
+  # for(i in 1:length(target_transition_list)){
+  #   cat(paste0('\n',names(target_transition_list)[i], ' == ', unname(unlist(target_transition_list))[i], '\n'), 
+  #       file = 'no_strings.txt', append = TRUE)
+  # }
+  # 
+  # cat('\n target_transversion_list == \n', file = 'no_strings.txt', append = TRUE)
+  # for(i in 1:length(target_transversion_list)){
+  #   cat(paste0('\n',names(target_transversion_list)[i], ' == ', unname(unlist(target_transversion_list))[i],'\n'), 
+  #       file = 'no_strings.txt', append = TRUE)
+  # }
+  # 
+  
+  
+  # cat('\n target_insertion_list == \n', file = 'no_strings.txt', append = TRUE)
+  # for(i in 1:length(target_insertion_list)){
+  #   cat(paste0('\n',names(target_insertion_list)[i], ' == ', unname(unlist(target_insertion_list))[i],'\n'), 
+  #       file = 'no_strings.txt', append = TRUE)
+  # }
+  # 
+  # cat('\n target_deletion_list == \n', file = 'no_strings.txt', append = TRUE)
+  # for(i in 1:length(target_deletion_list)){
+  #   cat(paste0('\n',names(target_deletion_list)[i], ' == ', unname(unlist(target_deletion_list))[i], '\n'), 
+  #       file = 'no_strings.txt', append = TRUE)
+  # }
   
   # cat(paste0('in perform_all_bc_mutations, uniform_edits = ', uniform_edits,  '\n'),
   #     file = 'outfile_nummuts.txt',
@@ -1368,9 +1587,10 @@ perform_all_bc_mutations <- function(incoming_mut_mat,
                                       baseline_ints = baseline_seq_ints_bc,
                                       # uniform = uniform_sub_edits,
                                       bg_transition_pos_er_list = bg_transition_list, 
-                                      target_transition_pos_er_list = target_transition_list)
+                                      target_transition_pos_er_list = target_transition_list,
+                                      timepoint_filename = timepoint_for_label)
   
-  # cat('after transition func\n', file = 'no_strings.txt', append = TRUE)
+  # cat('after bc transition func\n', file = 'no_strings.txt', append = TRUE)
   # cat(paste0('sum(incoming_mut_mat) after transition  = ', sum(incoming_mut_mat),  '\n'),
   #     file = 'outfile_nummuts.txt',
   #     append = TRUE)
@@ -1387,7 +1607,7 @@ perform_all_bc_mutations <- function(incoming_mut_mat,
                                         target_transversion_pos_er_list = target_transversion_list,
                                         bg_sub_prob_mat = prob_sub_mat)
                                         # force_all_transversions = forced_transversions)
-  # cat('after transversion func\n', file = 'no_strings.txt', append = TRUE)
+  # cat('after bc transversion func\n', file = 'no_strings.txt', append = TRUE)
   # cat(paste0('sum(incoming_mut_mat) after transversion  = ', sum(incoming_mut_mat),  '\n'),
   #     file = 'outfile_nummuts.txt',
   #     append = TRUE)
@@ -1398,8 +1618,10 @@ perform_all_bc_mutations <- function(incoming_mut_mat,
                                      num_cols = num_cols_bc,
                                      # uniform = uniform_indel_edits,
                                      bg_ins_pos_er_list = bg_insertion_list, 
-                                     target_ins_pos_er_list = target_insertion_list)
-  # cat('after insertion func\n', file = 'no_strings.txt', append = TRUE)
+                                     target_ins_pos_er_list = target_insertion_list,
+                                     run_id = urid,
+                                     this_cell_num = cell_num)
+  # cat('after bc insertion func\n', file = 'no_strings.txt', append = TRUE)
   # cat(paste0('length(target_deletion_list) pre deletion func  = ', length(target_deletion_list),  '\n'),
   #     file = 'no_strings.txt',
   #     append = TRUE)
@@ -1411,7 +1633,7 @@ perform_all_bc_mutations <- function(incoming_mut_mat,
                                     # uniform = uniform_indel_edits,
                                     bg_del_pos_er_list = bg_deletion_list, 
                                     target_del_pos_er_list = target_deletion_list)  
-  # cat('after deletion func\n', file = 'no_strings.txt', append = TRUE)
+  # cat('after bc deletion func\n', file = 'no_strings.txt', append = TRUE)
   # cat(paste0('sum(incoming_mut_mat) after deletion  = ', sum(incoming_mut_mat),  '\n'),
   #     file = 'outfile_nummuts.txt',
   #     append = TRUE)
