@@ -43,8 +43,7 @@ suppressPackageStartupMessages({
   library(Biostrings)
 })
 
-close(file('no_strings.txt', open = 'w'))
-close(file('random_vals.txt', open = 'w'))
+
 
 
 # accept simulation parameters from command line
@@ -250,28 +249,45 @@ option_list <- list(
   
   make_option('--beast_birth_rate_dist_params', type = 'character', default = '1; 1; 1',
               help = 'Parameterize the birth and death rates for tree reconstruction')
-      
+       
   
   #######################################
 )
 opt_parser <- OptionParser(option_list = option_list, add_help_option = FALSE)
 input_args <- parse_args(opt_parser)
 
+setwd('/dartfs/rc/lab/M/McKennaLab/projects/Aidan/simulations/r_sim_clean')
+
+print('Sourcing files ... ')
+source('./fit_plot_parameters.R') # this should go in an if statement or event (don't always need to do it)
+source('./nonuniform_muts_heterogeneous.R')
 source('./substitution_models.r')
 source('./add_intervening_be_targets_to_seq.r')
 source('./make_babette_tree.r')
+source('./mut_to_fasta_CONCAT_INTS.r')
+print('Files sourced ... ')
 
 ###############
 # replacing this 1/16 ... 
 # source('./mut_to_fasta_test.r')
 ###############
-source('./mut_to_fasta_CONCAT_INTS.r')
+
 
 
 # generate unique run name: 
 # set.seed(42)
 unique_run_id <- as.character(sample(1:10000000000000, size = 1))
 print(paste0('Unique run id = ', unique_run_id))
+
+# create runlog file
+if(!dir.exists(file.path('output', 'run_logs'))){
+  dir.create(file.path('output', 'run_logs'), recursive = TRUE)
+}
+runlog_filename <- paste0('runlog_', unique_run_id, '.txt')
+runlog_path <- file.path('output', 'run_logs', runlog_filename)
+close(file(runlog_path, open = 'w'))
+# close(file('no_strings.txt', open = 'w'))
+# close(file('random_vals.txt', open = 'w'))
 
 # generate letters grid for subrun id generation:
 diletters_grid <- expand.grid(LETTERS, LETTERS)
@@ -434,9 +450,9 @@ classify_be_mutation_type <- function(from_base, to_base){
 }
 if(!is.null(input_args$be_conversion_pattern)){
   be_target_fromto <- parse_be_example(input_args$be_conversion_pattern)
-  be_target_from <- be_target_fromto[['from_base']]
+  be_target_origin <- be_target_fromto[['from_base']]
   be_target_to <- be_target_fromto[['to_base']]
-  be_mutation_type <- classify_be_mutation_type(from_base = be_target_from,
+  be_mutation_type <- classify_be_mutation_type(from_base = be_target_origin,
                                                 to_base = be_target_to)  
 }
 
@@ -470,7 +486,7 @@ bc_base_fracs <- process_cla_string(input_args$bc_nuc_composition, outputted_typ
 
 # WORKING ON THIS 5/23
 # updated way to construct a barcode sequence with targets at the correct positions
-create_bc_sequence <- function(be_target_origin = be_target_from,
+create_bc_sequence <- function(be_target_origin = be_target_origin,
                                bc_length = input_args$bc_length, 
                                be_targets_counts = input_args$be_targets,
                                nuc_targets_counts = input_args$nuclease_targets,
@@ -496,8 +512,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
   # print('after be_targets_configs')
   return_list <- list()
   
-  print('be_targets_configs == ')
-  print(be_targets_configs)
+  # print('be_targets_configs == ')
+  # print(be_targets_configs)
   
   # if there are no barcode targets at all (BE or nuc)
   if(is.null(nuc_targets_counts) & is.null(be_targets_counts)){
@@ -516,8 +532,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
   }
   if(!is.null(nuc_targets_counts)){
     nuc_target_setup <- parse_target_count_arguments(pos_er_str = nuc_targets_counts) 
-    print('nuc_target_setup')
-    print(nuc_target_setup)
+    # print('nuc_target_setup')
+    # print(nuc_target_setup)
   }
   
   # print('past setup')
@@ -541,8 +557,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
     nuc_target_config_pattern <- parsed_nuc_target_config[['config']]
     nuc_first_target_pos <- parsed_nuc_target_config[['first_targ_pos']]
     nuc_target_num_bases_btwn <- parsed_nuc_target_config[['bases_btwn']]  
-    print('parsed_nuc_target_config')
-    print(parsed_nuc_target_config)
+    # print('parsed_nuc_target_config')
+    # print(parsed_nuc_target_config)
     # print('bottom of this if')
   }
   
@@ -621,7 +637,7 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
       cat(paste0('\nnum_be_targets == ', num_be_targets, '\n'), file = 'no_strings.txt', append = TRUE)
       
       # the total number of targets is computed by summing the number of HML targets in be_target_setup
-      bc_sequence_no_targets <- generate_non_be_target_sequence(bc_length = input_args$bc_length, 
+      bc_sequence_no_targets <- generate_non_be_target_sequence(bc_length = bc_length, 
                                                                 nuc_fracs = bc_base_fracs,
                                                                 target_from = be_target_origin,
                                                                 be_target_count = num_be_targets)
@@ -669,7 +685,7 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
       # can still use generate_non_be_target_sequence() to get the sequence since it considers nuc fractions
       # note that we specify num_be_targets = 0 so that we don't return a truncated sequence here
       bc_sequence_with_targets <- generate_non_be_target_sequence(
-        bc_length = input_args$bc_length, 
+        bc_length = bc_length, 
         nuc_fracs = bc_base_fracs,
         target_from = be_target_origin,
         be_target_count = 0
@@ -694,7 +710,7 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
     # print('line 610')
     if('num_h' %in% names(nuc_target_setup)){
       
-      print('in the part with num_h')
+      # print('in the part with num_h')
       
       num_nuc_targets <- sum(as.numeric(nuc_target_setup))
       
@@ -707,8 +723,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
                                                     bc_length_with_targets = bc_length, 
                                                     num_bases_btwn = nuc_target_num_bases_btwn)
       
-      print('bc_nuc_target_inds')
-      print(bc_nuc_target_inds)
+      # print('bc_nuc_target_inds')
+      # print(bc_nuc_target_inds)
       # print(length(bc_nuc_target_inds))
       
       # print('after generate target indices')
@@ -718,12 +734,12 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
                                                                           num_m = nuc_target_setup[['num_m']], 
                                                                           num_l = nuc_target_setup[['num_l']])
       
-      print('return list 721ish == ')
-      print(return_list)
+      # print('return list 721ish == ')
+      # print(return_list)
       
       # return_list[['nuc_basepos_editrate_classes']] <- bc_nuc_target_inds
     } else{ # if actual indices are supplied along with HML edit rate classes
-      print('in the ELSE down below ...')
+      # print('in the ELSE down below ...')
       # bc_sequence_with_targets <- generate_non_be_target_sequence(
       #   bc_length = input_args$bc_length, 
       #   nuc_fracs = bc_base_fracs,
@@ -744,7 +760,7 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
     }
     
     # new home 2/26
-    return_list[['bc_seq']] <- generate_non_be_target_sequence(bc_length = input_args$bc_length,
+    return_list[['bc_seq']] <- generate_non_be_target_sequence(bc_length = bc_length,
                                                                nuc_fracs = bc_base_fracs,
                                                                target_from = 'A',
                                                                be_target_count = 0)
@@ -774,8 +790,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
 bc_generation_return_list <- create_bc_sequence()
 # print(bc_generation_return_list)
 
-print(paste0('bc_generation_return_list == '))
-print(bc_generation_return_list)
+# print(paste0('bc_generation_return_list == '))
+# print(bc_generation_return_list)
 cat('\ncan i still append to a file ... \n', file = 'no_strings.txt', append = TRUE)
 
 cat(paste0('length(bc_generation_return_list == ', length(bc_generation_return_list)), 
@@ -1050,15 +1066,15 @@ mt_sub_model_params <- mt_sub_model_list[['sub_model_params_list']]
 mt_sub_prob_mat <- mt_sub_model_list[['sub_prob_mat']]
 
 # print('before parse sub model params')
-print('before parse sub model params, baseline_seq_nucs_bc == ')
-print(baseline_seq_nucs_bc)
+# print('before parse sub model params, baseline_seq_nucs_bc == ')
+# print(baseline_seq_nucs_bc)
 
 bc_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$bc_substitution_model,
                                             selected_sub_model = input_args$bc_sub_model_params,
                                             sequence_with_targets = baseline_seq_nucs_bc)
 
-print('after parse sub model params, baseline_seq_nucs_bc == ')
-print(baseline_seq_nucs_bc)
+# print('after parse sub model params, baseline_seq_nucs_bc == ')
+# print(baseline_seq_nucs_bc)
 # print('after parse sub model params')
 bc_sub_model_params <- bc_sub_model_list[['sub_model_params_list']]
 bc_sub_prob_mat <- bc_sub_model_list[['sub_prob_mat']]
@@ -1139,15 +1155,15 @@ generate_transversion_basepos_list <- function(sequence_with_targets, sub_prob_m
 basepos_bc_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
                                                                           sub_prob_mat = bc_sub_prob_mat)
 
-print('after basaepos_bc_nontarget_transition_probs, baseline_seq_nucs_bc == ')
-print(baseline_seq_nucs_bc)
+# print('after basaepos_bc_nontarget_transition_probs, baseline_seq_nucs_bc == ')
+# print(baseline_seq_nucs_bc)
 
 
 basepos_bc_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
                                                                               sub_prob_mat = bc_sub_prob_mat)
 
-print('after basaepos_bc_nontarget_transversion_probs, baseline_seq_nucs_bc == ')
-print(baseline_seq_nucs_bc)
+# print('after basaepos_bc_nontarget_transversion_probs, baseline_seq_nucs_bc == ')
+# print(baseline_seq_nucs_bc)
 
 
 
@@ -1339,7 +1355,7 @@ drop_editrate <- function(rate, num_degrees){
   return(rate)
 }
 
-get_new_be_targets <- function(be_editing_window, basepos_er_be_list, 
+get_new_be_targets <- function(be_editing_window, basepos_erc_be_list, 
                                decaying_editing, baseline_seq_ints_bc){
   
   # if we have an editing window
@@ -1348,10 +1364,10 @@ get_new_be_targets <- function(be_editing_window, basepos_er_be_list,
     growing_window_editrates <- list()
     
     # iterate through the positions (format is position:rate)
-    for(target_basepos in names(basepos_er_be_list)){
+    for(target_basepos in names(basepos_erc_be_list)){
       
       # get the edit rate associated with this target itself
-      target_editrate <- unname(unlist(basepos_er_be_list[as.character(target_basepos)]))
+      target_editrate <- unname(unlist(basepos_erc_be_list[as.character(target_basepos)]))
       
       # get the integer representation of that base
       base_int <- baseline_seq_ints_bc[as.integer(target_basepos)]
@@ -1438,7 +1454,7 @@ get_new_be_targets <- function(be_editing_window, basepos_er_be_list,
   
 }
 
-get_new_nuc_targets <- function(nuc_editing_window, basepos_er_nuc_list, 
+get_new_nuc_targets <- function(nuc_editing_window, basepos_erc_nuc_list, 
                                 decaying_editing, baseline_seq_ints_bc){
   # if we have an editing window
   if(nuc_editing_window > 0){
@@ -1446,10 +1462,10 @@ get_new_nuc_targets <- function(nuc_editing_window, basepos_er_nuc_list,
     growing_window_editrates <- list()
     
     # iterate through the positions (format is position:rate)
-    for(target_basepos in names(basepos_er_nuc_list)){
+    for(target_basepos in names(basepos_erc_nuc_list)){
       
       # get the edit rate associated with this target itself
-      target_editrate <- unname(unlist(basepos_er_nuc_list[as.character(target_basepos)]))
+      target_editrate <- unname(unlist(basepos_erc_nuc_list[as.character(target_basepos)]))
       
       # don't let lower window == 0
       lower_window <- max(1, as.integer(target_basepos) - nuc_editing_window)
@@ -1527,7 +1543,7 @@ get_new_nuc_targets <- function(nuc_editing_window, basepos_er_nuc_list,
 if(input_args$be_editing_window > 0){
   
   new_be_targets <- get_new_be_targets(be_editing_window = input_args$be_editing_window, 
-                                       basepos_er_be_list = basepos_erc_be_list,
+                                       basepos_erc_be_list = basepos_erc_be_list,
                                        decaying_editing = input_args$be_decaying_window,
                                        baseline_seq_ints_bc = baseline_seq_ints_bc)
   basepos_erc_be_list <- append(basepos_erc_be_list, new_be_targets)
@@ -1535,7 +1551,7 @@ if(input_args$be_editing_window > 0){
 
 if(input_args$nuclease_editing_window > 0){
   new_nuc_targets <- get_new_nuc_targets(nuc_editing_window = input_args$nuclease_editing_window, 
-                                         basepos_er_nuc_list = basepos_erc_nuc_list,
+                                         basepos_erc_nuc_list = basepos_erc_nuc_list,
                                          decaying_editing = input_args$nuclease_decaying_window,
                                          baseline_seq_ints_bc = baseline_seq_ints_bc)
   basepos_erc_nuc_list <- append(basepos_erc_nuc_list, new_nuc_targets)
@@ -2269,15 +2285,15 @@ write.table(format_input_args_df, paste0('./output/run_specs/', unique_run_id,
 # }
 # ############### BULK COMMENT WITH NEW APPROACH
 
-simulate_uniform_subs <- FALSE
-simulate_uniform_indels <- FALSE
-
-if(!is.null(input_args$be_targets)){
-  simulate_uniform_subs <- FALSE
-}
-if(!is.null(input_args$nuclease_targets)){
-  simulate_uniform_indels <- FALSE
-}
+# simulate_uniform_subs <- FALSE
+# simulate_uniform_indels <- FALSE
+# 
+# if(!is.null(input_args$be_targets)){
+#   simulate_uniform_subs <- FALSE
+# }
+# if(!is.null(input_args$nuclease_targets)){
+#   simulate_uniform_indels <- FALSE
+# }
 
 # rewrite savename if it was passed in as NULL
 if(is.null(input_args$savename)){
@@ -2293,10 +2309,6 @@ if(is.null(input_args$savename)){
 
 set.seed(42)
 
-setwd('/dartfs/rc/lab/M/McKennaLab/projects/Aidan/simulations/r_sim_clean')
-
-source('./fit_plot_parameters.R') # this should go in an if statement or event (don't always need to do it)
-source('./nonuniform_muts_heterogeneous.R')
 
 
 # for example, if we want static heatmap/dendrogram, then source
@@ -2375,25 +2387,26 @@ transversion_matches <- c(c(3,4), c(3,4), c(1,2), c(1,2))
 # replace pos_er_list in here ........
 setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length,
                       num_rows_mt, num_cols_mt, num_rows_bc, num_cols_bc, time_inc,
-                      pos_bc_nontarget_transition_probs,
-                      pos_bc_nontarget_transversion_probs,
-                      pos_bc_nontarget_insertion_probs,
-                      pos_bc_nontarget_deletion_probs,
-                      pos_mt_nontarget_transition_probs,
-                      pos_mt_nontarget_transversion_probs,
-                      pos_mt_nontarget_insertion_probs,
-                      pos_mt_nontarget_deletion_probs,
-                      pos_bc_target_transition_probs,
-                      pos_bc_target_transversion_probs,
-                      pos_bc_target_insertion_probs,
-                      pos_bc_target_deletion_probs,
-                      mt_sub_mat,
-                      bc_sub_mat,
+                      basepos_bc_nontarget_transition_probs,
+                      basepos_bc_nontarget_transversion_probs,
+                      basepos_bc_nontarget_insertion_probs,
+                      basepos_bc_nontarget_deletion_probs,
+                      basepos_mt_nontarget_transition_probs,
+                      basepos_mt_nontarget_transversion_probs,
+                      basepos_mt_nontarget_insertion_probs,
+                      basepos_mt_nontarget_deletion_probs,
+                      basepos_bc_target_transition_probs,
+                      basepos_bc_target_transversion_probs,
+                      basepos_bc_target_insertion_probs,
+                      basepos_bc_target_deletion_probs,
+                      mt_sub_prob_mat,
+                      bc_sub_prob_mat,
                       # pos_er_nuc_list,
                       # er_df, pos_er_be_list, 
-                      savename, 
-                      uniform_subs, 
-                      uniform_indels, forced_transversions, stopping_points, cold_startup,
+                      custom_savename, 
+                      # uniform_subs, 
+                      # uniform_indels, 
+                      forced_transversions, sim_length_stopping_points, cold_startup,
                       incoming_mt_profiles, incoming_bc_profiles,
                       sim_time_vec_mt, sim_time_vec_bc, parent_vec, jitter_frac){
   
@@ -2476,11 +2489,13 @@ setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length
 multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parents, 
                             timepoint, 
                             # uniform_editing_indels, uniform_editing_subs,
-                            pos_bc_nt_transitions, pos_bc_nt_transversions, pos_bc_nt_insertions, 
-                            pos_bc_nt_deletions, pos_mt_nt_transitions, pos_mt_nt_transversions, 
-                            pos_mt_nt_insertions, pos_mt_nt_deletions, pos_bc_t_transitions, 
-                            pos_bc_t_transversions, pos_bc_t_insertions, pos_bc_t_deletions,
-                            mt_nt_sub_mat, bc_nt_sub_mat, jitter_fraction, id){
+                            basepos_bc_nontarget_transition_probs, basepos_bc_nontarget_transversion_probs, 
+                            basepos_bc_nontarget_insertion_probs, basepos_bc_nontarget_deletion_probs,
+                            basepos_mt_nontarget_transition_probs, basepos_mt_nontarget_transversion_probs, 
+                            basepos_mt_nontarget_insertion_probs, basepos_mt_nontarget_deletion_probs, 
+                            basepos_bc_target_transition_probs, basepos_bc_target_transversion_probs, 
+                            basepos_bc_target_insertion_probs, basepos_bc_target_deletion_probs,
+                            mt_sub_prob_mat, bc_sub_prob_mat, jitter_fraction, unique_run_id){
                             # pos_be_list, pos_nuc_list, editrate_df, force_all_transverions){
   
   # cat(paste0('length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions)), file = 'no_strings.txt', append = TRUE)
@@ -2616,22 +2631,22 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
   # print(environment(pos_mt_nt_transitions))
   # print(environment(mt_profiles))
   
-  # can anyone explain to me why 1) this is necessary, 2) what problem this solves, and 3) why it works? because it does
-  # without these, 'object 'pos_mt_nontarget_transition_probs' not found' e.g.
-  pos_mt_nt_transitions <- pos_mt_nt_transitions
-  pos_mt_nt_transversions <- pos_mt_nt_transversions
-  pos_mt_nt_insertions <- pos_mt_nt_insertions
-  pos_mt_nt_deletions <- pos_mt_nt_deletions
+  # # can anyone explain to me why 1) this is necessary, 2) what problem this solves, and 3) why it works? because it does
+  # # without these, 'object 'pos_mt_nontarget_transition_probs' not found' e.g.
+  # pos_mt_nt_transitions <- pos_mt_nt_transitions
+  # pos_mt_nt_transversions <- pos_mt_nt_transversions
+  # pos_mt_nt_insertions <- pos_mt_nt_insertions
+  # pos_mt_nt_deletions <- pos_mt_nt_deletions
   
-  pos_bc_nt_transitions <- pos_bc_nt_transitions
-  pos_bc_nt_transversions <- pos_bc_nt_transversions
-  pos_bc_nt_insertions <- pos_bc_nt_insertions
-  pos_bc_nt_deletions <- pos_bc_nt_deletions
+  # pos_bc_nt_transitions <- pos_bc_nt_transitions 3/5
+  # pos_bc_nt_transversions <- pos_bc_nt_transversions
+  # pos_bc_nt_insertions <- pos_bc_nt_insertions
+  # pos_bc_nt_deletions <- pos_bc_nt_deletions
   
-  pos_bc_t_transitions <- pos_bc_t_transitions
-  pos_bc_t_transversions <- pos_bc_t_transversions
-  pos_bc_t_insertions <- pos_bc_t_insertions
-  pos_bc_t_deletions <- pos_bc_t_deletions
+  # pos_bc_t_transitions <- pos_bc_t_transitions
+  # pos_bc_t_transversions <- pos_bc_t_transversions
+  # pos_bc_t_insertions <- pos_bc_t_insertions
+  # pos_bc_t_deletions <- pos_bc_t_deletions
   
   # cat('\n pos_bc_t_transitions == \n', file = 'no_strings.txt', append = TRUE)
   # for(i in 1:length(pos_bc_t_transitions)){
@@ -2670,11 +2685,11 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
                                      # cat(paste0('\n in lapply at x == ', x, ', length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions), '\n'), 
                                      #     file = 'no_strings.txt', append = TRUE)
                                      return(perform_all_mt_mutations(incoming_mut_mat = mt_profiles[[x]],
-                                                                     bg_transition_list = pos_mt_nt_transitions,
-                                                                     bg_transversion_list = pos_mt_nt_transversions,
-                                                                     bg_insertion_list = pos_mt_nt_insertions,
-                                                                     bg_deletion_list = pos_mt_nt_deletions,
-                                                                     prob_sub_mat = mt_nt_sub_mat))
+                                                                     bg_transition_list = basepos_mt_nontarget_transition_probs,
+                                                                     bg_transversion_list = basepos_mt_nontarget_transversion_probs,
+                                                                     bg_insertion_list = basepos_mt_nontarget_insertion_probs,
+                                                                     bg_deletion_list = basepos_mt_nontarget_deletion_probs,
+                                                                     prob_sub_mat = mt_sub_prob_mat))
                                      
                                    })
   
@@ -2715,17 +2730,17 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
                                                                      # basepos_be_list = pos_be_list,
                                                                      # basepos_nuc_list = pos_nuc_list,
                                                                      # editrate_df = editrate_df,
-                                                                     bg_transition_list = pos_bc_nt_transitions,
-                                                                     bg_transversion_list = pos_bc_nt_transversions,
-                                                                     bg_insertion_list = pos_bc_nt_insertions,
-                                                                     bg_deletion_list = pos_bc_nt_deletions,
-                                                                     target_transition_list = pos_bc_t_transitions,
-                                                                     target_transversion_list = pos_bc_t_transversions,
-                                                                     target_insertion_list = pos_bc_t_insertions,
-                                                                     target_deletion_list = pos_bc_t_deletions,
-                                                                     prob_sub_mat = mt_nt_sub_mat,
+                                                                     bg_transition_list = basepos_bc_nontarget_transition_probs,
+                                                                     bg_transversion_list = basepos_bc_nontarget_transversion_probs,
+                                                                     bg_insertion_list = basepos_bc_nontarget_insertion_probs,
+                                                                     bg_deletion_list = basepos_bc_nontarget_deletion_probs,
+                                                                     target_transition_list = basepos_bc_target_transition_probs,
+                                                                     target_transversion_list = basepos_bc_target_transversion_probs,
+                                                                     target_insertion_list = basepos_bc_target_insertion_probs,
+                                                                     target_deletion_list = basepos_bc_target_deletion_probs,
+                                                                     prob_sub_mat = bc_sub_prob_mat,
                                                                      timepoint_for_label = timepoint,
-                                                                     urid = id,
+                                                                     urid = unique_run_id,
                                                                      cell_num = x))
                                                                      # force_all_transversions = force_all_transversions))
                                    })  
@@ -2833,27 +2848,27 @@ const_sim_arglist <- list(num_clusters = input_args$num_cores,
                           num_rows_bc = max(poss_num_bc_integrations),
                           num_cols_bc = input_args$bc_length,
                           time_inc = input_args$time_inc,
-                          pos_bc_nontarget_transition_probs = basepos_bc_nontarget_transition_probs,
-                          pos_bc_nontarget_transversion_probs = basepos_bc_nontarget_transversion_probs,
-                          pos_bc_nontarget_insertion_probs = basepos_bc_nontarget_insertion_probs,
-                          pos_bc_nontarget_deletion_probs = basepos_bc_nontarget_deletion_probs,
-                          pos_mt_nontarget_transition_probs = basepos_mt_nontarget_transition_probs,
-                          pos_mt_nontarget_transversion_probs = basepos_mt_nontarget_transversion_probs,
-                          pos_mt_nontarget_insertion_probs = basepos_mt_nontarget_insertion_probs,
-                          pos_mt_nontarget_deletion_probs = basepos_mt_nontarget_deletion_probs,
-                          pos_bc_target_transition_probs = basepos_bc_target_transition_probs,
-                          pos_bc_target_transversion_probs = basepos_bc_target_transversion_probs,
-                          pos_bc_target_insertion_probs = basepos_bc_target_insertion_probs,
-                          pos_bc_target_deletion_probs = basepos_bc_target_deletion_probs,
-                          mt_sub_mat = mt_sub_prob_mat,
-                          bc_sub_mat = bc_sub_prob_mat,
-                          uniform_subs = simulate_uniform_subs,
-                          uniform_indels = simulate_uniform_indels,
+                          basepos_bc_nontarget_transition_probs = basepos_bc_nontarget_transition_probs,
+                          basepos_bc_nontarget_transversion_probs = basepos_bc_nontarget_transversion_probs,
+                          basepos_bc_nontarget_insertion_probs = basepos_bc_nontarget_insertion_probs,
+                          basepos_bc_nontarget_deletion_probs = basepos_bc_nontarget_deletion_probs,
+                          basepos_mt_nontarget_transition_probs = basepos_mt_nontarget_transition_probs,
+                          basepos_mt_nontarget_transversion_probs = basepos_mt_nontarget_transversion_probs,
+                          basepos_mt_nontarget_insertion_probs = basepos_mt_nontarget_insertion_probs,
+                          basepos_mt_nontarget_deletion_probs = basepos_mt_nontarget_deletion_probs,
+                          basepos_bc_target_transition_probs = basepos_bc_target_transition_probs,
+                          basepos_bc_target_transversion_probs = basepos_bc_target_transversion_probs,
+                          basepos_bc_target_insertion_probs = basepos_bc_target_insertion_probs,
+                          basepos_bc_target_deletion_probs = basepos_bc_target_deletion_probs,
+                          mt_sub_prob_mat = mt_sub_prob_mat,
+                          bc_sub_prob_mat = bc_sub_prob_mat,
+                          # uniform_subs = simulate_uniform_subs,
+                          # uniform_indels = simulate_uniform_indels,
                           forced_transversions = force_transversions,
                           # pos_er_be_list = basepos_editrate_be_list,
                           # pos_er_nuc_list = basepos_editrate_nuc_list,
-                          savename = custom_savename, 
-                          stopping_points = sim_length_stopping_points,
+                          custom_savename = custom_savename, 
+                          sim_length_stopping_points = sim_length_stopping_points,
                           jitter_frac = input_args$jitter_fraction)
 cold_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
                                        hot_or_cold = 'cold', 
@@ -5022,24 +5037,24 @@ for(t in 1:length(poss_times)){
                                                                                          timepoint = poss_times[t],
                                                                                          # uniform_editing_indels = uniform_indels,
                                                                                          # uniform_editing_subs = uniform_subs,
-                                                                                         pos_bc_nt_transitions = pos_bc_nontarget_transition_probs,
-                                                                                         pos_bc_nt_transversions = pos_bc_nontarget_transversion_probs,
-                                                                                         pos_bc_nt_insertions = pos_bc_nontarget_insertion_probs,
-                                                                                         pos_bc_nt_deletions = pos_bc_nontarget_deletion_probs,
-                                                                                         pos_mt_nt_transitions = pos_mt_nontarget_transition_probs,
-                                                                                         pos_mt_nt_transversions = pos_mt_nontarget_transversion_probs,
-                                                                                         pos_mt_nt_insertions = pos_mt_nontarget_insertion_probs,
-                                                                                         pos_mt_nt_deletions = pos_mt_nontarget_deletion_probs,
-                                                                                         pos_bc_t_transitions = pos_bc_target_transition_probs,
-                                                                                         pos_bc_t_transversions = pos_bc_target_transversion_probs,
-                                                                                         pos_bc_t_insertions = pos_bc_target_insertion_probs,
-                                                                                         pos_bc_t_deletions = pos_bc_target_deletion_probs,
-                                                                                         mt_nt_sub_mat = mt_sub_mat,
-                                                                                         bc_nt_sub_mat = bc_sub_mat,
+                                                                                         basepos_bc_nontarget_transition_probs = basepos_bc_nontarget_transition_probs,
+                                                                                         basepos_bc_nontarget_transversion_probs = basepos_bc_nontarget_transversion_probs,
+                                                                                         basepos_bc_nontarget_insertion_probs = basepos_bc_nontarget_insertion_probs,
+                                                                                         basepos_bc_nontarget_deletion_probs = basepos_bc_nontarget_deletion_probs,
+                                                                                         basepos_mt_nontarget_transition_probs = basepos_mt_nontarget_transition_probs,
+                                                                                         basepos_mt_nontarget_transversion_probs = basepos_mt_nontarget_transversion_probs,
+                                                                                         basepos_mt_nontarget_insertion_probs = basepos_mt_nontarget_insertion_probs,
+                                                                                         basepos_mt_nontarget_deletion_probs = basepos_mt_nontarget_deletion_probs,
+                                                                                         basepos_bc_target_transition_probs = basepos_bc_target_transition_probs,
+                                                                                         basepos_bc_target_transversion_probs = basepos_bc_target_transversion_probs,
+                                                                                         basepos_bc_target_insertion_probs = basepos_bc_target_insertion_probs,
+                                                                                         basepos_bc_target_deletion_probs = basepos_bc_target_deletion_probs,
+                                                                                         mt_sub_prob_mat = mt_sub_prob_mat,
+                                                                                         bc_sub_prob_mat = bc_sub_prob_mat,
                                                                                          jitter_fraction = jitter_frac,
-                                                                                         id = unique_run_id
-                                                                                         ))
-  # c(mt_profiles, bc_profiles, 
+                                                                                         unique_run_id = unique_run_id
+                        ))
+      # c(mt_profiles, bc_profiles, 
   #   sim_time_vec_mt, sim_time_vec_bc, cell_lineage) %<-% multi_core_func(mt_profiles = mt_profiles,
   #                                                                        bc_profiles = bc_profiles,
   #                                                                        mt_times = sim_time_vec_mt,
