@@ -1,6 +1,13 @@
 print(strrep('#', 60))
 
+# generate unique run name: 
+# set.seed(42)
+unique_run_id <- as.character(sample(1:10000000000000, size = 1))
+print(paste0('Unique run id = ', unique_run_id))
+# quit(save = 'no', status = 0)
 
+
+print('Loading libraries ... ')
 suppressPackageStartupMessages({
   library(shiny)
   library(shinyWidgets)
@@ -156,11 +163,15 @@ option_list <- list(
               help = 'savename prefix for generated data'),
   make_option('--reconstruction_method', type = 'character', default = 'score',
               help = "'score' = use score matrix approach to reconstruct lineage;
-              'beast' = use BEAST to reconstruct lineage,
               'fasta_only' = only write out simulated sequences (useful for tree development with other tools)"),
+  # 'beast' = use BEAST to reconstruct lineage,
   # can allow -S here to equal af or bin, for example
   make_option(c('-S', '--score_approach'), type = 'character', default = NULL,
               help = 'relevant if reconstruction_method == "score": mutation score approach {"af", "bin"} (if both: "both" or "af; bin"'),
+  make_option('--fasta_type', type = 'character', default = 'terminal',
+              help = 'relevant if reconstruction_method == "fasta_only": any (combination) of "terminal; all_cells"'),
+  make_option('--include_var_pos_fasta', type = 'logical', default = FALSE,
+              help = 'relevant if reconstruction_method == "fasta_only": boolen, whether to also write out fasta(s) that only include variable positions across seqs'),
   make_option('--chosen_gamma', type = 'character', default = 'mt_gamma_site_model',
               help = 'specify which gamma heterogeneity function (bc or mt) is used in reconstruction [mt_gamma_site_model or bc_gamma_site_model]'),
   make_option(c('-F', '--sampling_fractions'), type = 'character', default = '1',
@@ -275,10 +286,10 @@ print('Files sourced ... ')
 
 
 
-# generate unique run name: 
-# set.seed(42)
-unique_run_id <- as.character(sample(1:10000000000000, size = 1))
-print(paste0('Unique run id = ', unique_run_id))
+# # generate unique run name: 
+# # set.seed(42)
+# unique_run_id <- as.character(sample(1:10000000000000, size = 1))
+# print(paste0('Unique run id = ', unique_run_id))
 
 # create runlog file
 if(!dir.exists(file.path('output', 'run_logs', unique_run_id))){
@@ -1081,7 +1092,7 @@ bc_sub_model_params <- bc_sub_model_list[['sub_model_params_list']]
 bc_sub_prob_mat <- bc_sub_model_list[['sub_prob_mat']]
 
 
-print('1083')
+# print('1083')
 
 # accepts a substitution model and a sequence as input, 
 # and returns a list of basepos:transition_prob for transitions
@@ -1364,7 +1375,7 @@ drop_editrate <- function(rate, num_degrees){
   return(rate)
 }
 
-print('1358')
+# print('1358')
 get_new_be_targets <- function(be_editing_window, basepos_erc_be_list, 
                                decaying_editing, baseline_seq_ints_bc){
   
@@ -2123,8 +2134,11 @@ poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, 
 poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
 poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
 poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob, outputted_type = 'numeric')
+poss_fasta_types <- process_cla_string(input_args$fasta_type, outputted_type = 'character')
+include_var_pos_fasta <- input_args$include_var_pos_fasta
 
-print('2118')
+
+# print('2118')
 
 # if sim lengths are specified using start:stop:inc, define sim lengths accordingly
 if(grepl(pattern = ':', x = input_args$sim_length)){
@@ -2419,14 +2433,14 @@ poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integrati
 
 mt_recovered_genomes_df <- generate_downsample_features(max_ints_per_cell_vec = poss_num_mito_genomes,
                                                       recovery_rate_vec = poss_mt_genome_recovery_probs)
-print(paste0('class(mt_recovered_genomes_df) = ', class(mt_recovered_genomes_df)))
-print(paste0('nrow(mt_recovered_genomes_df) = ', nrow(mt_recovered_genomes_df)))
-print(mt_recovered_genomes_df)
+# print(paste0('class(mt_recovered_genomes_df) = ', class(mt_recovered_genomes_df)))
+# print(paste0('nrow(mt_recovered_genomes_df) = ', nrow(mt_recovered_genomes_df)))
+# print(mt_recovered_genomes_df)
 bc_recovered_ints_df <- generate_downsample_features(max_ints_per_cell_vec = poss_num_bc_integrations,
                                                      recovery_rate_vec = poss_bc_integration_recovery_probs)
-print(paste0('class(bc_recovered_ints_df) = ', class(bc_recovered_ints_df)))
-print(paste0('nrow(bc_recovered_ints_df) = ', nrow(bc_recovered_ints_df)))
-print(bc_recovered_ints_df)
+# print(paste0('class(bc_recovered_ints_df) = ', class(bc_recovered_ints_df)))
+# print(paste0('nrow(bc_recovered_ints_df) = ', nrow(bc_recovered_ints_df)))
+# print(bc_recovered_ints_df)
 
 
 # mymat <- matrix(data = seq(1, 40), nrow = 10)
@@ -2473,7 +2487,9 @@ setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length
                       forced_transversions, sim_length_stopping_points, cold_startup,
                       incoming_mt_profiles, incoming_bc_profiles,
                       sim_time_vec_mt, sim_time_vec_bc, parent_vec, jitter_frac,
-                      mt_recovered_genomes_df, bc_recovered_ints_df){
+                      mt_recovered_genomes_df, bc_recovered_ints_df,
+                      poss_fasta_types,
+                      include_var_pos_fasta){
   
   # print('basepos_mt_nontarget_transition_probs')
   # print(basepos_mt_nontarget_transition_probs)
@@ -2537,7 +2553,8 @@ setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length
                                     'sim_length_stopping_points', 'jitter_frac',
                                     'add_mito_jitter',
                                     'unique_run_id',
-                                    'mt_recovered_genomes_df', 'bc_recovered_ints_df'),
+                                    'mt_recovered_genomes_df', 'bc_recovered_ints_df', 
+                                    'poss_fasta_types', 'include_var_pos_fasta'),
                 envir = environment())
   cluster_startup_end <- Sys.time()
   cluster_startup_total <<- difftime(cluster_startup_end, cluster_startup_start, units = 'secs')
@@ -2562,7 +2579,8 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
                             basepos_bc_target_transition_probs, basepos_bc_target_transversion_probs, 
                             basepos_bc_target_insertion_probs, basepos_bc_target_deletion_probs,
                             mt_sub_prob_mat, bc_sub_prob_mat, jitter_fraction, unique_run_id,
-                            mt_recovered_genomes_df, bc_recovered_ints_df){
+                            mt_recovered_genomes_df, bc_recovered_ints_df, poss_fasta_types,
+                            include_var_pos_fasta){
                             # pos_be_list, pos_nuc_list, editrate_df, force_all_transverions){
   
   # cat(paste0('length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions)), file = 'no_strings.txt', append = TRUE)
@@ -2939,7 +2957,9 @@ const_sim_arglist <- list(num_clusters = input_args$num_cores,
                           sim_length_stopping_points = sim_length_stopping_points,
                           jitter_frac = input_args$jitter_fraction,
                           bc_recovered_ints_df = bc_recovered_ints_df,
-                          mt_recovered_genomes_df = mt_recovered_genomes_df)
+                          mt_recovered_genomes_df = mt_recovered_genomes_df,
+                          poss_fasta_types = poss_fasta_types,
+                          include_var_pos_fasta = include_var_pos_fasta)
 cold_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
                                        hot_or_cold = 'cold', 
                                        starting_mt_profiles = NULL,
@@ -3078,6 +3098,64 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   timepoint_linstring_filename <- file.path(linstring_dir_path, paste0('lin_strings_', timept_savename, '.txt'))
   
   write.table(lineage_strings, timepoint_linstring_filename)
+  
+  
+  
+  
+  create_ground_truth_tree <- function(lineage_strings, save_path){
+    # so first we have to isolate the lineage strings of interest, which will just be (length(lineage_strings)+1)/2 if there's only one founder cell
+    terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
+    
+    # split each of the terminal lineage strings into a vector of 1s and 2s, and create matrix where each gen is a column
+    # need factors for downstream conversion to as.phylo
+    terminal_lineage_df <- data.frame(t(sapply(terminal_lineage_strings, function(full_string){
+      splits <- str_split(string = full_string, pattern = '\\.')[[1]]
+      splits <- append(splits, full_string)
+      return(splits)  
+    })), stringsAsFactors = TRUE)
+    
+    # write.table(terminal_lineage_df, './terminal_lineage_df_pre.csv')
+    
+    # if there are N columns, N-1 are generation indicators, and Nth is the lineage string
+    gen_colnames <- paste0('Gen', seq(1, ncol(terminal_lineage_df)-1))
+    
+    # last column name will be the original lineage_string
+    terminal_lineage_df_colnames <- append(gen_colnames, 'lineage_string')
+    colnames(terminal_lineage_df) <- terminal_lineage_df_colnames
+    
+    # revert the lineage_string back to character from factor
+    terminal_lineage_df$lineage_string <- as.character(terminal_lineage_df$lineage_string)
+    
+    # create a formula that can be used to specify lineage relationships
+    lineage_formula <- as.formula(paste0('~', paste(colnames(terminal_lineage_df)[1:(ncol(terminal_lineage_df)-1)], collapse = '/')))
+    true_phylo <- ape::as.phylo(lineage_formula, data = terminal_lineage_df)  
+    
+    true_phylo$tip.label <- sort(terminal_lineage_df$lineage_string)
+    #########################
+    # rewriting labels into new format ... 
+    new_labels <- character()
+    for(i in 1:length(true_phylo$tip.label)){
+      # new_lab <- teststr <- '1.1.1.1.1.1.1.2'
+      newlab <- gsub(pattern = '\\.', replacement = '_', x = true_phylo$tip.label[i])
+      new_labels <- append(new_labels, newlab)
+    }
+    true_phylo$tip.label <- new_labels
+    #########################
+    
+    write.tree(true_phylo, file = save_path)
+    
+    return(true_phylo)
+  }
+  
+  # create processed_newicks dir if it doesn't already exist
+  if(!dir.exists(file.path('output', 'processed_newicks', unique_run_id))){
+    dir.create(file.path('output', 'processed_newicks', unique_run_id), recursive = TRUE)
+  }
+  
+  print('Writing ground truth tree for this timepoint ... ')
+  this_timepoint_ground_truth_tree <- create_ground_truth_tree(lineage_strings = lineage_strings, 
+                                                               save_path = file.path('output', 'processed_newicks', unique_run_id, 
+                                                                                     paste0('ground_truth_tree_', timept_savename, '.newick')))
   
   # cat('\npast save_mutation_profiles()\n', file = 'no_strings.txt', append = TRUE)
   
@@ -3476,7 +3554,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   
   # cat('\npast create_raw_score_matrices()\n', file = 'no_strings.txt', append = TRUE)
   
-  if(recon_method == 'beast'){
+  if(recon_method == 'fasta_only'){
     # work in progress, don't delete:
     # custom_inference_model <- create_inference_model(
     #   site_model = site_mod,
@@ -3572,10 +3650,10 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     non_par_create_sublist_profiles <- function(mut_profiles,  
                                                 which_integrations){ 
       
-      print(paste0('in non par, dim(profiles[[1]]) == ', dim(mut_profiles[[1]])))
-      print(paste0('in non par, class(profiles[[1]]) == ', class(mut_profiles[[1]])))
-      print(paste0('in non par, which_integrations == ', which_integrations))
-      print(paste0('in non par, length(mut_profiles) == ', length(mut_profiles)))
+      # print(paste0('in non par, dim(profiles[[1]]) == ', dim(mut_profiles[[1]])))
+      # print(paste0('in non par, class(profiles[[1]]) == ', class(mut_profiles[[1]])))
+      # print(paste0('in non par, which_integrations == ', which_integrations))
+      # print(paste0('in non par, length(mut_profiles) == ', length(mut_profiles)))
       
       created_list <- lapply(seq(1, length(mut_profiles)), function(mut_mat_num){
         mut_mat <- mut_profiles[[mut_mat_num]][which_integrations, ]
@@ -3626,7 +3704,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
          # nonparallel_time <- 
          bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_bc_list_', this_num_recovered_ints, 
                                                                                              '_integrations_recovery_prob_', this_recovery_rate, 
-                                                                                             '_timept_', this_timept_savename))
+                                                                                             '_timept_', this_timept_savename, '.rds'))
          
          saveRDS(object = non_par_create_sublist_profiles(mut_profiles = barcode_profiles,
                                                           which_integrations = these_ints),
@@ -3657,7 +3735,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         
         mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_mt_list_', this_num_recovered_genomes, 
                                                                                             '_copies_recovery_prob_', this_recovery_rate, 
-                                                                                            '_timept_', this_timept_savename))
+                                                                                            '_timept_', this_timept_savename, '.rds'))
 
         
         saveRDS(object = non_par_create_sublist_profiles(mut_profiles = mito_profiles,
@@ -3760,59 +3838,59 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                   bc_recovery_probs = poss_bc_integration_recovery_probs)
   }
   
-  if(recon_method == 'fasta_only'){
-    
-    # this is what i need to fill in 3/6
-    
-  }
+  # if(recon_method == 'fasta_only'){
+  #   
+  #   # this is what i need to fill in 3/6
+  #   
+  # }
   
   ################################### new approach to reconstructing ground truth tree
-  create_ground_truth_tree <- function(lineage_strings){
-    # so first we have to isolate the lineage strings of interest, which will just be (length(lineage_strings)+1)/2 if there's only one founder cell
-    terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
-    
-    # split each of the terminal lineage strings into a vector of 1s and 2s, and create matrix where each gen is a column
-    # need factors for downstream conversion to as.phylo
-    terminal_lineage_df <- data.frame(t(sapply(terminal_lineage_strings, function(full_string){
-      splits <- str_split(string = full_string, pattern = '\\.')[[1]]
-      splits <- append(splits, full_string)
-      return(splits)  
-    })), stringsAsFactors = TRUE)
-    
-    write.table(terminal_lineage_df, './terminal_lineage_df_pre.csv')
-    
-    # if there are N columns, N-1 are generation indicators, and Nth is the lineage string
-    gen_colnames <- paste0('Gen', seq(1, ncol(terminal_lineage_df)-1))
-    
-    # last column name will be the original lineage_string
-    terminal_lineage_df_colnames <- append(gen_colnames, 'lineage_string')
-    colnames(terminal_lineage_df) <- terminal_lineage_df_colnames
-    
-    # revert the lineage_string back to character from factor
-    terminal_lineage_df$lineage_string <- as.character(terminal_lineage_df$lineage_string)
-    
-    # create a formula that can be used to specify lineage relationships
-    lineage_formula <- as.formula(paste0('~', paste(colnames(terminal_lineage_df)[1:(ncol(terminal_lineage_df)-1)], collapse = '/')))
-    true_phylo <- ape::as.phylo(lineage_formula, data = terminal_lineage_df)  
-    
-    true_phylo$tip.label <- sort(terminal_lineage_df$lineage_string)
-    #########################
-    # rewriting labels into new format ... 
-    new_labels <- character()
-    for(i in 1:length(true_phylo$tip.label)){
-      # new_lab <- teststr <- '1.1.1.1.1.1.1.2'
-      newlab <- gsub(pattern = '\\.', replacement = '_', x = true_phylo$tip.label[i])
-      new_labels <- append(new_labels, newlab)
-    }
-    true_phylo$tip.label <- new_labels
-    #########################
-    
-    write.tree(true_phylo, file = 'ground_truth_check.newick')
-    
-    return(true_phylo)
-  }
-  print('Now building ground truth tree ...')
-  true_phylo <<- create_ground_truth_tree(lineage_strings = lineage_strings)
+  # create_ground_truth_tree <- function(lineage_strings, save_path){
+  #   # so first we have to isolate the lineage strings of interest, which will just be (length(lineage_strings)+1)/2 if there's only one founder cell
+  #   terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
+  #   
+  #   # split each of the terminal lineage strings into a vector of 1s and 2s, and create matrix where each gen is a column
+  #   # need factors for downstream conversion to as.phylo
+  #   terminal_lineage_df <- data.frame(t(sapply(terminal_lineage_strings, function(full_string){
+  #     splits <- str_split(string = full_string, pattern = '\\.')[[1]]
+  #     splits <- append(splits, full_string)
+  #     return(splits)  
+  #   })), stringsAsFactors = TRUE)
+  #   
+  #   # write.table(terminal_lineage_df, './terminal_lineage_df_pre.csv')
+  #   
+  #   # if there are N columns, N-1 are generation indicators, and Nth is the lineage string
+  #   gen_colnames <- paste0('Gen', seq(1, ncol(terminal_lineage_df)-1))
+  #   
+  #   # last column name will be the original lineage_string
+  #   terminal_lineage_df_colnames <- append(gen_colnames, 'lineage_string')
+  #   colnames(terminal_lineage_df) <- terminal_lineage_df_colnames
+  #   
+  #   # revert the lineage_string back to character from factor
+  #   terminal_lineage_df$lineage_string <- as.character(terminal_lineage_df$lineage_string)
+  #   
+  #   # create a formula that can be used to specify lineage relationships
+  #   lineage_formula <- as.formula(paste0('~', paste(colnames(terminal_lineage_df)[1:(ncol(terminal_lineage_df)-1)], collapse = '/')))
+  #   true_phylo <- ape::as.phylo(lineage_formula, data = terminal_lineage_df)  
+  #   
+  #   true_phylo$tip.label <- sort(terminal_lineage_df$lineage_string)
+  #   #########################
+  #   # rewriting labels into new format ... 
+  #   new_labels <- character()
+  #   for(i in 1:length(true_phylo$tip.label)){
+  #     # new_lab <- teststr <- '1.1.1.1.1.1.1.2'
+  #     newlab <- gsub(pattern = '\\.', replacement = '_', x = true_phylo$tip.label[i])
+  #     new_labels <- append(new_labels, newlab)
+  #   }
+  #   true_phylo$tip.label <- new_labels
+  #   #########################
+  #   
+  #   write.tree(true_phylo, file = save_path)
+  #   
+  #   return(true_phylo)
+  # }
+  # print('Now building ground truth tree ...')
+  # true_phylo <<- create_ground_truth_tree(lineage_strings = lineage_strings)
   
   make_static_heatmap <- function(scores, inds, sub_run_id, include_plots){
     
@@ -4586,281 +4664,429 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   
   format_param_matrix(param_mat)
   
-  make_fasta_files <- function(urid, ground_truth_phylo = true_phylo, this_timept_savename = timept_savename){
+  
+  make_fasta_files_new <- function(urid, ground_truth_phylo = true_phylo, this_timept_savename = timept_savename){
     
     # write all the way up the path to the reference seq subdir
     if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
       dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
     }
-    if(!dir.exists(file.path('output', 'processed_newicks', urid))){
-      dir.create(file.path('output', 'processed_newicks', urid), recursive = TRUE)
-    }
     
-    # write.table(lineage_strings, 'these_lin_strings.txt')
-    terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
-    
-    all_processed_list_paths <- list.files(file.path('processed_lists', urid), full.names = TRUE)
-    current_timepoint <- str_extract(this_timept_savename, '(?<=_time_)[0-9.]+')
-    this_timepoint_paths <- character()
-    for(file_path in all_processed_list_paths){
-      path_time <- str_extract(file_path, '(?<=_time_)[0-9.]+(?=\\.rds)')
-      # print(paste0('path_time == ', path_time))
-      # print(paste0('this_timept_savename == ', this_timept_savename))
-      print(paste0('current_timepoint == ', current_timepoint))
-      if(as.numeric(current_timepoint) == as.numeric(path_time)){
-        this_timepoint_paths <- append(this_timepoint_paths, file_path)
-      }
-    }
-    
-    for(list_path in this_timepoint_paths){
-      
-      # 10/11 should print out list_path
-      
-      print(paste0('list_path == ', list_path))
-      
-      core_name_splits <- stringr::str_split(list_path, pattern = '/')[[1]] # split path on /
-      core_name <- core_name_splits[length(core_name_splits)]
-      core_name <- substr(core_name, 1, nchar(core_name)-4)
-      
-      
-      
-      fasta_savename <- file.path('output', 'processed_fastas', urid,
-                                  paste0(core_name, '.fasta'))
-      
-      
-      
-      
-      print(paste0('fasta_savename == ', fasta_savename))
-      
-      print('about to call mut_profiles_to_fasta 4635')
-      # i think for now, this will only support one integration value per run. will have to change eventually ... 
-      # save mut profile as fasta
-      mut_profiles_to_fasta(all_mut_profiles_path = list_path,
-                            all_linstrings_path = 'these_lin_strings.txt',
-                            # number_of_integrations = as.integer(bc_int),
-                            number_of_integrations = 10,
-                            reference_seq = baseline_seq_nucs_bc,
-                            terminal_cells_only = TRUE,
-                            depth = NULL,
-                            output_fasta_path = fasta_savename,
-                            num_cores = input_args$num_cores,
-                            run_id = urid)
-       
-      
-      # writing ground truth tree again
-      print('writing ground truth tree again ... ')
-      write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
-      quit(save = 'no', status = 0)
-      
-      # # ################################################ 2/6
-      # print('starting alignment ...')
-      # ################## 1/8 including alignment
-      # seqs <- readDNAStringSet(fasta_savename)
-      # # alignment <- msa(inputSeqs = seqs, method = 'ClustalW', type = 'dna')
-      # # alignment <- msa(inputSeqs = seqs, method = 'Muscle', type = 'dna')
-      # 
-      # # default gapOpening is 400, gapExenstion = 0
-      # # so now i'm driving opening down ... 
-      # alignment <- msaMuscle(inputSeqs = seqs, type = 'dna', gapOpening = 10)
-      # 
-      # # coerce alignment to DNAStringSet
-      # aligned_seqs <- as(alignment, 'DNAStringSet')
-      # 
-      # fasta_stem <- str_split(fasta_savename, '\\.fasta')[[1]][1]
-      # aligned_savename <- paste0(fasta_stem, '_ALIGNED.fasta')
-      # 
-      # print('writing alignment ... ')
-      # # write to same dir as unaligned seqs
-      # writeXStringSet(aligned_seqs, aligned_savename)
-      # 
-      # 
-      # 
-      # ##################################
-      # # KILLING SIMULATOR AS SOON AS ALIGNED FASTA IS WRITTEN 1/17
-      # cat('\n########\nterminating program early (intentional) 1/17\n########\n')
-      # quit(save = 'no', status = 0)
-      # 
-      # # ################################################ 2/6
-    
-  }}
-  
-  
-  # compare_all_trees_beast() will no longer be called (1/29).
-    # instead, we call make_fasta_files(), then run tree building software on written files
-  compare_all_trees_beast <- function(urid, ground_truth_phylo = true_phylo, this_timept_savename = timept_savename){
-    
-    # write all the way up the path to the reference seq subdir
-    if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
-      dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
-    }
-    if(!dir.exists(file.path('output', 'processed_newicks', urid))){
-      dir.create(file.path('output', 'processed_newicks', urid), recursive = TRUE)
-    }
     
     # lin_string_path <- file.path('output', 'linstrings', urid)
     # if(!dir.exists(lin_string_path)){
     #   dir.create(lin_string_path, recursive = TRUE)
     # }
     # write.table(lineage_strings, file.path(lin_string_path, 'lin_strings.txt'))
-
-    write.table(lineage_strings, 'these_lin_strings.txt')
+    
+    # write.table(lineage_strings, 'these_lin_strings.txt')
+    # write.table(lineage_strings, file.path('output', 'linstrings', urid, ))
     terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
-
-    all_processed_list_paths <- list.files(file.path('processed_lists', urid), full.names = TRUE)
+    
+    all_processed_list_paths <- list.files(file.path('output', 'processed_lists', urid), full.names = TRUE)
     current_timepoint <- str_extract(this_timept_savename, '(?<=_time_)[0-9.]+')
     this_timepoint_paths <- character()
     for(file_path in all_processed_list_paths){
       path_time <- str_extract(file_path, '(?<=_time_)[0-9.]+(?=\\.rds)')
       # print(paste0('path_time == ', path_time))
       # print(paste0('this_timept_savename == ', this_timept_savename))
-      print(paste0('current_timepoint == ', current_timepoint))
+      # print(paste0('current_timepoint == ', current_timepoint))
       if(as.numeric(current_timepoint) == as.numeric(path_time)){
         this_timepoint_paths <- append(this_timepoint_paths, file_path)
       }
     }
-
+    
+    # print('this_timepoint_paths == ')
+    # print(this_timepoint_paths)
+    
     for(list_path in this_timepoint_paths){
-
+      
       # 10/11 should print out list_path
-
-      print(paste0('list_path == ', list_path))
-
+      
+      # print(paste0('list_path == ', list_path))
+      
       core_name_splits <- stringr::str_split(list_path, pattern = '/')[[1]] # split path on /
       core_name <- core_name_splits[length(core_name_splits)]
       core_name <- substr(core_name, 1, nchar(core_name)-4)
-
-      # writing ground truth tree again
-      print('writing ground truth tree again ... ')
-      write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
-
-      fasta_savename <- file.path('output', 'processed_fastas', urid,
-                                  paste0(core_name, '.fasta'))
-
-      print(paste0('fasta_savename == ', fasta_savename))
-
       
-      print('about to call mut_profiles_to_fasta 4742')
-      # i think for now, this will only support one integration value per run. will have to change eventually ...
-      # save mut profile as fasta
-      mut_profiles_to_fasta(all_mut_profiles_path = list_path,
-                            all_linstrings_path = 'these_lin_strings.txt',
-                            # number_of_integrations = as.integer(bc_int),
-                            number_of_integrations = 10,
-                            reference_seq = baseline_seq_nucs_bc,
-                            terminal_cells_only = TRUE,
-                            depth = NULL,
-                            output_fasta_path = fasta_savename,
-                            num_cores = input_args$num_cores,
-                            run_id = urid)
-      print('writing all intermediate cells to separate fasta file')
-      print('about to call mut_profiles_to_fasta 4756')
-      # print(paste0('the file we\'re trying to write all cells to: all_cells_', fasta_savename))
-      mut_profiles_to_fasta(all_mut_profiles_path = list_path,
-                            all_linstrings_path = 'these_lin_strings.txt',
-                            # number_of_integrations = as.integer(bc_int),
-                            number_of_integrations = 10,
-                            reference_seq = baseline_seq_nucs_bc,
-                            terminal_cells_only = FALSE,
-                            depth = 'all_cells',
-                            output_fasta_path = fasta_savename,
-                            num_cores = input_args$num_cores,
-                            run_id = urid)
-           
+      # is this a bc or an mt sample:
+      bc_or_mt <- str_extract(string = core_name, pattern = '(?<=processed_)(mt|bc)(?=_list)')
       
+      if(bc_or_mt == 'bc'){
+        this_ref_seq <- baseline_seq_nucs_bc
+      }
+      else if(bc_or_mt == 'mt'){
+        this_ref_seq <- baseline_seq_nucs_mt
+      }
       
-      quit(save = 'no', status = 0)
+      # extract number of integrations/genome copies from this list's name:
+      num_ints_copies <- as.integer(str_extract(string = core_name, pattern = '(?<=_list_)\\d+'))
       
-
-      # ################################################ 2/6
-      # print('starting alignment ...')
-      # ################## 1/8 including alignment
-      # seqs <- readDNAStringSet(fasta_savename)
-      # # alignment <- msa(inputSeqs = seqs, method = 'ClustalW', type = 'dna')
-      # # alignment <- msa(inputSeqs = seqs, method = 'Muscle', type = 'dna')
-      # 
-      # # default gapOpening is 400, gapExenstion = 0
-      # # so now i'm driving opening down ...
-      # alignment <- msaMuscle(inputSeqs = seqs, type = 'dna', gapOpening = 10)
-      # 
-      # # coerce alignment to DNAStringSet
-      # aligned_seqs <- as(alignment, 'DNAStringSet')
-      # 
-      # fasta_stem <- str_split(fasta_savename, '\\.fasta')[[1]][1]
-      # aligned_savename <- paste0(fasta_stem, '_ALIGNED.fasta')
-      # 
-      # print('writing alignment ... ')
-      # # write to same dir as unaligned seqs
-      # writeXStringSet(aligned_seqs, aligned_savename)
-      # 
       # # writing ground truth tree again
       # print('writing ground truth tree again ... ')
-      # write.tree(true_phylo, file.path('processed_newicks', urid, 'ground_truth_tree.newick'))
-      # 
-      # ##################################
-      # # KILLING SIMULATOR AS SOON AS ALIGNED FASTA IS WRITTEN 1/17
-      # cat('\n########\nterminating program early (intentional) 1/17\n########\n')
-      # quit(save = 'no', status = 0)
-      # 
-      # ################################################ 2/6
-    
-    
-    ############################################
+      # write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
       
-      ##################################
-      
-      ################## 1/8 including alignment
+      fasta_savename <- file.path('output', 'processed_fastas', urid,
+                                  paste0(core_name, '.fasta'))
       
       # print(paste0('fasta_savename == ', fasta_savename))
-      # convert fasta to phylo 
-      this_phylo <- fasta_to_phylo(fasta_path = aligned_savename,
-                                   this_run_id = unique_run_id,
-                                   linstrings = terminal_lineage_strings,
-                                   return_phylo = TRUE,
-                                   inf_model = 'NOT_TEST',
-                                   newick_out_path = file.path('output', 'processed_newicks', urid,
-                                                               paste0(core_name, '.newick')))
       
-      # does collapsing work? ... 
-      this_phylo <- ape::collapse.singles(this_phylo)
+      if(all(c('terminal', 'all_cells') %in% poss_fasta_types)){
+        poss_fasta_types <- 'both' # this will be an indicator that tells us to do the all_cells workflow first then subset to only include terminal
+      }
       
-      # print('got to here')
-      # print('class 1')
-      # print(class(this_phylo))
-      # print('class 2')
-      # print(class(ground_truth_phylo))
+      mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+                            # all_linstrings_path = 'these_lin_strings.txt',
+                            all_linstrings_path = timepoint_linstring_filename,
+                            include_var_pos_fasta = include_var_pos_fasta,
+                            # number_of_integrations = as.integer(bc_int),
+                            fasta_type = poss_fasta_types,
+                            number_of_integrations = num_ints_copies,
+                            reference_seq = this_ref_seq,
+                            # terminal_cells_only = TRUE,
+                            # depth = NULL,
+                            output_fasta_path = fasta_savename,
+                            num_cores = input_args$num_cores,
+                            run_id = urid,
+                            bc_or_mt = bc_or_mt)
       
-      # print(str(ground_truth_phylo))
-      # print(str(this_phylo))
+      # for(fasta_type in poss_fasta_types){
+      #   if(fasta_type == 'terminal'){
+      #     
+      #     
+      #     
+      #   }
+      #   else if(fasta_type == 'all_cells'){
+      #     
+      #     
+      #     if(include_var_pos_fasta){
+      #       
+      #     }
+      #     
+      #   }
+      # }
       
-      # print('tip labels of this phylo == ')
-      # print(this_phylo$tip.label)
+      # print('about to call mut_profiles_to_fasta 4742')
+      # i think for now, this will only support one integration value per run. will have to change eventually ...
+      # save mut profile as fasta
+      # mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+      #                       # all_linstrings_path = 'these_lin_strings.txt',
+      #                       all_linstrings_path = timepoint_linstring_filename,
+      #                       include_var_pos_fasta = 
+      #                       # number_of_integrations = as.integer(bc_int),
+      #                       fasta_type = fasta_type,
+      #                       number_of_integrations = num_ints_copies,
+      #                       reference_seq = this_ref_seq,
+      #                       terminal_cells_only = TRUE,
+      #                       depth = NULL,
+      #                       output_fasta_path = fasta_savename,
+      #                       num_cores = input_args$num_cores,
+      #                       run_id = urid)
+      # print('writing all intermediate cells to separate fasta file')
+      # # print('about to call mut_profiles_to_fasta 4756')
+      # # print(paste0('the file we\'re trying to write all cells to: all_cells_', fasta_savename))
+      # mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+      #                       # all_linstrings_path = 'these_lin_strings.txt',
+      #                       all_linstrings_path = timepoint_linstring_filename,
+      #                       # number_of_integrations = as.integer(bc_int),
+      #                       number_of_integrations = num_ints_copies,
+      #                       reference_seq = this_ref_seq,
+      #                       terminal_cells_only = FALSE,
+      #                       depth = 'all_cells',
+      #                       output_fasta_path = fasta_savename,
+      #                       num_cores = input_args$num_cores,
+      #                       run_id = urid)
+      # 
+      # 
       
-      # print(paste0('ground truth tip label == ', ground_truth_phylo$tip.label))
-      # print(paste0('this phylo tip label == ', this_phylo$tip.label))
-      # print('tip labels of ground truth phylo == ')
-      # print(ground_truth_phylo$tip.label)
       
-      rf_dist <-  phangorn::RF.dist(ground_truth_phylo, this_phylo, normalize = TRUE)
-      # print(rf_dist)
-      
-      print(paste0('Norm RF Dist for ', fasta_savename, ' == ', rf_dist))
-      # print('other side of this print')
     }
     
-    # for(this_fasta_path in list.files(file.path('processed_newicks', urid), full.names = TRUE)){
-    #   
-    #   core_name_splits <- stringr::str_split(this_fasta_path, pattern = '/')[[1]] # split path on /
-    #   core_name <- core_name_splits[length(core_name_splits)]
-    #   
-    #   this_phylo <- fasta_to_phylo(fasta_path = this_fasta_path,
-    #                  return_phylo = TRUE,
-    #                  inf_model = 'TEST',
-    #                  newick_out_path = file.path('processed_newicks', urid,
-    #                                              substr(core_name, 1, nchar(this_fasta_path)-7), '.newick'))
-    #   print(paste0('Norm RF Dist for ', this_fasta_path, ' == ', phangorn::RF.dist(true_phylo, this_phylo, normalize = TRUE)))
-    # }
-    # stop('end of reconstruction')
+    return()
+    # quit(save = 'no', status = 0)
   }
+  
+  # make_fasta_files <- function(urid, ground_truth_phylo = true_phylo, this_timept_savename = timept_savename){
+  #   
+  #   # write all the way up the path to the reference seq subdir
+  #   if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
+  #     dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
+  #   }
+  #   if(!dir.exists(file.path('output', 'processed_newicks', urid))){
+  #     dir.create(file.path('output', 'processed_newicks', urid), recursive = TRUE)
+  #   }
+  #   
+  #   # write.table(lineage_strings, 'these_lin_strings.txt')
+  #   terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
+  #   
+  #   all_processed_list_paths <- list.files(file.path('processed_lists', urid), full.names = TRUE)
+  #   current_timepoint <- str_extract(this_timept_savename, '(?<=_time_)[0-9.]+')
+  #   this_timepoint_paths <- character()
+  #   for(file_path in all_processed_list_paths){
+  #     path_time <- str_extract(file_path, '(?<=_time_)[0-9.]+(?=\\.rds)')
+  #     # print(paste0('path_time == ', path_time))
+  #     # print(paste0('this_timept_savename == ', this_timept_savename))
+  #     print(paste0('current_timepoint == ', current_timepoint))
+  #     if(as.numeric(current_timepoint) == as.numeric(path_time)){
+  #       this_timepoint_paths <- append(this_timepoint_paths, file_path)
+  #     }
+  #   }
+  #   
+  #   for(list_path in this_timepoint_paths){
+  #     
+  #     # 10/11 should print out list_path
+  #     
+  #     print(paste0('list_path == ', list_path))
+  #     
+  #     core_name_splits <- stringr::str_split(list_path, pattern = '/')[[1]] # split path on /
+  #     core_name <- core_name_splits[length(core_name_splits)]
+  #     core_name <- substr(core_name, 1, nchar(core_name)-4)
+  #     
+  #     
+  #     
+  #     fasta_savename <- file.path('output', 'processed_fastas', urid,
+  #                                 paste0(core_name, '.fasta'))
+  #     
+  #     
+  #     
+  #     
+  #     print(paste0('fasta_savename == ', fasta_savename))
+  #     
+  #     # print('about to call mut_profiles_to_fasta 4635')
+  #     # i think for now, this will only support one integration value per run. will have to change eventually ... 
+  #     # save mut profile as fasta
+  #     mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+  #                           all_linstrings_path = 'these_lin_strings.txt',
+  #                           # number_of_integrations = as.integer(bc_int),
+  #                           number_of_integrations = 10,
+  #                           reference_seq = baseline_seq_nucs_bc,
+  #                           terminal_cells_only = TRUE,
+  #                           depth = NULL,
+  #                           output_fasta_path = fasta_savename,
+  #                           num_cores = input_args$num_cores,
+  #                           run_id = urid)
+  #      
+  #     
+  #     # writing ground truth tree again
+  #     print('writing ground truth tree again ... ')
+  #     write.tree(true_phylo, file.path('output', 'processed_newicks', urid, paste0('ground_truth_tree_', timept_savename, '.newick')))
+  #     quit(save = 'no', status = 0)
+  #     
+  #     # # ################################################ 2/6
+  #     # print('starting alignment ...')
+  #     # ################## 1/8 including alignment
+  #     # seqs <- readDNAStringSet(fasta_savename)
+  #     # # alignment <- msa(inputSeqs = seqs, method = 'ClustalW', type = 'dna')
+  #     # # alignment <- msa(inputSeqs = seqs, method = 'Muscle', type = 'dna')
+  #     # 
+  #     # # default gapOpening is 400, gapExenstion = 0
+  #     # # so now i'm driving opening down ... 
+  #     # alignment <- msaMuscle(inputSeqs = seqs, type = 'dna', gapOpening = 10)
+  #     # 
+  #     # # coerce alignment to DNAStringSet
+  #     # aligned_seqs <- as(alignment, 'DNAStringSet')
+  #     # 
+  #     # fasta_stem <- str_split(fasta_savename, '\\.fasta')[[1]][1]
+  #     # aligned_savename <- paste0(fasta_stem, '_ALIGNED.fasta')
+  #     # 
+  #     # print('writing alignment ... ')
+  #     # # write to same dir as unaligned seqs
+  #     # writeXStringSet(aligned_seqs, aligned_savename)
+  #     # 
+  #     # 
+  #     # 
+  #     # ##################################
+  #     # # KILLING SIMULATOR AS SOON AS ALIGNED FASTA IS WRITTEN 1/17
+  #     # cat('\n########\nterminating program early (intentional) 1/17\n########\n')
+  #     # quit(save = 'no', status = 0)
+  #     # 
+  #     # # ################################################ 2/6
+  #   
+  # }}
+  
+  
+  #################################################### replaced this with make_fasta_files_new() 3/12
+  # # compare_all_trees_beast() will no longer be called (1/29).
+  #   # instead, we call make_fasta_files(), then run tree building software on written files
+  # compare_all_trees_beast <- function(urid, ground_truth_phylo = true_phylo, this_timept_savename = timept_savename){
+  #   
+  #   # write all the way up the path to the reference seq subdir
+  #   if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
+  #     dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
+  #   }
+  #   if(!dir.exists(file.path('output', 'processed_newicks', urid))){
+  #     dir.create(file.path('output', 'processed_newicks', urid), recursive = TRUE)
+  #   }
+  #   
+  #   # lin_string_path <- file.path('output', 'linstrings', urid)
+  #   # if(!dir.exists(lin_string_path)){
+  #   #   dir.create(lin_string_path, recursive = TRUE)
+  #   # }
+  #   # write.table(lineage_strings, file.path(lin_string_path, 'lin_strings.txt'))
+  # 
+  #   # write.table(lineage_strings, 'these_lin_strings.txt')
+  #   # write.table(lineage_strings, file.path('output', 'linstrings', urid, ))
+  #   terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
+  # 
+  #   all_processed_list_paths <- list.files(file.path('output', 'processed_lists', urid), full.names = TRUE)
+  #   current_timepoint <- str_extract(this_timept_savename, '(?<=_time_)[0-9.]+')
+  #   this_timepoint_paths <- character()
+  #   for(file_path in all_processed_list_paths){
+  #     path_time <- str_extract(file_path, '(?<=_time_)[0-9.]+(?=\\.rds)')
+  #     # print(paste0('path_time == ', path_time))
+  #     # print(paste0('this_timept_savename == ', this_timept_savename))
+  #     print(paste0('current_timepoint == ', current_timepoint))
+  #     if(as.numeric(current_timepoint) == as.numeric(path_time)){
+  #       this_timepoint_paths <- append(this_timepoint_paths, file_path)
+  #     }
+  #   }
+  #   
+  #   print('this_timepoint_paths == ')
+  #   print(this_timepoint_paths)
+  # 
+  #   for(list_path in this_timepoint_paths){
+  # 
+  #     # 10/11 should print out list_path
+  # 
+  #     print(paste0('list_path == ', list_path))
+  # 
+  #     core_name_splits <- stringr::str_split(list_path, pattern = '/')[[1]] # split path on /
+  #     core_name <- core_name_splits[length(core_name_splits)]
+  #     core_name <- substr(core_name, 1, nchar(core_name)-4)
+  # 
+  #     # writing ground truth tree again
+  #     print('writing ground truth tree again ... ')
+  #     write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
+  # 
+  #     fasta_savename <- file.path('output', 'processed_fastas', urid,
+  #                                 paste0(core_name, '.fasta'))
+  # 
+  #     print(paste0('fasta_savename == ', fasta_savename))
+  # 
+  #     
+  #     # print('about to call mut_profiles_to_fasta 4742')
+  #     # i think for now, this will only support one integration value per run. will have to change eventually ...
+  #     # save mut profile as fasta
+  #     mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+  #                           all_linstrings_path = 'these_lin_strings.txt',
+  #                           # number_of_integrations = as.integer(bc_int),
+  #                           number_of_integrations = 10,
+  #                           reference_seq = baseline_seq_nucs_bc,
+  #                           terminal_cells_only = TRUE,
+  #                           depth = NULL,
+  #                           output_fasta_path = fasta_savename,
+  #                           num_cores = input_args$num_cores,
+  #                           run_id = urid)
+  #     print('writing all intermediate cells to separate fasta file')
+  #     # print('about to call mut_profiles_to_fasta 4756')
+  #     # print(paste0('the file we\'re trying to write all cells to: all_cells_', fasta_savename))
+  #     mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+  #                           all_linstrings_path = 'these_lin_strings.txt',
+  #                           # number_of_integrations = as.integer(bc_int),
+  #                           number_of_integrations = 10,
+  #                           reference_seq = baseline_seq_nucs_bc,
+  #                           terminal_cells_only = FALSE,
+  #                           depth = 'all_cells',
+  #                           output_fasta_path = fasta_savename,
+  #                           num_cores = input_args$num_cores,
+  #                           run_id = urid)
+  #          
+  #     
+  #     
+  #     quit(save = 'no', status = 0)
+  #     
+  # 
+  #     # ################################################ 2/6
+  #     # print('starting alignment ...')
+  #     # ################## 1/8 including alignment
+  #     # seqs <- readDNAStringSet(fasta_savename)
+  #     # # alignment <- msa(inputSeqs = seqs, method = 'ClustalW', type = 'dna')
+  #     # # alignment <- msa(inputSeqs = seqs, method = 'Muscle', type = 'dna')
+  #     # 
+  #     # # default gapOpening is 400, gapExenstion = 0
+  #     # # so now i'm driving opening down ...
+  #     # alignment <- msaMuscle(inputSeqs = seqs, type = 'dna', gapOpening = 10)
+  #     # 
+  #     # # coerce alignment to DNAStringSet
+  #     # aligned_seqs <- as(alignment, 'DNAStringSet')
+  #     # 
+  #     # fasta_stem <- str_split(fasta_savename, '\\.fasta')[[1]][1]
+  #     # aligned_savename <- paste0(fasta_stem, '_ALIGNED.fasta')
+  #     # 
+  #     # print('writing alignment ... ')
+  #     # # write to same dir as unaligned seqs
+  #     # writeXStringSet(aligned_seqs, aligned_savename)
+  #     # 
+  #     # # writing ground truth tree again
+  #     # print('writing ground truth tree again ... ')
+  #     # write.tree(true_phylo, file.path('processed_newicks', urid, 'ground_truth_tree.newick'))
+  #     # 
+  #     # ##################################
+  #     # # KILLING SIMULATOR AS SOON AS ALIGNED FASTA IS WRITTEN 1/17
+  #     # cat('\n########\nterminating program early (intentional) 1/17\n########\n')
+  #     # quit(save = 'no', status = 0)
+  #     # 
+  #     # ################################################ 2/6
+  #   
+  #   
+  #   ############################################
+  #     
+  #     ##################################
+  #     
+  #     ################## 1/8 including alignment
+  #     
+  #     # print(paste0('fasta_savename == ', fasta_savename))
+  #     # convert fasta to phylo 
+  #     this_phylo <- fasta_to_phylo(fasta_path = aligned_savename,
+  #                                  this_run_id = unique_run_id,
+  #                                  linstrings = terminal_lineage_strings,
+  #                                  return_phylo = TRUE,
+  #                                  inf_model = 'NOT_TEST',
+  #                                  newick_out_path = file.path('output', 'processed_newicks', urid,
+  #                                                              paste0(core_name, '.newick')))
+  #     
+  #     # does collapsing work? ... 
+  #     this_phylo <- ape::collapse.singles(this_phylo)
+  #     
+  #     # print('got to here')
+  #     # print('class 1')
+  #     # print(class(this_phylo))
+  #     # print('class 2')
+  #     # print(class(ground_truth_phylo))
+  #     
+  #     # print(str(ground_truth_phylo))
+  #     # print(str(this_phylo))
+  #     
+  #     # print('tip labels of this phylo == ')
+  #     # print(this_phylo$tip.label)
+  #     
+  #     # print(paste0('ground truth tip label == ', ground_truth_phylo$tip.label))
+  #     # print(paste0('this phylo tip label == ', this_phylo$tip.label))
+  #     # print('tip labels of ground truth phylo == ')
+  #     # print(ground_truth_phylo$tip.label)
+  #     
+  #     rf_dist <-  phangorn::RF.dist(ground_truth_phylo, this_phylo, normalize = TRUE)
+  #     # print(rf_dist)
+  #     
+  #     print(paste0('Norm RF Dist for ', fasta_savename, ' == ', rf_dist))
+  #     # print('other side of this print')
+  #   }
+  #   
+  #   # for(this_fasta_path in list.files(file.path('processed_newicks', urid), full.names = TRUE)){
+  #   #   
+  #   #   core_name_splits <- stringr::str_split(this_fasta_path, pattern = '/')[[1]] # split path on /
+  #   #   core_name <- core_name_splits[length(core_name_splits)]
+  #   #   
+  #   #   this_phylo <- fasta_to_phylo(fasta_path = this_fasta_path,
+  #   #                  return_phylo = TRUE,
+  #   #                  inf_model = 'TEST',
+  #   #                  newick_out_path = file.path('processed_newicks', urid,
+  #   #                                              substr(core_name, 1, nchar(this_fasta_path)-7), '.newick'))
+  #   #   print(paste0('Norm RF Dist for ', this_fasta_path, ' == ', phangorn::RF.dist(true_phylo, this_phylo, normalize = TRUE)))
+  #   # }
+  #   # stop('end of reconstruction')
+  # }
+  #################################################### replaced this with make_fasta_files_new() 3/12
   
   compare_all_trees <- function(recon_modals,
                                 total_recon_trees,
@@ -5061,8 +5287,9 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     return(rf_matrix)
   }
   
-  if(recon_method == 'beast'){
-    compare_all_trees_beast(unique_run_id)
+  if(recon_method == 'fasta_only'){
+    # compare_all_trees_beast(unique_run_id)
+    make_fasta_files_new(unique_run_id)
   }
   else{
     rf_mat <- compare_all_trees(recon_modals = poss_recon_modals,
@@ -5418,7 +5645,7 @@ make_lineplot <- function(run_id, save_plots = TRUE){
     
     
     
-    set.seed(0)
+    # set.seed(0)
     rand_col_pal <- distinctColorPalette(k = 50)
     
     simlength_plot <- ggplot(modality_df, aes(x = endpoint, y = rf_dist, color = group)) + 
