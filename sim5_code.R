@@ -41,6 +41,7 @@ suppressPackageStartupMessages({
   library(zeallot)
   library(msa)
   library(Biostrings)
+  library(Matrix)
 })
 
 
@@ -280,13 +281,13 @@ unique_run_id <- as.character(sample(1:10000000000000, size = 1))
 print(paste0('Unique run id = ', unique_run_id))
 
 # create runlog file
-if(!dir.exists(file.path('output', 'run_logs'))){
-  dir.create(file.path('output', 'run_logs'), recursive = TRUE)
+if(!dir.exists(file.path('output', 'run_logs', unique_run_id))){
+  dir.create(file.path('output', 'run_logs', unique_run_id), recursive = TRUE)
 }
 runlog_filename <- paste0('runlog_', unique_run_id, '.txt')
-runlog_path <- file.path('output', 'run_logs', runlog_filename)
+runlog_path <<- file.path('output', 'run_logs', unique_run_id, runlog_filename)
 close(file(runlog_path, open = 'w'))
-# close(file('no_strings.txt', open = 'w'))
+close(file('no_strings.txt', open = 'w'))
 # close(file('random_vals.txt', open = 'w'))
 
 # generate letters grid for subrun id generation:
@@ -547,7 +548,7 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
     be_first_target_pos <- parsed_be_target_config[['first_targ_pos']]
     be_target_num_bases_btwn <- parsed_be_target_config[['bases_btwn']]  
     
-    cat('\n!is.null(be_targets_configs\n', file = 'no_strings.txt', append = TRUE)
+    # cat('\n!is.null(be_targets_configs\n', file = 'no_strings.txt', append = TRUE)
   }
   
   # if there is a provided nuc target config
@@ -556,7 +557,7 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
     parsed_nuc_target_config <- parse_target_config(nuc_targets_configs)
     nuc_target_config_pattern <- parsed_nuc_target_config[['config']]
     nuc_first_target_pos <- parsed_nuc_target_config[['first_targ_pos']]
-    nuc_target_num_bases_btwn <- parsed_nuc_target_config[['bases_btwn']]  
+    nuc_target_num_bases_btwn <- parsed_nuc_target_config[['bases_btwn']]
     # print('parsed_nuc_target_config')
     # print(parsed_nuc_target_config)
     # print('bottom of this if')
@@ -630,11 +631,11 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
   if(!is.null(be_targets_counts)){
     if('num_h' %in% names(be_target_setup)){
       
-      cat('\n in the part with num_h\n', file = 'no_strings.txt', append = TRUE)
+      # cat('\n in the part with num_h\n', file = 'no_strings.txt', append = TRUE)
       
       num_be_targets <- sum(as.numeric(be_target_setup))
       
-      cat(paste0('\nnum_be_targets == ', num_be_targets, '\n'), file = 'no_strings.txt', append = TRUE)
+      # cat(paste0('\nnum_be_targets == ', num_be_targets, '\n'), file = 'no_strings.txt', append = TRUE)
       
       # the total number of targets is computed by summing the number of HML targets in be_target_setup
       bc_sequence_no_targets <- generate_non_be_target_sequence(bc_length = bc_length, 
@@ -792,14 +793,14 @@ bc_generation_return_list <- create_bc_sequence()
 
 # print(paste0('bc_generation_return_list == '))
 # print(bc_generation_return_list)
-cat('\ncan i still append to a file ... \n', file = 'no_strings.txt', append = TRUE)
-
-cat(paste0('length(bc_generation_return_list == ', length(bc_generation_return_list)), 
-    file = 'no_strings.txt', append = TRUE)
-for(i in 1:length(bc_generation_return_list)){
-  cat(paste0('\n', names(bc_generation_return_list)[i], ' == ', unname(unlist(bc_generation_return_list))[i]),
-      file = 'no_strings.txt', append = TRUE)
-}
+# cat('\ncan i still append to a file ... \n', file = 'no_strings.txt', append = TRUE)
+# 
+# cat(paste0('length(bc_generation_return_list == ', length(bc_generation_return_list)), 
+#     file = 'no_strings.txt', append = TRUE)
+# for(i in 1:length(bc_generation_return_list)){
+#   cat(paste0('\n', names(bc_generation_return_list)[i], ' == ', unname(unlist(bc_generation_return_list))[i]),
+#       file = 'no_strings.txt', append = TRUE)
+# }
 baseline_seq_nucs_bc <<- bc_generation_return_list[['bc_seq']]
 # ERC == edit rate class
 # print('TESTING')
@@ -1080,7 +1081,7 @@ bc_sub_model_params <- bc_sub_model_list[['sub_model_params_list']]
 bc_sub_prob_mat <- bc_sub_model_list[['sub_prob_mat']]
 
 
-
+print('1083')
 
 # accepts a substitution model and a sequence as input, 
 # and returns a list of basepos:transition_prob for transitions
@@ -1174,8 +1175,12 @@ basepos_bc_nontarget_transversion_probs <- generate_transversion_basepos_list(se
 # basepos_mt_nontarget_transversion_probs <- basepos_mt_nontarget_subprob_lists[['basepos_transversion_list']]
 basepos_mt_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
                                                                           sub_prob_mat = mt_sub_prob_mat)
+# print('basepos_mt_nontarget_transition_probs == ')
+# print(basepos_mt_nontarget_transition_probs)
 basepos_mt_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
                                                                               sub_prob_mat = mt_sub_prob_mat)
+# print('basepos_mt_nontarget_transversion_probs == ')
+# print(basepos_mt_nontarget_transversion_probs)
 
 # cat('does anything work', file = 'no_strings.txt', append = TRUE)
 # cat(paste0('length(basepos_mt_nontarget_transversion_probs) == ', length(basepos_mt_nontarget_transversion_probs)), 
@@ -1199,7 +1204,11 @@ mt_bg_insertion_prob <- mt_bg_indel_probs[1]
 mt_bg_deletion_prob <- mt_bg_indel_probs[2]
 
 basepos_mt_nontarget_insertion_probs <- as.list(rep(mt_bg_insertion_prob, input_args$mito_genome_length))
+# print('basepos_mt_nontarget_insertion_probs == ')
+# print(basepos_mt_nontarget_insertion_probs)
 basepos_mt_nontarget_deletion_probs <- as.list(rep(mt_bg_deletion_prob, input_args$mito_genome_length))
+# print('basepos_mt_nontarget_deletion_probs == ')
+# print(basepos_mt_nontarget_deletion_probs)
 
 
 # NOW add heterogeneity to the non-target edit rates if appropriate
@@ -1355,6 +1364,7 @@ drop_editrate <- function(rate, num_degrees){
   return(rate)
 }
 
+print('1358')
 get_new_be_targets <- function(be_editing_window, basepos_erc_be_list, 
                                decaying_editing, baseline_seq_ints_bc){
   
@@ -1591,7 +1601,7 @@ be_prob_mean_estimate <- estimate_mut_prob_per_edit_pt(muts_per_site_per_divisio
 
 if(!is.null(basepos_erc_be_list)){
   
-  cat('\nNOT NULL BASEPOS ERC BE LIST\n', file = 'no_strings.txt', append = TRUE)
+  # cat('\nNOT NULL BASEPOS ERC BE LIST\n', file = 'no_strings.txt', append = TRUE)
   
   target_config_dir_path <- file.path('target_configs', unique_run_id)
   
@@ -1608,15 +1618,15 @@ if(!is.null(basepos_erc_be_list)){
           file = file.path(target_config_dir_path, 'target_pos.csv'), append = TRUE)
       
     }
-    cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "High")])) == ',
-               length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "High")])),
-               file = 'no_strings.txt', append = TRUE)
-    cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Medium")])) == ',
-               length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Medium")])),
-               file = 'no_strings.txt', append = TRUE)
-    cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Low")])) == ',
-               length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Low")])),
-               file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "High")])) == ',
+    #            length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "High")])),
+    #            file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Medium")])) == ',
+    #            length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Medium")])),
+    #            file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Low")])) == ',
+    #            length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Low")])),
+    #            file = 'no_strings.txt', append = TRUE)
     # if the BE causes transitions, the transversion basepos edit rate list will be empty list
     basepos_bc_target_transition_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
                                                                                      h_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'High')]), 
@@ -2114,6 +2124,8 @@ poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell
 poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
 poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob, outputted_type = 'numeric')
 
+print('2118')
+
 # if sim lengths are specified using start:stop:inc, define sim lengths accordingly
 if(grepl(pattern = ':', x = input_args$sim_length)){
   splits <- as.numeric(str_split(string = input_args$sim_length, pattern = ':')[[1]])
@@ -2307,7 +2319,7 @@ if(is.null(input_args$savename)){
 
 ##########################################
 
-set.seed(42)
+# set.seed(42)
 
 
 
@@ -2365,6 +2377,58 @@ add_mito_jitter <- function(mt_mutation_mat, frac_copies_lost){
   
 }
 
+
+
+# generate integrations that will be selected in downsampling approaches for mt and bc:
+generate_downsample_features <- function(max_ints_per_cell_vec, recovery_rate_vec){
+  
+  
+  integration_downsample_df <- data.frame(max_ints_per_cell = integer(),
+                                          recovery_rate = numeric(),
+                                          num_recovered_ints = integer(),
+                                          which_ints_recovered = I(list()))
+  
+  for(max_ints_per_cell in max_ints_per_cell_vec){
+    
+    for(recovery_rate in recovery_rate_vec){
+      
+      num_recovered_ints <- ceiling(max_ints_per_cell*recovery_rate)
+      
+      which_ints_recovered <- sort(sample(seq(1, max_ints_per_cell), size = num_recovered_ints, replace = FALSE)) # sorting does not hurt here since ints are independent
+      
+      new_row <- data.frame(max_ints_per_cell = max_ints_per_cell,
+                            recovery_rate = recovery_rate,
+                            num_recovered_ints = num_recovered_ints,
+                            which_ints_recovered = I(list(which_ints_recovered)))
+      
+      integration_downsample_df <- rbind(integration_downsample_df, new_row)
+      
+      
+    }
+    
+  }
+  
+  return(integration_downsample_df)
+  
+}
+
+poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, outputted_type = 'integer')
+poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
+poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
+poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob, outputted_type = 'numeric')
+
+mt_recovered_genomes_df <- generate_downsample_features(max_ints_per_cell_vec = poss_num_mito_genomes,
+                                                      recovery_rate_vec = poss_mt_genome_recovery_probs)
+print(paste0('class(mt_recovered_genomes_df) = ', class(mt_recovered_genomes_df)))
+print(paste0('nrow(mt_recovered_genomes_df) = ', nrow(mt_recovered_genomes_df)))
+print(mt_recovered_genomes_df)
+bc_recovered_ints_df <- generate_downsample_features(max_ints_per_cell_vec = poss_num_bc_integrations,
+                                                     recovery_rate_vec = poss_bc_integration_recovery_probs)
+print(paste0('class(bc_recovered_ints_df) = ', class(bc_recovered_ints_df)))
+print(paste0('nrow(bc_recovered_ints_df) = ', nrow(bc_recovered_ints_df)))
+print(bc_recovered_ints_df)
+
+
 # mymat <- matrix(data = seq(1, 40), nrow = 10)
 # remove_inds <- c(6, 8, 9)
 # inds <- c(1,4,1)
@@ -2408,7 +2472,8 @@ setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length
                       # uniform_indels, 
                       forced_transversions, sim_length_stopping_points, cold_startup,
                       incoming_mt_profiles, incoming_bc_profiles,
-                      sim_time_vec_mt, sim_time_vec_bc, parent_vec, jitter_frac){
+                      sim_time_vec_mt, sim_time_vec_bc, parent_vec, jitter_frac,
+                      mt_recovered_genomes_df, bc_recovered_ints_df){
   
   # print('basepos_mt_nontarget_transition_probs')
   # print(basepos_mt_nontarget_transition_probs)
@@ -2471,7 +2536,8 @@ setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length
                                     'non_uniform_editing',
                                     'sim_length_stopping_points', 'jitter_frac',
                                     'add_mito_jitter',
-                                    'unique_run_id'),
+                                    'unique_run_id',
+                                    'mt_recovered_genomes_df', 'bc_recovered_ints_df'),
                 envir = environment())
   cluster_startup_end <- Sys.time()
   cluster_startup_total <<- difftime(cluster_startup_end, cluster_startup_start, units = 'secs')
@@ -2495,26 +2561,27 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
                             basepos_mt_nontarget_insertion_probs, basepos_mt_nontarget_deletion_probs, 
                             basepos_bc_target_transition_probs, basepos_bc_target_transversion_probs, 
                             basepos_bc_target_insertion_probs, basepos_bc_target_deletion_probs,
-                            mt_sub_prob_mat, bc_sub_prob_mat, jitter_fraction, unique_run_id){
+                            mt_sub_prob_mat, bc_sub_prob_mat, jitter_fraction, unique_run_id,
+                            mt_recovered_genomes_df, bc_recovered_ints_df){
                             # pos_be_list, pos_nuc_list, editrate_df, force_all_transverions){
   
   # cat(paste0('length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions)), file = 'no_strings.txt', append = TRUE)
   
-  cat('\nfirst line of multi core func', file = 'no_strings.txt', append = TRUE)
+  # cat('\nfirst line of multi core func', file = 'no_strings.txt', append = TRUE)
   if((timepoint %% cell_cycle_length == 0) & (timepoint > 0)){
-    cat('\ninside first if of multi core func', file = 'no_strings.txt', append = TRUE)
+    # cat('\ninside first if of multi core func', file = 'no_strings.txt', append = TRUE)
     print(paste('allowing cells to divide at ', timepoint, sep = ''))
     
     
     
     num_old_cells <- old_cells_at_timept(timept = timepoint, cc_length = cell_cycle_length)
     
-    cat('\nafter num old cells', file = 'no_strings.txt', append = TRUE)
+    # cat('\nafter num old cells', file = 'no_strings.txt', append = TRUE)
     
     most_recent_mito_start_index <- num_old_cells + 1
     most_recent_mito_end_index <- num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size
     
-    cat('\nafter most recent assignments', file = 'no_strings.txt', append = TRUE)
+    # cat('\nafter most recent assignments', file = 'no_strings.txt', append = TRUE)
     # replicate profiles form one higher than the previous number of cells, onward
     # most_recent_mito <- unlist(mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index])
     # most_recent_mito_len <- length(most_recent_mito)
@@ -2526,7 +2593,7 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
     
     cells_to_jitter <- mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index]
     
-    cat('\nafter cells to jitter', file = 'no_strings.txt', append = TRUE)
+    # cat('\nafter cells to jitter', file = 'no_strings.txt', append = TRUE)
     
     # cat(paste0('\n PRE JITTER length(mt_profiles) == ', length(mt_profiles), '\n'), 
     #     file = 'no_strings.txt', append = TRUE)
@@ -2552,7 +2619,7 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
                                     #     file = 'no_strings.txt', append = TRUE)
                                     return(add_mito_jitter(cells_to_jitter[[x]], frac_copies_lost = jitter_fraction))
                                   })
-    cat('\nafter copy profiles 1', file = 'no_strings.txt', append = TRUE)
+    # cat('\nafter copy profiles 1', file = 'no_strings.txt', append = TRUE)
     # most_recent_mito <- add_mito_jitter()
     copy_profiles2 <- parLapply(cl = one_cluster, X = seq(1, length(cells_to_jitter)), 
                                     fun = function(x){
@@ -2565,7 +2632,7 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
                                       return(add_mito_jitter(cells_to_jitter[[x]], frac_copies_lost = jitter_fraction))
                                     })
     
-    cat('\nafter copy profiles 2', file = 'no_strings.txt', append = TRUE)
+    # cat('\nafter copy profiles 2', file = 'no_strings.txt', append = TRUE)
     
     # mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index] <- most_recent_mito
     
@@ -2582,15 +2649,15 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
     mt_profiles <- append(mt_profiles, copy_profiles1)
     mt_profiles <- append(mt_profiles, copy_profiles2)
     
-    cat(paste0('\ntimepoint = ', timepoint, '\n'), file = 'no_strings.txt', append = TRUE)
-    cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\ntimepoint = ', timepoint, '\n'), file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
     
     
     
     copy_profiles <- rep(unlist(bc_profiles[(num_old_cells + 1):(num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)]), 2) 
-    cat(paste0('\nlength(copy_profiles) = ', length(copy_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nlength(copy_profiles) = ', length(copy_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
     bc_profiles <- append(bc_profiles, copy_profiles)
-    cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
     
     # cat(paste0('\n POST JITTER length(mt_profiles) == ', length(mt_profiles), '\n'), 
     #     file = 'no_strings.txt', append = TRUE)
@@ -2604,10 +2671,10 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
     # as opposed to one cell dividing into one new cell while also remaining in the population itself
     parents <- append(parents, rep(seq((num_old_cells + 1), (num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)), 2))
     
-    cat(paste0('\nPARENTS:\n'), file = 'no_strings.txt', append = TRUE)
-    cat(parents, file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nPARENTS:\n'), file = 'no_strings.txt', append = TRUE)
+    # cat(parents, file = 'no_strings.txt', append = TRUE)
     
-    cat('\nafter parents', file = 'no_strings.txt', append = TRUE)
+    # cat('\nafter parents', file = 'no_strings.txt', append = TRUE)
     # cat(paste0('\n length(mt_profiles) == ', length(mt_profiles), '\n'), 
     #     file = 'no_strings.txt', append = TRUE)
     
@@ -2680,6 +2747,7 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
   # cat(paste0('\n seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)) == ', seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)), '\n'), 
   #     file = 'no_strings.txt', append = TRUE)
   
+  cat(paste0('\nperforming all mt mutations\n'), file = 'no_strings.txt', append = TRUE)
   mutated_mt_profiles <- parLapply(cl = one_cluster, X = seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)), 
                                    fun = function(x){
                                      # cat(paste0('\n in lapply at x == ', x, ', length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions), '\n'), 
@@ -2745,7 +2813,7 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
                                                                      # force_all_transversions = force_all_transversions))
                                    })  
   # print('made it here after bc')
-    cat('\nmade it past perform_all_bc_mutations\n', file = 'no_strings.txt', append = TRUE)
+    # cat('\nmade it past perform_all_bc_mutations\n', file = 'no_strings.txt', append = TRUE)
   # }
   
   
@@ -2765,16 +2833,16 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
   return(return_list)
 }
 
-list_of_lists <- list(`1` = list('G' = 0.2),
-                      `2` = list('G' = 0.2))
-for(i in 1:length(list_of_lists)){
-  # if(length(list_of_lists[[i]]) > 1){ # relevant for transversions where two probabilities are given
-  for(j in 1:length(list_of_lists[[i]])){
-    noise <- rnorm(n = 1, mean = 10, sd = 3)
-    list_of_lists[[i]][[j]] <- list_of_lists[[i]][[j]]+noise
-  }
-  # }
-}
+# list_of_lists <- list(`1` = list('G' = 0.2),
+#                       `2` = list('G' = 0.2))
+# for(i in 1:length(list_of_lists)){
+#   # if(length(list_of_lists[[i]]) > 1){ # relevant for transversions where two probabilities are given
+#   for(j in 1:length(list_of_lists[[i]])){
+#     noise <- rnorm(n = 1, mean = 10, sd = 3)
+#     list_of_lists[[i]][[j]] <- list_of_lists[[i]][[j]]+noise
+#   }
+#   # }
+# }
 
 
 # make_lol <- function(){
@@ -2869,7 +2937,9 @@ const_sim_arglist <- list(num_clusters = input_args$num_cores,
                           # pos_er_nuc_list = basepos_editrate_nuc_list,
                           custom_savename = custom_savename, 
                           sim_length_stopping_points = sim_length_stopping_points,
-                          jitter_frac = input_args$jitter_fraction)
+                          jitter_frac = input_args$jitter_fraction,
+                          bc_recovered_ints_df = bc_recovered_ints_df,
+                          mt_recovered_genomes_df = mt_recovered_genomes_df)
 cold_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
                                        hot_or_cold = 'cold', 
                                        starting_mt_profiles = NULL,
@@ -2971,7 +3041,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
     lineage_strings <<- character(length = length(cell_lineage))
     for(i in seq_len(length(cell_lineage))){
-      if(cell_lineage[i] == 0){ # if the cell has no parent, it's a founder cell and can be referred to by its relative founder popn. #
+      if(cell_lineage[i] == 0){ # if the cell has no parent, it's a founder cell
         lineage_strings[i] <- i
         
       }
@@ -2999,7 +3069,15 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     return(lineage_strings)
   }
   lineage_strings <<- create_lineage_strings(cell_lineage)
-  write.table(lineage_strings, 'test_lin_strings.txt')
+  
+  linstring_dir_path <- file.path('output', 'linstrings', unique_run_id)
+  if(!dir.exists(linstring_dir_path)){
+    dir.create(linstring_dir_path, recursive = TRUE)
+  }
+  
+  timepoint_linstring_filename <- file.path(linstring_dir_path, paste0('lin_strings_', timept_savename, '.txt'))
+  
+  write.table(lineage_strings, timepoint_linstring_filename)
   
   # cat('\npast save_mutation_profiles()\n', file = 'no_strings.txt', append = TRUE)
   
@@ -3322,15 +3400,15 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                           this_timept_savename = timept_savename){
       
       # we have to iterate through number of integrations as well as recovery probs
-      cat(paste0('\nbc_recovery_probs == \n'), file = 'no_strings.txt', append = TRUE)
-      cat(bc_recovery_probs, file = 'no_strings.txt', append = TRUE)
+      # cat(paste0('\nbc_recovery_probs == \n'), file = 'no_strings.txt', append = TRUE)
+      # cat(bc_recovery_probs, file = 'no_strings.txt', append = TRUE)
       print(paste0('Now computing barcode score matrices ...'))
       for(num_bc_ints in bc_integrations){
         print(paste0('Now scoring for ', num_bc_ints, ' barcode integrations ...'))
         
         for(bc_recovery_prob in bc_recovery_probs){
           bc_score_assign_name <- paste0('distinct_mut_scores_mat_bc_', num_bc_ints, '_integrations_recovery_prob_', bc_recovery_prob)
-          cat(paste0('\nbc_score_assign_name == ', bc_score_assign_name, '\n'), file = 'no_strings.txt', append = TRUE)
+          # cat(paste0('\nbc_score_assign_name == ', bc_score_assign_name, '\n'), file = 'no_strings.txt', append = TRUE)
           # cat(paste0('\nbefore SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)
           assign(x = bc_score_assign_name, value = summarize_allelic_scores_indexing(mut_profiles = barcode_profiles, 
                                                                                      num_cores = num_cores,
@@ -3410,195 +3488,281 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     #   tipdates_filename = NA
     # )
     
-    create_beast_sublist_profiles <- function(mut_profiles, num_cores, linstrings, recovery_prob, num_integrations = NULL){ 
-      
-      # mut_profiles is incoming list of mutation profiles
-      # num_cores is number of cpu cores
-      # linstrings is cell name identifiers
-      # recovery_prob is the expected fraction of bc integrations or mito genome copies that are "recovered" at the end of the experiment
-      # num_integrations is the max possible number of bc integrations or mito genome copies that can be recovered
-      
-      if(is.null(num_integrations)){
-        num_integrations <- nrow(mut_profiles[[1]])
-      }
-      
-      
-      total_start_time <- Sys.time()
-      
-      allelic_scores_cluster <<- makeCluster(num_cores, outfile = 'no_strings.txt') # number of cores
-      clusterEvalQ(cl = allelic_scores_cluster, {
-        suppressPackageStartupMessages({
-          library('Matrix')
-          library('parallel')
-          library('data.table')  
-        })
-        
-      })
-      
-      clusterExport(cl = allelic_scores_cluster, 
-                    varlist = c('mut_profiles', 'num_integrations', 'recovery_prob'), 
-                    envir = environment())
-      
-      # cat('\nafter clusterExport SASI', file = 'no_strings.txt', append = TRUE)
-      
-      cluster_startup_end_time <- Sys.time()
+    # create_sublist_profiles <- function(mut_profiles, num_cores, linstrings, 
+    #                                     # integration_df,
+    #                                     # recovery_prob, 
+    #                                     which_intergrations
+    #                                     # num_integrations = ,
+    #                                     
+    #                                     ){ 
+    #   
+    #   # mut_profiles is incoming list of mutation profiles
+    #   # num_cores is number of cpu cores
+    #   # linstrings is cell name identifiers
+    #   # recovery_prob is the expected fraction of bc integrations or mito genome copies that are "recovered" at the end of the experiment
+    #   # num_integrations is the max possible number of bc integrations or mito genome copies that can be recovered
+    #   
+    #   # if(is.null(num_integrations)){
+    #   #   num_integrations <- nrow(mut_profiles[[1]])
+    #   # }
+    #   
+    #   
+    #   total_start_time <- Sys.time()
+    #   
+    #   allelic_scores_cluster <<- makeCluster(num_cores, outfile = 'no_strings.txt') # number of cores
+    #   clusterEvalQ(cl = allelic_scores_cluster, {
+    #     suppressPackageStartupMessages({
+    #       library('Matrix')
+    #       library('parallel')
+    #       library('data.table')  
+    #     })
+    #     
+    #   })
+    #   
+    #   clusterExport(cl = allelic_scores_cluster, 
+    #                 # varlist = c('mut_profiles', 'num_integrations', 'recovery_prob'), 
+    #                 varlist = c('mut_profiles', 'which_integrations'),
+    #                 envir = environment())
+    #   
+    #   # cat('\nafter clusterExport SASI', file = 'no_strings.txt', append = TRUE)
+    #   
+    #   cluster_startup_end_time <- Sys.time()
+    # 
+    #   
+    #   mut_combos_start_time <- Sys.time()
+    #   
+    #   created_list <- parLapply(cl = allelic_scores_cluster, seq(1, length(mut_profiles)), function(mut_mat_num){
+    #     
+    #     # access current mutational profile
+    #     # only indirectly accessing so that we can keep track of relative position here
+    #     # without loss of generality, we can take the first N rows to simulate the num_integrations == N
+    #     # only have to subset rows when working with bc
+    #     
+    #     # need to force to a matrix if only one row (integration)
+    #     if(num_integrations == 1){
+    #       
+    #       mut_mat <- mut_profiles[[mut_mat_num]][1, ]
+    #       
+    #     }
+    #     else{
+    #      
+    #       
+    #       # taking ceiling here so that we are guaranteed at least one recovered integration per cell
+    #       num_recovered_ints <- ceiling(num_integrations*recovery_prob)
+    #       # cat(paste0('\nfor mut_mat_num == ', mut_mat_num, 'num_recovered_ints == ', num_recovered_ints, ' for recovery_prob == ', recovery_prob), 
+    #       #     file = 'no_strings.txt', append = TRUE)
+    #       
+    #       
+    #       # I THINK THIS LINE IS CURSED ###################### 2/25
+    #       which_ints_recovered <- sample(seq(1, num_integrations), size = num_recovered_ints, replace = FALSE)
+    #       ###################### 2/25
+    #       
+    #       # cat('\n which_ints_recovered == \n', file = 'no_strings.txt', append = TRUE)
+    #       # cat(which_ints_recovered, file = 'no_strings.txt', append = TRUE)
+    #       
+    #       
+    #       
+    #       mut_mat <- mut_profiles[[mut_mat_num]][which_ints_recovered, ]
+    #     }
+    #   })
+    #   
+    #   return(created_list)
+    # }
     
+    non_par_create_sublist_profiles <- function(mut_profiles,  
+                                                which_integrations){ 
       
-      mut_combos_start_time <- Sys.time()
+      print(paste0('in non par, dim(profiles[[1]]) == ', dim(mut_profiles[[1]])))
+      print(paste0('in non par, class(profiles[[1]]) == ', class(mut_profiles[[1]])))
+      print(paste0('in non par, which_integrations == ', which_integrations))
+      print(paste0('in non par, length(mut_profiles) == ', length(mut_profiles)))
       
-      created_list <- parLapply(cl = allelic_scores_cluster, seq(1, length(mut_profiles)), function(mut_mat_num){
-        
-        # access current mutational profile
-        # only indirectly accessing so that we can keep track of relative position here
-        # without loss of generality, we can take the first N rows to simulate the num_integrations == N
-        # only have to subset rows when working with bc
-        
-        # need to force to a matrix if only one row (integration)
-        if(num_integrations == 1){
-          
-          mut_mat <- mut_profiles[[mut_mat_num]][1, ]
-          
-        }
-        else{
-         
-          
-          # taking ceiling here so that we are guaranteed at least one recovered integration per cell
-          num_recovered_ints <- ceiling(num_integrations*recovery_prob)
-          # cat(paste0('\nfor mut_mat_num == ', mut_mat_num, 'num_recovered_ints == ', num_recovered_ints, ' for recovery_prob == ', recovery_prob), 
-          #     file = 'no_strings.txt', append = TRUE)
-          
-          
-          # I THINK THIS LINE IS CURSED ###################### 2/25
-          which_ints_recovered <- sample(seq(1, num_integrations), size = num_recovered_ints, replace = FALSE)
-          ###################### 2/25
-          
-          # cat('\n which_ints_recovered == \n', file = 'no_strings.txt', append = TRUE)
-          # cat(which_ints_recovered, file = 'no_strings.txt', append = TRUE)
-          
-          
-          
-          mut_mat <- mut_profiles[[mut_mat_num]][which_ints_recovered, ]
-        }
+      created_list <- lapply(seq(1, length(mut_profiles)), function(mut_mat_num){
+        mut_mat <- mut_profiles[[mut_mat_num]][which_integrations, ]
       })
       
       return(created_list)
     }
     
     create_modified_profile_lists <- function(mito_profiles,
-                                          barcode_profiles,
-                                          bc_integrations,
-                                          mito_genomes,
-                                          mito_recovery_probs,
-                                          bc_recovery_probs,
-                                          which_linstrings = lineage_strings,
-                                          num_cores = input_args$num_cores,
-                                          this_timept_savename = timept_savename){
+                                              barcode_profiles,
+                                              bc_integrations,
+                                              mito_genomes,
+                                              mito_recovery_probs,
+                                              bc_recovery_probs,
+                                              mt_recovered_genomes_df, 
+                                              bc_recovered_ints_df,
+                                              which_linstrings = lineage_strings,
+                                              num_cores = input_args$num_cores,
+                                              this_timept_savename = timept_savename){
       
-      cat(paste0('\nbc_recovery_probs == ', bc_recovery_probs, '\n'), file = 'no_strings.txt', append = TRUE)
+      # cat(paste0('\nbc_recovery_probs == ', bc_recovery_probs, '\n'), file = 'no_strings.txt', append = TRUE)
       
       # we have to iterate through number of integrations as well as recovery probs
+       
+      if(!dir.exists(file.path('output', 'processed_lists', unique_run_id))){
+        dir.create(file.path('output', 'processed_lists', unique_run_id), recursive = TRUE)
+      }  
       
-      if(!dir.exists(file.path('processed_lists', unique_run_id))){
-        dir.create(file.path('processed_lists', unique_run_id), recursive = TRUE)
+      # cat(paste0('\nbc_recovery_probs == \n'), file = 'no_strings.txt', append = TRUE)
+      # cat(bc_recovery_probs, file = 'no_strings.txt', append = TRUE)
+      # print(paste0('Now processing bc mutation profile list ...'))
+      
+      print('Downsampling bc mutation profile list ... ')
+      # print(paste0('class(bc_recovered_ints_df) == ', class(bc_recovered_ints_df)))
+      # print(paste0('nrow(bc_recovered_ints_df) == ', nrow(bc_recovered_ints_df)))
+      for(rownum in seq_len(nrow(bc_recovered_ints_df))){
+        
+         these_ints <- bc_recovered_ints_df$which_ints_recovered[rownum][[1]]
+         # print(paste0('these_ints == ', these_ints))
+         
+         this_recovery_rate <- bc_recovered_ints_df$recovery_rate[rownum]
+         # print(paste0('this_recovery_rate == ', this_recovery_rate))
+         
+         this_num_recovered_ints <- bc_recovered_ints_df$num_recovered_ints[rownum]
+         # print(paste0('this_num_recovered_ints == ', this_num_recovered_ints))
+         
+         
+         # nonparallel_time <- 
+         bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_bc_list_', this_num_recovered_ints, 
+                                                                                             '_integrations_recovery_prob_', this_recovery_rate, 
+                                                                                             '_timept_', this_timept_savename))
+         
+         saveRDS(object = non_par_create_sublist_profiles(mut_profiles = barcode_profiles,
+                                                          which_integrations = these_ints),
+                 file = bc_list_assign_name)
       }
       
-      cat(paste0('\nbc_recovery_probs == \n'), file = 'no_strings.txt', append = TRUE)
-      cat(bc_recovery_probs, file = 'no_strings.txt', append = TRUE)
-      print(paste0('Now processing bc mutation profile list ...'))
-      for(num_bc_ints in bc_integrations){
-        print(paste0('Now processing for ', num_bc_ints, ' barcode integrations ...'))
+      print('Downsampling mt mutation profile list ... ')
+      # print(paste0('class(mt_recovered_genomes_df) == ', class(mt_recovered_genomes_df)))
+      # print(paste0('nrow(mt_recovered_genomes_df) == ', nrow(mt_recovered_genomes_df)))
+      
+      
+      for(rownum in seq_len(nrow(mt_recovered_genomes_df))){
         
-        for(bc_recovery_prob in bc_recovery_probs){
-          bc_list_assign_name <- file.path('processed_lists', unique_run_id, paste0('processed_bc_list_', num_bc_ints, '_integrations_recovery_prob_', bc_recovery_prob, '_timept_', this_timept_savename))
-          cat(paste0('\bc_list_assign_name == ', bc_list_assign_name, '\n'), file = 'no_strings.txt', append = TRUE)
-          # cat(paste0('\nbefore SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)
-          # saveRDS(x = bc_list_assign_name, value = create_beast_sublist_profiles(mut_profiles = barcode_profiles, 
-          #                                                                            num_cores = num_cores,
-          #                                                                            linstrings = which_linstrings,
-          #                                                                            num_integrations = num_bc_ints,
-          #                                                                            recovery_prob = bc_recovery_prob),
-          #        envir = .GlobalEnv)
-          
-          ############################# comment and add 2/25
-          # saveRDS(create_beast_sublist_profiles(mut_profiles = barcode_profiles, 
-          #                                       num_cores = num_cores,
-          #                                       linstrings = which_linstrings,
-          #                                       num_integrations = num_bc_ints,
-          #                                       recovery_prob = bc_recovery_prob),
-          #         file = paste0(bc_list_assign_name, '.rds'))
-          
-          
-          saveRDS(barcode_profiles, file = paste0(bc_list_assign_name, '.rds'))
-          
-          
-          ############################# comment and add 2/25
-          # cat(paste0('\nafter SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)  
-        }
+        # saveRDS(mito_profiles, './troubleshoot_mito_profiles.rds')
+        # 
+        # print(paste0('class(mito_profiles[[1]] == ', class(mito_profiles[[1]])))
+        # print(paste0('length(mito_profiles) == ', length(mito_profiles)))
+        # print(paste0('dim(mito_profiles[[1]]) == ', dim(mito_profiles[[1]])))
         
+        these_genomes <- mt_recovered_genomes_df$which_ints_recovered[rownum][[1]]
+        # print(paste0('these_genomes == ', these_genomes))
+        
+        this_recovery_rate <- mt_recovered_genomes_df$recovery_rate[rownum]
+        # print(paste0('this_recovery_rate == ', this_recovery_rate))
+        
+        this_num_recovered_genomes <- mt_recovered_genomes_df$num_recovered_ints[rownum]
+        # print(paste0('this_num_recovered_genomes == ', this_num_recovered_genomes))
+        
+        mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_mt_list_', this_num_recovered_genomes, 
+                                                                                            '_copies_recovery_prob_', this_recovery_rate, 
+                                                                                            '_timept_', this_timept_savename))
+
+        
+        saveRDS(object = non_par_create_sublist_profiles(mut_profiles = mito_profiles,
+                                                         which_integrations = these_genomes),
+                file = mt_list_assign_name)
+        # print('saved RDS object for mt')
       }
-      
-      
-      # cat(paste0('\nmito_recovery_probs == \n'), file = 'no_strings.txt', append = TRUE)
-      # cat(mito_recovery_probs, file = 'no_strings.txt', append = TRUE)
-      print(paste0('Now processing mt profile list'))
-      for(num_mito_genomes in mito_genomes){
-        print(paste0('Now processing for ', num_mito_genomes, ' mito genome copies ...'))
-        for(mito_recovery_prob in mito_recovery_probs){
-          mt_list_assign_name <- file.path('processed_lists', unique_run_id, paste0('processed_mt_list_', num_mito_genomes, '_copies_recovery_prob_', mito_recovery_prob, '_timept_', this_timept_savename))
-          # cat(paste0('\nmt_score_assign_name == ', mt_score_assign_name, '\n'), file = 'no_strings.txt', append = TRUE)
-          # cat(paste0('\nbefore SASI bc for num_mito_genomes == ', num_mito_genomes), file = 'no_strings.txt', append = TRUE)
-          # assign(x = mt_list_assign_name, value = create_beast_sublist_profiles(mut_profiles = mito_profiles, 
-          #                                                                            num_cores = num_cores,
-          #                                                                            linstrings = which_linstrings,
-          #                                                                            num_integrations = num_mito_genomes,
-          #                                                                            recovery_prob = mito_recovery_prob),
-          #        envir = .GlobalEnv)
-          
-          ###################### comment and add 2/25
-          # saveRDS(create_beast_sublist_profiles(mut_profiles = mito_profiles, 
-          #                                       num_cores = num_cores,
-          #                                       linstrings = which_linstrings,
-          #                                       num_integrations = num_mito_genomes,
-          #                                       recovery_prob = mito_recovery_prob),
-          #         file = paste0(mt_list_assign_name, '.rds'))
-          
-          
-          saveRDS(mito_profiles, file = paste0(mt_list_assign_name, '.rds'))
-          ###################### comment and add 2/25
-          
-          
-          # cat(paste0('\nafter SASI bc for num_mito_genomes == ', num_mito_genomes), file = 'no_strings.txt', append = TRUE)  
-        }
-        
-      }
-      
-      
-      
-      # distinct_mut_scores_mat_mt <<- summarize_allelic_scores_indexing(mut_profiles = mito_profiles, 
-      #                                                                  num_cores = num_cores,
-      #                                                                  linstrings = which_linstrings)
-      
-      
-      
-      # downsample_inds <<- seq(1, length(lineage_strings))
-      
-      
-      
-      
-      
     }
+      
+    #   for(num_bc_ints in bc_integrations){
+    #     print(paste0('Now processing for ', num_bc_ints, ' barcode integrations ...'))
+    #      
+    #     for(bc_recovery_prob in bc_recovery_probs){
+    #       
+    #       # cat(paste0('\bc_list_assign_name == ', bc_list_assign_name, '\n'), file = 'no_strings.txt', append = TRUE)
+    #       # cat(paste0('\nbefore SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)
+    #       saveRDS(x = bc_list_assign_name, value = create_sublist_profiles(mut_profiles = barcode_profiles,
+    #                                                                        num_cores = num_cores,
+    #                                                                        linstrings = which_linstrings,
+    #                                                                        num_integrations = num_bc_ints,
+    #                                                                        recovery_prob = bc_recovery_prob),
+    #              envir = .GlobalEnv)
+    #         
+    #       ############################# comment and add 2/25
+    #       # saveRDS(create_sublist_profiles(mut_profiles = barcode_profiles, 
+    #       #                                       num_cores = num_cores,
+    #       #                                       linstrings = which_linstrings,
+    #       #                                       num_integrations = num_bc_ints,
+    #       #                                       recovery_prob = bc_recovery_prob),
+    #       #         file = paste0(bc_list_assign_name, '.rds'))
+    #       
+    #       
+    #       saveRDS(barcode_profiles, file = paste0(bc_list_assign_name, '.rds'))
+    #       
+    #       
+    #       ############################# comment and add 2/25
+    #       # cat(paste0('\nafter SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)  
+    #     }
+    #     
+    #   }
+    #   
+    #   
+    #   # cat(paste0('\nmito_recovery_probs == \n'), file = 'no_strings.txt', append = TRUE)
+    #   # cat(mito_recovery_probs, file = 'no_strings.txt', append = TRUE)
+    #   # print(paste0('Now processing mt profile list'))
+    #   # for(num_mito_genomes in mito_genomes){
+    #   #   print(paste0('Now processing for ', num_mito_genomes, ' mito genome copies ...'))
+    #   #   for(mito_recovery_prob in mito_recovery_probs){
+    #   #     mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_mt_list_', num_mito_genomes, '_copies_recovery_prob_', mito_recovery_prob, '_timept_', this_timept_savename))
+    #   #     # cat(paste0('\nmt_score_assign_name == ', mt_score_assign_name, '\n'), file = 'no_strings.txt', append = TRUE)
+    #   #     # cat(paste0('\nbefore SASI bc for num_mito_genomes == ', num_mito_genomes), file = 'no_strings.txt', append = TRUE)
+    #   #     assign(x = mt_list_assign_name, value = create_sublist_profiles(mut_profiles = mito_profiles,
+    #   #                                                                                num_cores = num_cores,
+    #   #                                                                                linstrings = which_linstrings,
+    #   #                                                                                num_integrations = num_mito_genomes,
+    #   #                                                                                recovery_prob = mito_recovery_prob),
+    #   #            envir = .GlobalEnv)
+    #   #     
+    #   #     ###################### comment and add 2/25
+    #   #     # saveRDS(create_sublist_profiles(mut_profiles = mito_profiles, 
+    #   #     #                                       num_cores = num_cores,
+    #   #     #                                       linstrings = which_linstrings,
+    #   #     #                                       num_integrations = num_mito_genomes,
+    #   #     #                                       recovery_prob = mito_recovery_prob),
+    #   #     #         file = paste0(mt_list_assign_name, '.rds'))
+    #   #     
+    #   #     
+    #   #     saveRDS(mito_profiles, file = paste0(mt_list_assign_name, '.rds'))
+    #   #     ###################### comment and add 2/25
+    #   #     
+    #   #     
+    #   #     # cat(paste0('\nafter SASI bc for num_mito_genomes == ', num_mito_genomes), file = 'no_strings.txt', append = TRUE)  
+    #   #   }
+    #   #   
+    #   # }
+    #   
+    #   
+    #   
+    #   # distinct_mut_scores_mat_mt <<- summarize_allelic_scores_indexing(mut_profiles = mito_profiles, 
+    #   #                                                                  num_cores = num_cores,
+    #   #                                                                  linstrings = which_linstrings)
+    #   
+    #   
+    #   
+    #   # downsample_inds <<- seq(1, length(lineage_strings))
+    #   
+    #   
+    #   
+    #   
+    #   
+    # }
     
     create_modified_profile_lists(mito_profiles = mt_profiles,
                                   barcode_profiles = bc_profiles,
                                   bc_integrations = poss_num_bc_integrations,
                                   mito_genomes = poss_num_mito_genomes,
+                                  mt_recovered_genomes_df = mt_recovered_genomes_df,
+                                  bc_recovered_ints_df = bc_recovered_ints_df,
                                   mito_recovery_probs = poss_mt_genome_recovery_probs,
                                   bc_recovery_probs = poss_bc_integration_recovery_probs)
   }
   
   if(recon_method == 'fasta_only'){
     
-    
+    # this is what i need to fill in 3/6
     
   }
   
@@ -4425,14 +4589,14 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   make_fasta_files <- function(urid, ground_truth_phylo = true_phylo, this_timept_savename = timept_savename){
     
     # write all the way up the path to the reference seq subdir
-    if(!dir.exists(file.path('processed_fastas', urid, 'reference_seqs'))){
-      dir.create(file.path('processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
+    if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
+      dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
     }
-    if(!dir.exists(file.path('processed_newicks', urid))){
-      dir.create(file.path('processed_newicks', urid), recursive = TRUE)
+    if(!dir.exists(file.path('output', 'processed_newicks', urid))){
+      dir.create(file.path('output', 'processed_newicks', urid), recursive = TRUE)
     }
     
-    write.table(lineage_strings, 'these_lin_strings.txt')
+    # write.table(lineage_strings, 'these_lin_strings.txt')
     terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
     
     all_processed_list_paths <- list.files(file.path('processed_lists', urid), full.names = TRUE)
@@ -4460,7 +4624,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
       
       
       
-      fasta_savename <- file.path('processed_fastas', urid,
+      fasta_savename <- file.path('output', 'processed_fastas', urid,
                                   paste0(core_name, '.fasta'))
       
       
@@ -4468,6 +4632,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
       
       print(paste0('fasta_savename == ', fasta_savename))
       
+      print('about to call mut_profiles_to_fasta 4635')
       # i think for now, this will only support one integration value per run. will have to change eventually ... 
       # save mut profile as fasta
       mut_profiles_to_fasta(all_mut_profiles_path = list_path,
@@ -4484,7 +4649,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
       
       # writing ground truth tree again
       print('writing ground truth tree again ... ')
-      write.tree(true_phylo, file.path('processed_newicks', urid, 'ground_truth_tree.newick'))
+      write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
       quit(save = 'no', status = 0)
       
       # # ################################################ 2/6
@@ -4525,18 +4690,18 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   compare_all_trees_beast <- function(urid, ground_truth_phylo = true_phylo, this_timept_savename = timept_savename){
     
     # write all the way up the path to the reference seq subdir
-    if(!dir.exists(file.path('processed_fastas', urid, 'reference_seqs'))){
-      dir.create(file.path('processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
+    if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
+      dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
     }
-    if(!dir.exists(file.path('processed_newicks', urid))){
-      dir.create(file.path('processed_newicks', urid), recursive = TRUE)
+    if(!dir.exists(file.path('output', 'processed_newicks', urid))){
+      dir.create(file.path('output', 'processed_newicks', urid), recursive = TRUE)
     }
     
-    lin_string_path <- file.path('output', 'linstrings', urid)
-    if(!dir.exists(lin_string_path)){
-      dir.create(lin_string_path, recursive = TRUE)
-    }
-    write.table(lineage_strings, file.path(lin_string_path, 'lin_strings.txt'))
+    # lin_string_path <- file.path('output', 'linstrings', urid)
+    # if(!dir.exists(lin_string_path)){
+    #   dir.create(lin_string_path, recursive = TRUE)
+    # }
+    # write.table(lineage_strings, file.path(lin_string_path, 'lin_strings.txt'))
 
     write.table(lineage_strings, 'these_lin_strings.txt')
     terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
@@ -4566,13 +4731,15 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
 
       # writing ground truth tree again
       print('writing ground truth tree again ... ')
-      write.tree(true_phylo, file.path('processed_newicks', urid, 'ground_truth_tree.newick'))
+      write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
 
-      fasta_savename <- file.path('processed_fastas', urid,
+      fasta_savename <- file.path('output', 'processed_fastas', urid,
                                   paste0(core_name, '.fasta'))
 
       print(paste0('fasta_savename == ', fasta_savename))
 
+      
+      print('about to call mut_profiles_to_fasta 4742')
       # i think for now, this will only support one integration value per run. will have to change eventually ...
       # save mut profile as fasta
       mut_profiles_to_fasta(all_mut_profiles_path = list_path,
@@ -4586,6 +4753,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                             num_cores = input_args$num_cores,
                             run_id = urid)
       print('writing all intermediate cells to separate fasta file')
+      print('about to call mut_profiles_to_fasta 4756')
       # print(paste0('the file we\'re trying to write all cells to: all_cells_', fasta_savename))
       mut_profiles_to_fasta(all_mut_profiles_path = list_path,
                             all_linstrings_path = 'these_lin_strings.txt',
@@ -4649,7 +4817,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                    linstrings = terminal_lineage_strings,
                                    return_phylo = TRUE,
                                    inf_model = 'NOT_TEST',
-                                   newick_out_path = file.path('processed_newicks', urid,
+                                   newick_out_path = file.path('output', 'processed_newicks', urid,
                                                                paste0(core_name, '.newick')))
       
       # does collapsing work? ... 
@@ -5019,7 +5187,7 @@ for(t in 1:length(poss_times)){
   
   cells_completed <- sum(num_cells_each_timepoint[1:t]) # should work since padded left side with zero
   
-  cat(paste0('\nNow simulating timepoint t = ', poss_times[t],'\n'), file = 'no_strings.txt', append = TRUE)
+  # cat(paste0('\nNow simulating timepoint t = ', poss_times[t],'\n'), file = 'no_strings.txt', append = TRUE)
   
   print(paste0('Now simulating timepoint t = ', poss_times[t], ': reaching progress ... ', 
                round(100*sum(num_cells_each_timepoint[1:(t+cell_cycle_length)])/sum(num_cells_each_timepoint)), 
@@ -5084,14 +5252,14 @@ for(t in 1:length(poss_times)){
                                                                          # pos_nuc_list = pos_er_nuc_list,
                                                                          # editrate_df = er_df)
   
-  cat('\nafter multi_core_func\n', file = 'no_strings.txt', append = TRUE)
+  # cat('\nafter multi_core_func\n', file = 'no_strings.txt', append = TRUE)
   if(poss_times[t] %in% sim_length_stopping_points){
     stopCluster(one_cluster)
     all_processes_at_stopping_point(timept_savename = paste0(custom_savename, '_time_', poss_times[t]), relative_timepoint = t, this_endpoint = poss_times[t])
     
     # if this isn't the last time point, need to restart the cluster and continue to simulate
     if(t != length(poss_times)){
-      cat('\ninside t != length(poss_times) before %<-%\n', file = 'no_strings.txt', append = TRUE)
+      # cat('\ninside t != length(poss_times) before %<-%\n', file = 'no_strings.txt', append = TRUE)
       hot_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
                                             hot_or_cold = 'hot', 
                                             starting_mt_profiles = mt_profiles,
@@ -5100,18 +5268,18 @@ for(t in 1:length(poss_times)){
                                             time_vec_bc = sim_time_vec_bc,
                                             vec_of_parents = cell_lineage)
       zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles), do.call(setup_sim, hot_sim_arglist))
-      cat('\ninside t != length(poss_times) after %<-%\n', file = 'no_strings.txt', append = TRUE)
+      # cat('\ninside t != length(poss_times) after %<-%\n', file = 'no_strings.txt', append = TRUE)
       # c(cell_lineage, mt_profiles, bc_profiles) %<-% do.call(setup_sim, hot_sim_arglist)
       
       for(i in 1:length(hot_sim_arglist)){
         assign(names(hot_sim_arglist)[i], hot_sim_arglist[[i]], envir = .GlobalEnv)
       }  
-      cat('\ninside t != length(poss_times) after assign\n', file = 'no_strings.txt', append = TRUE)
+      # cat('\ninside t != length(poss_times) after assign\n', file = 'no_strings.txt', append = TRUE)
     }
     
     
   }
-  cat('\nafter stopping point if \n', file = 'no_strings.txt', append = TRUE)
+  # cat('\nafter stopping point if \n', file = 'no_strings.txt', append = TRUE)
   
 }
 
