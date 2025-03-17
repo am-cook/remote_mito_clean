@@ -202,6 +202,7 @@ mut_profiles_to_fasta <- function(all_mut_profiles_path,
                                   fasta_type,
                                   include_var_pos_fasta, 
                                   number_of_integrations,
+                                  downsample_recovered_cells_df,
                                   reference_seq,
                                   bc_or_mt,
                                   # terminal_cells_only = TRUE,
@@ -363,6 +364,8 @@ mut_profiles_to_fasta <- function(all_mut_profiles_path,
     
     
     
+    
+    
     if(fasta_type == 'all_cells'){
       
       all_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_ALL_CELLS_VAR_POS\\2', x = output_fasta_path) 
@@ -370,8 +373,36 @@ mut_profiles_to_fasta <- function(all_mut_profiles_path,
       
     } else if(fasta_type == 'terminal'){
       
-      term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL_VAR_POS\\2', x = output_fasta_path) 
-      write.fasta(all_cells_seqs, names = underscore_names, file.out = term_cells_varpos_fasta_path)
+      
+      matching_downsample_df_rows <- which(downsample_recovered_cells_df$num_terminal_cells == length(all_cells_seqs))
+      
+      for(rownum in matching_downsample_df_rows){
+        this_recovery_rate <- downsample_recovered_cells_df$cell_recovery_rate[rownum]
+        cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[rownum][[1]]
+        
+        # print(paste0('in recon, rownum == ', rownum))
+        # print(paste0('this recovery rate == ', this_recovery_rate))
+        # print('new labels == ')
+        # print(new_labels)
+        # print('kept_lineage_strings == ')
+        # print(kept_lineage_strings)
+        
+        # incorporate recovery rate into the fasta savename ... 
+        # term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL_VAR_POS_cell_rec_rate_', this_recovery_rate, '\\2'), x = output_fasta_path)
+        
+        # add the cell sample rate into the file name
+        temp_term_cells_varpos_fasta_path <- sub('(prob_[0-9]+\\.?[0-9]*)', paste0('\\1_cell_rec_rate_', this_recovery_rate), output_fasta_path)
+        
+        # add the terminal var pos indicator 
+        term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL_VAR_POS', '\\2'), x = temp_term_cells_varpos_fasta_path)
+        
+        write.fasta(all_cells_seqs[cells_recovered_inds], names = underscore_names[cells_recovered_inds], file.out = term_cells_varpos_fasta_path)  
+      }
+      
+      
+      
+      # term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL_VAR_POS\\2', x = output_fasta_path) 
+      # write.fasta(all_cells_seqs, names = underscore_names, file.out = term_cells_varpos_fasta_path)
       
     } else if(fasta_type == 'both'){
       
@@ -386,8 +417,28 @@ mut_profiles_to_fasta <- function(all_mut_profiles_path,
       
       # terminal_shortcut_seqs <- all_cells_seqs
       
-      term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL_VAR_POS\\2', x = output_fasta_path) 
-      write.fasta(all_cells_seqs[start_ind:end_ind], names = underscore_names[start_ind:end_ind], file.out = term_cells_varpos_fasta_path)
+      matching_downsample_df_rows <- which(downsample_recovered_cells_df$num_terminal_cells == length(all_cells_seqs[start_ind:end_ind]))
+      for(rownum in matching_downsample_df_rows){
+        this_recovery_rate <- downsample_recovered_cells_df$cell_recovery_rate[rownum]
+        cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[rownum][[1]]
+      
+        
+        # # incorporate recovery rate into the fasta savename ... 
+        # term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL_VAR_POS_cell_rec_rate_', this_recovery_rate, '\\2'), x = output_fasta_path)
+        
+        # add the cell sample rate into the file name
+        temp_term_cells_varpos_fasta_path <- sub('(prob_[0-9]+\\.?[0-9]*)', paste0('\\1_cell_rec_rate_', this_recovery_rate), output_fasta_path)
+        
+        # add the terminal var pos indicator 
+        term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL_VAR_POS', '\\2'), x = temp_term_cells_varpos_fasta_path)
+        
+        # double slice, first to get the terminal cells, then to get the downampled cells
+        write.fasta(all_cells_seqs[start_ind:end_ind][cells_recovered_inds], 
+                    names = underscore_names[start_ind:end_ind][cells_recovered_inds], 
+                    file.out = term_cells_varpos_fasta_path)
+      }
+      # term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL_VAR_POS\\2', x = output_fasta_path) 
+      # write.fasta(all_cells_seqs[start_ind:end_ind], names = underscore_names[start_ind:end_ind], file.out = term_cells_varpos_fasta_path)
 
     }
     
@@ -443,19 +494,42 @@ mut_profiles_to_fasta <- function(all_mut_profiles_path,
   
   if(fasta_type == 'all_cells'){
     
-    all_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_ALL_CELLS\\2', x = output_fasta_path) 
-    write.fasta(all_cells_seqs_FULL, names = underscore_names, file.out = all_cells_varpos_fasta_path)
+    all_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_ALL_CELLS\\2', x = output_fasta_path) 
+    write.fasta(all_cells_seqs_FULL, names = underscore_names, file.out = all_cells_fasta_path)
     
   } else if(fasta_type == 'terminal'){
     
-    term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL\\2', x = output_fasta_path) 
-    write.fasta(all_cells_seqs_FULL, names = underscore_names, file.out = term_cells_varpos_fasta_path)
+    matching_downsample_df_rows <- which(downsample_recovered_cells_df$num_terminal_cells == length(all_cells_seqs_FULL))
+    for(rownum in matching_downsample_df_rows){
+      # for(i in seq_len(nrow(downsample_recovered_cells_df))){
+      this_recovery_rate <- downsample_recovered_cells_df$cell_recovery_rate[rownum]
+      cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[rownum][[1]]
+      
+      # map the recovered inds to the lineage strings
+      # kept_lineage_strings <- 
+      
+      # # incorporate recovery rate into the fasta savename ... 
+      # term_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL_cell_rec_rate_', this_recovery_rate, '\\2'), x = output_fasta_path)
+      
+      # add the cell sample rate into the file name
+      temp_term_cells_fasta_path <- sub('(prob_[0-9]+\\.?[0-9]*)', paste0('\\1_cell_rec_rate_', this_recovery_rate), output_fasta_path)
+      
+      # add the terminal var pos indicator 
+      term_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL', '\\2'), x = temp_term_cells_fasta_path)
+      
+      write.fasta(all_cells_seqs_FULL[cells_recovered_inds], names = underscore_names[cells_recovered_inds], file.out = term_cells_fasta_path)
+    }
+      
+    # }
+    
+    # term_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL\\2', x = output_fasta_path) 
+    # write.fasta(all_cells_seqs_FULL, names = underscore_names, file.out = term_cells_fasta_path)
     
   } else if(fasta_type == 'both'){
     
     # we should theoretically be able to use the both shortcut in var_pos because all sites that would be variable in all_cells would be variable in terminal
-    all_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_ALL_CELLS\\2', x = output_fasta_path) 
-    write.fasta(all_cells_seqs_FULL, names = underscore_names, file.out = all_cells_varpos_fasta_path)
+    all_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_ALL_CELLS\\2', x = output_fasta_path) 
+    write.fasta(all_cells_seqs_FULL, names = underscore_names, file.out = all_cells_fasta_path)
     
     
     # subset the fastas to only include terminal if we're interested in writing both types (i.e. terminal and all_cells) out
@@ -464,8 +538,34 @@ mut_profiles_to_fasta <- function(all_mut_profiles_path,
     
     # terminal_shortcut_seqs <- all_cells_seqs_FULL
     
-    term_cells_varpos_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL\\2', x = output_fasta_path) 
-    write.fasta(all_cells_seqs_FULL[start_ind:end_ind], names = underscore_names[start_ind:end_ind], file.out = term_cells_varpos_fasta_path)
+    
+    matching_downsample_df_rows <- which(downsample_recovered_cells_df$num_terminal_cells == length(all_cells_seqs_FULL[start_ind:end_ind]))
+    for(rownum in matching_downsample_df_rows){
+      this_recovery_rate <- downsample_recovered_cells_df$cell_recovery_rate[rownum]
+      cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[rownum][[1]]
+      
+      print(paste0('in both, class(cells_recovered_inds) == ', class(cells_recovered_inds)))
+      
+      
+      # # incorporate recovery rate into the fasta savename ... 
+      # term_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL_cell_rec_rate_', this_recovery_rate, '\\2'), x = output_fasta_path)
+      
+      # add the cell sample rate into the file name
+      temp_term_cells_fasta_path <- sub('(prob_[0-9]+\\.?[0-9]*)', paste0('\\1_cell_rec_rate_', this_recovery_rate), output_fasta_path)
+      
+      # add the terminal var pos indicator 
+      term_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL', '\\2'), x = temp_term_cells_fasta_path)
+      
+      
+      # double slice, first to get the terminal cells, then to get the downampled cells
+      write.fasta(all_cells_seqs_FULL[start_ind:end_ind][cells_recovered_inds], 
+                  names = underscore_names[start_ind:end_ind][cells_recovered_inds], 
+                  file.out = term_cells_fasta_path)  
+    }
+    
+    
+    # term_cells_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = '\\1_TERMINAL\\2', x = output_fasta_path) 
+    # write.fasta(all_cells_seqs_FULL[start_ind:end_ind], names = underscore_names[start_ind:end_ind], file.out = term_cells_fasta_path)
     
   }
   # if(fasta_type == 'all_cells'){
