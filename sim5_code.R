@@ -260,13 +260,17 @@ option_list <- list(
               help = 'Mitochondiral profile jitter probability (ie independent probability a given mito genome is lost at division timepoint'),
   
   make_option('--beast_birth_rate_dist_params', type = 'character', default = '1; 1; 1',
-              help = 'Parameterize the birth and death rates for tree reconstruction')
+              help = 'Parameterize the birth and death rates for tree reconstruction'),
+  make_option('--cell_type_substitution_models', type = 'character', default = NULL,
+              help = 'nested json for specifying cell-specific mutation, division, and death rates')
        
   
   #######################################
 )
 opt_parser <- OptionParser(option_list = option_list, add_help_option = FALSE)
 input_args <- parse_args(opt_parser)
+
+
 
 setwd('/dartfs/rc/lab/M/McKennaLab/projects/Aidan/simulations/r_sim_clean')
 
@@ -311,6 +315,11 @@ if(!is.null(input_args$params_json_path)){
   
   input_args <- fromJSON(file = input_args$params_json_path)
 }
+
+
+
+
+
 
 # define global force_transversions indicator
 force_transversions <<- input_args$force_transversions
@@ -442,7 +451,7 @@ parse_be_example <- function(example_string){
   
 }
 
-
+ 
 # note that we can determine if transition or transversion rates should be elevated in targets
 # by classifying the type of mutation the BE uses
 classify_be_mutation_type <- function(from_base, to_base){
@@ -457,7 +466,7 @@ classify_be_mutation_type <- function(from_base, to_base){
   if(transition_list[[from_base]] == to_base){
     return('transition')
   }
-  return('transversion')
+  return('transversion') 
   
 }
 if(!is.null(input_args$be_conversion_pattern)){
@@ -2392,8 +2401,8 @@ add_mito_jitter <- function(mt_mutation_mat, frac_copies_lost){
 }
 
 
-# generate the indices of the cells that will be recovered at each timepoint according to fraction of total cells captured. 
-# this will only work correclty on terminal cell fastas. 
+# generate the indices of the cells that will be recovered at each timepoint according to fraction of total cells captured up front. 
+# this will only work correctly on terminal cell fastas. 
 generate_downsample_cells <- function(cell_sample_rate_vec, sim_length_stopping_points, cell_cycle_length){
   
   cell_downsample_df <- data.frame(cell_recovery_rate = numeric(),
@@ -2440,6 +2449,7 @@ generate_downsample_cells <- function(cell_sample_rate_vec, sim_length_stopping_
 
 
 # generate integrations that will be selected in downsampling approaches for mt and bc:
+# this will be run before the simulation bg
 generate_downsample_integrations <- function(max_ints_per_cell_vec, recovery_rate_vec){
   
   
@@ -3647,7 +3657,9 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   
   else if (recon_method == 'score'){
     
-    summarize_allelic_scores_indexing <- function(mut_profiles, num_cores, linstrings, recovery_prob, num_integrations = NULL){ 
+    # summarize_allelic_scores_indexing <- function(mut_profiles, num_cores, linstrings, recovery_prob, num_integrations = NULL){ 
+    
+    summarize_allelic_scores_indexing <- function(mut_profiles, num_cores, linstrings, downsample_recovered_cells_df){ 
       
       # mut_profiles is incoming list of mutation profiles
       # num_cores is number of cpu cores
@@ -3981,7 +3993,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                                                                      num_cores = num_cores,
                                                                                      linstrings = which_linstrings,
                                                                                      num_integrations = num_bc_ints,
-                                                                                     recovery_prob = bc_recovery_prob),
+                                                                                     recovery_prob = bc_recovery_prob,
+                                                                                     downsample_recovered_cells_df = downsample_recovered_cells_df),
                  envir = .GlobalEnv)
           # cat(paste0('\nafter SASI bc for num_bc_ints == ', num_bc_ints), file = 'no_strings.txt', append = TRUE)  
         }
@@ -4002,7 +4015,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                                                                      num_cores = num_cores,
                                                                                      linstrings = which_linstrings,
                                                                                      num_integrations = num_mito_genomes,
-                                                                                     recovery_prob = mito_recovery_prob),
+                                                                                     recovery_prob = mito_recovery_prob,
+                                                                                     downsample_recovered_cells_df = downsample_recovered_cells_df),
                  envir = .GlobalEnv)
           
           # cat(paste0('\nafter SASI bc for num_mito_genomes == ', num_mito_genomes), file = 'no_strings.txt', append = TRUE)  

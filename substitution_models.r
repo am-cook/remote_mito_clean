@@ -1,9 +1,12 @@
-library(phangorn)
-library(ggplot2)
-library(reshape2)
-library(docstring)
-library(ggpubr)
-library(psych)
+suppressPackageStartupMessages({
+  library(phangorn)
+  library(ggplot2)
+  library(reshape2)
+  library(docstring)
+  library(ggpubr)
+  library(psych)  
+})
+
 
 # ex_phylo <- readRDS('./output/saved_phylos/954580019942/this_recon_phylo_4071.rds')
 # class(ex_phylo)

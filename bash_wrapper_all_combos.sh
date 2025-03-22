@@ -80,4 +80,6 @@ for filename in "$param_dir"/*; do
 
   cd ../../../
 
+  Rscript process_results_from_bash.r -I "$most_recent_runid"
+
 done

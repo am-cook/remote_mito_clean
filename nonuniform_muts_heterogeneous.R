@@ -7,7 +7,7 @@ suppressPackageStartupMessages({
  
  
 
-set.seed(42)
+# set.seed(42)
 # class_means <- list('High' = 0.1, 'Medium' = 0.03, 'Low' = 0.01)
 # num_targets <- 50
 # orig_pos_er_list <- sample(names(class_means), size = num_targets, replace = TRUE)
@@ -286,7 +286,8 @@ non_uniform_editing <- function(pos_er_list, num_integrations, eligible_ints, ti
 
 
 # get_background_edit_inds <- function(num_rows, num_cols, uniform_edit_prob){
-get_background_edit_inds <- function(num_rows, num_cols, bg_pos_er_list, sample_transversion = FALSE, mut_type = 'not_specified', verbose = FALSE){
+get_background_edit_inds <- function(num_rows, num_cols, bg_pos_er_list, mut_type,
+                                     sample_transversion = FALSE, verbose = FALSE){
   # Accepts sparse matrix as input, and adds to it the transitions that occur
   
   
@@ -704,6 +705,11 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   
 }
 
+
+# the reason this is working is because the targets that are being generated are all the same base. 
+# so force_transversions isn’t absolutely essential because the selection of which positions to edit in the target editing workflow does that already. 
+# the only difference would be in an editing window context, where bases can differ. 
+# i’d argue it’s actually better to NOT force transversions in these cases.
 
 transversion_func <- function(mut_mat, num_rows, num_cols, bg_transversion_pos_er_list, baseline_ints, bg_sub_prob_mat,
                               target_transversion_pos_er_list = NULL, force_target_transversions = FALSE, verbose = FALSE){

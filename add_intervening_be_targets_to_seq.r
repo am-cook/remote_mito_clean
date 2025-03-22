@@ -1,7 +1,10 @@
 # sourcing this for use in sim5_code.R
 
-library(docstring)
+suppressPackageStartupMessages({
+  library(docstring)  
+})
 
+ 
  
 generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, be_target_count){
   #' @title Generate barcode sequence not including BE targets
