@@ -96,13 +96,19 @@ save_image_of_tree <- function(tree_path, savename_prefix, midpt = FALSE){
   
 }
 
+
 # recon_tree <- read.tree(input_args$recon_tree_path)
 print(paste0('current wd == ', getwd()))
 print(paste0('looking for recon tree at ', input_args$recon_tree_path))
 recon_tree <- read.tree(file.path(output_dir_stem, 'processed_fastas', input_args$run_id, input_args$recon_tree_path))
+
+# subset ground truth tree to only include those tip labels present in recon tree:
+recon_tips <- recon_tree$tip.label
+subset_gt_tree <- drop.tip(ground_truth_tree, setdiff(ground_truth_tree$tip.label, recon_tip))
+
 midpt_recon_tree <- midpoint(recon_tree)
-rf_dist <-  phangorn::RF.dist(recon_tree, ground_truth_tree, normalize = TRUE)
-midpt_rf_dist <- phangorn::RF.dist(midpt_recon_tree, ground_truth_tree, normalize = TRUE)
+rf_dist <-  phangorn::RF.dist(recon_tree, subset_gt_tree, normalize = TRUE)
+# midpt_rf_dist <- phangorn::RF.dist(midpt_recon_tree, subset_gt_tree, normalize = TRUE)
 print(paste0('rf_dist == ', rf_dist))
 # print(paste0('midpt_rf_dist == ', midpt_rf_dist))
 

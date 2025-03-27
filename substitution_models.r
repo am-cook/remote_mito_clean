@@ -773,13 +773,6 @@ nontarget_scale_gamma_heterogeneity <- function(position_er_list, shape_param = 
       position_er_list[[i]][[j]] <- position_er_list[[i]][[j]] * scaling_factor
     }
   }
-  # hetero_rates <- lapply(unname(unlist(position_er_list)), function(x){
-  #   scaling_factor <- sample(hetero_scales, size = 1)[1]
-  #   return(scaling_factor * x)
-  # })
-  # 
-  # # add in position names from list provided
-  # names(hetero_rates) <- names(position_er_list)
   
   
   return(position_er_list)

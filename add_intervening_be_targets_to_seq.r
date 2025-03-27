@@ -47,7 +47,7 @@ generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, b
   # repeat this process for each of the four possible BE targets
   if(target_from == 'A'){
     
-    cat('\nin target from A\n', file = 'no_strings.txt', append = TRUE)
+    # cat('\nin target from A\n', file = 'no_strings.txt', append = TRUE)
     num_required_as <- num_required_as - be_target_count
     # if there are more BE targets of a specific nuc than allotted, we'll have to take away from other bases' counts
     if(num_required_as < 0){ 
@@ -55,23 +55,23 @@ generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, b
       num_required_as <- 0
     }
   } else if(target_from == 'G'){
-    cat('\nin target from G\n', file = 'no_strings.txt', append = TRUE)
+    # cat('\nin target from G\n', file = 'no_strings.txt', append = TRUE)
     num_required_gs <- num_required_gs - be_target_count
     if(num_required_gs < 0){ 
       leftover_bases <- abs(num_required_gs)
       num_required_gs <- 0
     }
   } else if(target_from == 'C'){
-    cat('\nin target from C\n', file = 'no_strings.txt', append = TRUE)
+    # cat('\nin target from C\n', file = 'no_strings.txt', append = TRUE)
     num_required_cs <- num_required_cs - be_target_count
     if(num_required_cs < 0){ 
       leftover_bases <- abs(num_required_cs)
       num_required_cs <- 0
     }
-    cat(paste0('\nnum_required_cs == ', num_required_cs, '\n'), file = 'no_strings.txt', append = TRUE)
-    cat(paste0('\nleftover_bases == ', leftover_bases, '\n'), file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nnum_required_cs == ', num_required_cs, '\n'), file = 'no_strings.txt', append = TRUE)
+    # cat(paste0('\nleftover_bases == ', leftover_bases, '\n'), file = 'no_strings.txt', append = TRUE)
   } else if(target_from == 'T'){
-    cat('\nin target from T\n', file = 'no_strings.txt', append = TRUE)
+    # cat('\nin target from T\n', file = 'no_strings.txt', append = TRUE)
     num_required_ts <- num_required_ts - be_target_count
     if(num_required_ts < 0){ 
       leftover_bases <- abs(num_required_ts)

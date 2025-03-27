@@ -281,6 +281,7 @@ source('./substitution_models.r')
 source('./add_intervening_be_targets_to_seq.r')
 source('./make_babette_tree.r')
 source('./mut_to_fasta_CONCAT_INTS.r')
+source('./parse_cell_type_specific_args.r')
 print('Files sourced ... ')
 
 ###############
@@ -311,9 +312,39 @@ diletters_vec <- apply(diletters_grid, MARGIN = 1, function(x){return(paste0(x[1
 letters_diletters <<- append(LETTERS, diletters_vec)
 
 # if the user supplied parameters through a json rather than CLAs, re-write input_args
+# create run_specs directory if it doesn't exist:
+if(!dir.exists(file.path('output', 'run_specs', unique_run_id))){
+  dir.create(file.path('output', 'run_specs', unique_run_id), recursive = TRUE)
+}
+
 if(!is.null(input_args$params_json_path)){
   
+  old_json_name_splits <- str_split(string = input_args$params_json_path, pattern = '/')[[1]]
+  old_json_name <- old_json_name_splits[length(old_json_name_splits)]
+  
+  # copy this entire json over to the run_specs dir, preserving the json name:
+  file.copy(from = input_args$params_json_path, 
+            to = file.path('output', 'run_specs', unique_run_id, old_json_name))
+  
+  # then read in the args from that json 
   input_args <- fromJSON(file = input_args$params_json_path)
+  
+} else{
+  
+  
+  input_args_mat <- do.call(rbind, input_args)
+  param_names <- rownames(input_args_mat)
+  rownames(input_args_mat) <- NULL
+  input_args_mat <- cbind(param_names, input_args_mat)
+  input_param_colnames <- c('input_param', 'val')
+  input_args_mat <- rbind(input_param_colnames, input_args_mat)
+  input_args_df <- as.data.frame(input_args_mat)
+  colnames(input_args_df) <- input_param_colnames
+  format_input_args_df <- format.data.frame(input_args_df, justify = 'left')
+  
+  write.table(format_input_args_df, paste0('./output/run_specs/', unique_run_id, 
+                                           '/input_args_', unique_run_id, '.txt'), 
+              quote = FALSE, row.names = FALSE, col.names = FALSE, append = TRUE, sep = '\t')
 }
 
 
@@ -368,64 +399,89 @@ parse_target_config <- function(config_str){
 }
 
 
-parse_target_count_arguments <- function(pos_er_str){
-  # if(nuc_or_be == 'be'){
-  #   configs <- input_args$be_target_config
-  # }
-  # else if(nuc_or_be == 'nuc'){
-  #   configs <- input_args$nuc_target_config
-  # }
-  
-  no_spaces <- str_replace_all(pos_er_str, ' ', '')
-  # print(paste0('no_spaces == ', no_spaces))
-  charstr <- str_split_1(no_spaces, pattern = '')
-  
-  rate_abbrev_dict <- list('H' = 'High',
-                           'M' = 'Medium',
-                           'L' = 'Low')
-  
-  # if the user passes in site-specific HML rates
-  if(('H' %in% charstr) | ('M' %in% charstr) | ('L' %in% charstr)){
-    splits <- unlist(str_split(no_spaces, pattern = ';'))
-    rates <- lapply(splits, function(x){
-      rate_abbrev_dict[[str_split_i(x, pattern = ':', i = 2)]]
-    })
-    pos_nums <- sapply(splits, function(x){str_split_i(x, pattern = ':', i = 1)})
-    names(rates) <- pos_nums
+############## changing 3/24
+# parse_target_count_arguments <- function(pos_er_str){
+#   # if(nuc_or_be == 'be'){
+#   #   configs <- input_args$be_target_config
+#   # }
+#   # else if(nuc_or_be == 'nuc'){
+#   #   configs <- input_args$nuc_target_config
+#   # }
+#   
+#   no_spaces <- str_replace_all(pos_er_str, ' ', '')
+#   # print(paste0('no_spaces == ', no_spaces))
+#   charstr <- str_split_1(no_spaces, pattern = '')
+#   
+#   rate_abbrev_dict <- list('H' = 'High',
+#                            'M' = 'Medium',
+#                            'L' = 'Low')
+#   
+#   # if the user passes in site-specific HML rates
+#   if(('H' %in% charstr) | ('M' %in% charstr) | ('L' %in% charstr)){
+#     splits <- unlist(str_split(no_spaces, pattern = ';'))
+#     rates <- lapply(splits, function(x){
+#       rate_abbrev_dict[[str_split_i(x, pattern = ':', i = 2)]]
+#     })
+#     pos_nums <- sapply(splits, function(x){str_split_i(x, pattern = ':', i = 1)})
+#     names(rates) <- pos_nums
+#     
+#     # if the user specified HML by position, our return list will have integer names (as chars)
+#     return(rates)
+#   }
+#   
+#   # if the user passes in the number of desired targets and a ratio of HML edit sites but no site-specificity
+#   else{
+#     
+#     # the first integer in the inputted string is the number of targets
+#     num_targets <- as.integer(str_split_i(no_spaces, pattern = ':', i = 1))
+#     
+#     # everything that comes after the colon is HML ratios
+#     raw_ratio <- str_split_i(no_spaces, pattern = ':', i = 2)
+#     
+#     # convert string HML ratio to numeric vector
+#     hml_rates <- as.numeric(unlist(str_split(raw_ratio, pattern = ';')))
+#     
+#     # noramlize the rates in case they don't sum to 1
+#     norm_rates <- hml_rates/sum(hml_rates)
+#     
+#     # find the number of H, M, and L targets
+#     num_h <- round(norm_rates[1]*num_targets)
+#     num_m <- round(norm_rates[2]*num_targets)
+#     num_l <- num_targets - num_h - num_m
+#     
+#     return_list <- list('num_h' = num_h,
+#                         'num_m' = num_m,
+#                         'num_l' = num_l)
+#     
+#     # if the user doesn't specify positions, the returned list will have length 3
+#     # and will designate the number of H, M, and L targets
+#     return(return_list)
+#     
+#   }
+# }
+# ############## changing 3/24
+
+parse_target_count_arguments <- function(num_targets, class_fracs){
     
-    # if the user specified HML by position, our return list will have integer names (as chars)
-    return(rates)
-  }
-  
-  # if the user passes in the number of desired targets and a ratio of HML edit sites but no site-specificity
-  else{
-    
-    # the first integer in the inputted string is the number of targets
-    num_targets <- as.integer(str_split_i(no_spaces, pattern = ':', i = 1))
-    
-    # everything that comes after the colon is HML ratios
-    raw_ratio <- str_split_i(no_spaces, pattern = ':', i = 2)
-    
-    # convert string HML ratio to numeric vector
-    hml_rates <- as.numeric(unlist(str_split(raw_ratio, pattern = ';')))
-    
-    # noramlize the rates in case they don't sum to 1
-    norm_rates <- hml_rates/sum(hml_rates)
-    
-    # find the number of H, M, and L targets
-    num_h <- round(norm_rates[1]*num_targets)
-    num_m <- round(norm_rates[2]*num_targets)
-    num_l <- num_targets - num_h - num_m
-    
-    return_list <- list('num_h' = num_h,
-                        'num_m' = num_m,
-                        'num_l' = num_l)
-    
-    # if the user doesn't specify positions, the returned list will have length 3
-    # and will designate the number of H, M, and L targets
-    return(return_list)
-    
-  }
+  hml_rates <- as.numeric(c(class_fracs$high,
+                            class_fracs$medium,
+                            class_fracs$low))
+
+  # noramlize the rates in case they don't sum to 1
+  norm_rates <- hml_rates/sum(hml_rates)
+
+  # find the number of H, M, and L targets
+  num_h <- round(norm_rates[1]*num_targets)
+  num_m <- round(norm_rates[2]*num_targets)
+  num_l <- num_targets - num_h - num_m
+
+  return_list <- list('num_h' = num_h,
+                      'num_m' = num_m,
+                      'num_l' = num_l)
+
+  # if the user doesn't specify positions, the returned list will have length 3
+  # and will designate the number of H, M, and L targets
+  return(return_list)
 }
 
 parse_be_example <- function(example_string){
@@ -499,23 +555,79 @@ split_inds_into_hml <- function(inds, num_h, num_m, num_l){
   return(hml_pos_list)
 }
 
+# if necessary (i.e. input_args$time_inc == 'auto'), create a greatest common divisor for the cell cycle lengths 
+# of all cell types in the cell population. this can be a decimal. if only one cell type is supplied, 
+# or if all cell types have the same cell cycle length, 'auto' will increment the simulation by the cell cycle length
+
+gcd <- function(a, b) {
+  
+  # since we might be working with decimal vals, we first scale up our vals to ints
+  # then we scale back down at the end
+  if(a %% 1 == 0){
+    num_decimal_places_a <- 0
+  } else{
+    num_decimal_places_a <- nchar(str_split(as.character(a), '\\.')[[1]][2])
+  }
+  if(b %% 1 == 0){
+    num_decimal_places_b <- 0
+  } else{
+    num_decimal_places_b <- nchar(str_split(as.character(b), '\\.')[[1]][2])
+  }
+  
+  
+  max_decimal_places <- max(c(num_decimal_places_a, num_decimal_places_b))
+  scale_factor <- 10**max_decimal_places
+  
+  a <- a*scale_factor
+  b <- b*scale_factor
+  
+  while (b != 0) {
+    temp <- b
+    b <- a %% b
+    a <- temp
+  }
+  return(a/scale_factor)
+}
+
+gcd_multiple_vals <- function(...){
+  vals <- c(...)
+  return(Reduce(gcd, vals))
+}
+
+
+
+# generate the time_inc of the simulation
+if(input_args$time_inc == 'auto'){
+  cell_cycle_lengths <- sapply(input_args$cell_type_dict$cell_type_params, function(celltype){
+    celltype$cell_cycle_length})
+  time_inc <- gcd_multiple_vals(cell_cycle_lengths)
+} else if(is.numeric(input_args$time_inc)){
+  time_inc <- input_args$time_inc
+}
+
 
 
 # convert base fractions from a character string to a numeric vector
-bc_base_fracs <- process_cla_string(input_args$bc_nuc_composition, outputted_type = 'numeric')
+# bc_base_fracs <- process_cla_string(input_args$bc_nuc_composition, outputted_type = 'numeric')
+bc_base_fracs <- c(input_args$bc_nuc_composition$frac_a,
+                   input_args$bc_nuc_composition$frac_g,
+                   input_args$bc_nuc_composition$frac_c,
+                   input_args$bc_nuc_composition$frac_t)
 
 
 # WORKING ON THIS 5/23
 # updated way to construct a barcode sequence with targets at the correct positions
 create_bc_sequence <- function(be_target_origin = be_target_origin,
                                bc_length = input_args$bc_length, 
-                               be_targets_counts = input_args$be_targets,
-                               nuc_targets_counts = input_args$nuclease_targets,
-                               be_targets_configs = input_args$be_target_config,
-                               nuc_targets_configs = input_args$nuc_target_config,
+                               be_targets_counts = input_args$be_targets$num_targets,
+                               nuc_targets_counts = input_args$nuclease_targets$num_targets,
+                               be_targets_classfracs = input_args$be_targets$edit_rate_class_fractions,
+                               nuc_targets_classfracs = input_args$nuclease_targets$edit_rate_class_fractions,
+                               be_targets_configs = input_args$be_targets$config,
+                               nuc_targets_configs = input_args$nuclease_targets$config,
                                path_to_bc_seq = input_args$barcode_sequence){
   
-  # be_targets_counts refers to the argument that specifies how many targets of each edit rate class (and optionally where) there are
+  # be_targets_counts refers to the argument that specifies how many targets there are
   # be_targets_configs refers to how targets are dispersed throughout the barcode, ie Random, Uniform, Spaced
   
   # initialize an empty list that will be returned at the end of this function
@@ -524,18 +636,8 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
   # - a BE list with structure pos:{HML}
   # - a nuc list with structure pos:{HML}
   
-  # cat('\n in create_bc_sequence()\n', file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\n input_args$be_targets == ', be_targets_counts), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\n input_args$be_target_config == ', be_targets_configs), file = 'no_strings.txt', append = TRUE)
-  
-  # print('in create_bc_sequence()')
-  # print(be_targets_configs)
-  # print('after be_targets_configs')
   return_list <- list()
-  
-  # print('be_targets_configs == ')
-  # print(be_targets_configs)
-  
+
   # if there are no barcode targets at all (BE or nuc)
   if(is.null(nuc_targets_counts) & is.null(be_targets_counts)){
     bc_seq <- sample(c('A', 'G', 'C', 'T'), size = bc_length, replace = TRUE)
@@ -546,13 +648,16 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
     return_list[['nuc_basepos_editrate_classes']] <- NULL
     return(return_list)
   }
-  
+
   # parse the nuc and BE target info
   if(!is.null(be_targets_counts)){
-    be_target_setup <- parse_target_count_arguments(pos_er_str = be_targets_counts)  
+    be_target_setup <- parse_target_count_arguments(num_targets = be_targets_counts,
+                                                    class_fracs = be_targets_classfracs)  
   }
   if(!is.null(nuc_targets_counts)){
-    nuc_target_setup <- parse_target_count_arguments(pos_er_str = nuc_targets_counts) 
+    nuc_target_setup <- parse_target_count_arguments(num_targets = nuc_targets_counts,
+                                                    class_fracs = nuc_targets_classfracs)  
+
     # print('nuc_target_setup')
     # print(nuc_target_setup)
   }
@@ -679,22 +784,7 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
                                                                           num_h = be_target_setup[['num_h']], 
                                                                           num_m = be_target_setup[['num_m']], 
                                                                           num_l = be_target_setup[['num_l']])
-      
-      # # shuffle the target inds in place
-      # bc_be_target_inds <- sample(bc_be_target_inds, size = length(bc_be_target_inds), replace = FALSE)
-      # 
-      # # since target inds are shuffled, can assign HML sequentially
-      # # the relative numbers of HML targets are taken from be_target_setup
-      # high_inds <- bc_be_target_inds[1:be_target_setup[['num_h']]]
-      # med_inds <- bc_be_target_inds[(be_target_setup[['num_h']]+1):(be_target_setup[['num_h']]+be_target_setup[['num_m']])]
-      # low_inds <- bc_be_target_inds[(be_target_setup[['num_h']]+be_target_setup[['num_m']]+1):length(bc_be_target_inds)]
-      # 
-      # # create a named list
-      # bc_be_pos_erc_list <- as.list(c(rep('High', bc_be_target_inds[['num_h']]), 
-      #                          rep('Medium', bc_be_target_inds[['num_m']]), 
-      #                          rep('Low', bc_be_target_inds[['num_l']])))
-      # hml_inds <- c(high_inds, med_inds, low_inds)
-      # names(bc_be_pos_erc_list) <- hml_inds
+
       
       return_list[['bc_seq']] <- bc_sequence_with_targets
       # return_list[['be_basepos_editrate_classes']] <- bc_be_pos_erc_list
@@ -712,9 +802,6 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
         be_target_count = 0
       )
       
-      # print('AM I INADVERTANTLY ENTERING THIS AND REWRITING RETURN_LIST[[BC_SEQ]] (670ish)')
-      # # the target positions are already stored
-      # bc_be_target_inds <- names(be_target_setup)
       
       return_list[['bc_seq']] <- bc_sequence_with_targets
       return_list[['be_basepos_editrate_classes']] <- be_target_setup
@@ -743,37 +830,15 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
                                                     target_pos_1 = nuc_first_target_pos, 
                                                     bc_length_with_targets = bc_length, 
                                                     num_bases_btwn = nuc_target_num_bases_btwn)
-      
-      # print('bc_nuc_target_inds')
-      # print(bc_nuc_target_inds)
-      # print(length(bc_nuc_target_inds))
-      
-      # print('after generate target indices')
+
       
       return_list[['nuc_basepos_editrate_classes']] <- split_inds_into_hml(inds = bc_nuc_target_inds, 
                                                                           num_h = nuc_target_setup[['num_h']], 
                                                                           num_m = nuc_target_setup[['num_m']], 
                                                                           num_l = nuc_target_setup[['num_l']])
-      
-      # print('return list 721ish == ')
-      # print(return_list)
-      
-      # return_list[['nuc_basepos_editrate_classes']] <- bc_nuc_target_inds
+
     } else{ # if actual indices are supplied along with HML edit rate classes
-      # print('in the ELSE down below ...')
-      # bc_sequence_with_targets <- generate_non_be_target_sequence(
-      #   bc_length = input_args$bc_length, 
-      #   nuc_fracs = bc_base_fracs,
-      #   target_from = be_target_origin,
-      #   be_target_count = 0
-      # )
-      # 
-      # # print('AM I INADVERTANTLY ENTERING THIS AND REWRITING RETURN_LIST[[BC_SEQ]] (670ish)')
-      # # # the target positions are already stored
-      # # bc_be_target_inds <- names(be_target_setup)
-      # 
-      # return_list[['bc_seq']] <- bc_sequence_with_targets
-      # return_list[['be_basepos_editrate_classes']] <- be_target_setup
+
       
       
       
@@ -786,22 +851,14 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
                                                                target_from = 'A',
                                                                be_target_count = 0)
   }
-  # print('return list')
-  # print(return_list)
 
-  
   ############################## comment 2/5  
   # return_list[['bc_seq']] <- generate_non_be_target_sequence(bc_length = input_args$bc_length, 
   #                                                            nuc_fracs = bc_base_fracs,
   #                                                            target_from = 'A',
   #                                                            be_target_count = 0)
   ############################## comment 2/5  
-  
-  # cat('\nreturn list (line 690ish) == \n', file = 'no_strings.txt', append = TRUE)
-  # for(i in 1:length(return_list)){
-  #   cat(paste0(names(return_list)[i], ': ', unname(unlist(return_list))[i]), file = 'target_pos.txt', append = TRUE)
-  # }
-  # cat(return_list, file = 'no_strings.txt', append = TRUE)
+
   return(return_list)
   
   
@@ -809,22 +866,14 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
 
 # print('is this running here')
 bc_generation_return_list <- create_bc_sequence()
-# print(bc_generation_return_list)
-
-# print(paste0('bc_generation_return_list == '))
-# print(bc_generation_return_list)
-# cat('\ncan i still append to a file ... \n', file = 'no_strings.txt', append = TRUE)
-# 
-# cat(paste0('length(bc_generation_return_list == ', length(bc_generation_return_list)), 
-#     file = 'no_strings.txt', append = TRUE)
-# for(i in 1:length(bc_generation_return_list)){
-#   cat(paste0('\n', names(bc_generation_return_list)[i], ' == ', unname(unlist(bc_generation_return_list))[i]),
-#       file = 'no_strings.txt', append = TRUE)
-# }
 baseline_seq_nucs_bc <<- bc_generation_return_list[['bc_seq']]
 # ERC == edit rate class
 # print('TESTING')
 # print(bc_generation_return_list)
+
+# not a crazy assumption that basepos_erc_be_list and basepos_erc_nuc_list would be the same across cell types
+# for example, a target that is high edit rate in one cell type would be high edit rate in another, regardless of whether the underlying numerical rates themselves are different
+# thus only have one basepos_erc list for be and for nuc across all cell types
 basepos_erc_be_list <- bc_generation_return_list[['be_basepos_editrate_classes']]
 basepos_erc_nuc_list <- bc_generation_return_list[['nuc_basepos_editrate_classes']]
 
@@ -845,106 +894,14 @@ baseline_seq_ints_bc <<- sapply(baseline_seq_nucs_bc, convert_nuc_to_int)
 baseline_seq_ints_mt <<- sample(seq(1,4), size = input_args$mito_genome_length, replace = TRUE)
 baseline_seq_nucs_mt <<- sapply(baseline_seq_ints_mt, convert_int_to_nuc)
 
+##### cell type-specific work ... 
+# generate cell type transition matrix lists for induced and uninduced conditions:
+# convert transition matrix values into a list of lists, where outer key transitions into inner key
+cell_type_names <<- names(input_args$cell_type_dict$cell_type_params)
 
-
-
-
-# return_list <- list('num_h' = 10,
-#                     'num_m' = 13,
-#                     'num_l' = 15)
-
-# # this function assigns positions as BE targets and gives respective rates.
-# # so here is where we'd have to involve the nucleotide substitution models
-# # process be targets:
-# targets_to_list <- function(pos_er_str, nuc_or_be, bc_length = input_args$bc_length){
-#   if(nuc_or_be == 'be'){
-#     configs <- input_args$be_target_config
-#   }
-#   else if(nuc_or_be == 'nuc'){
-#     configs <- input_args$nuc_target_config
-#   }
-#   
-#   no_spaces <- str_replace_all(pos_er_str, ' ', '')
-#   charstr <- str_split_1(no_spaces, pattern = '')
-#   
-#   rate_abbrev_dict <- list('H' = 'High',
-#                            'M' = 'Medium',
-#                            'L' = 'Low')
-#   
-#   # if the user passes in site-specific HML rates
-#   if(('H' %in% charstr) | ('M' %in% charstr) | ('L' %in% charstr)){
-#     splits <- unlist(str_split(no_spaces, pattern = ';'))
-#     rates <- lapply(splits, function(x){
-#       rate_abbrev_dict[[str_split_i(x, pattern = ':', i = 2)]]
-#     })
-#     pos_nums <- sapply(splits, function(x){str_split_i(x, pattern = ':', i = 1)})
-#     names(rates) <- pos_nums
-#     return(rates)
-#   }
-#   
-#   # if the user passes in the number of desired targets and a ratio of HML edit sites but no site-specificity
-#   else{
-#     
-#     num_bases <- as.integer(str_split_i(no_spaces, pattern = ':', i = 1))
-#     
-#     raw_rates <- str_split_i(no_spaces, pattern = ':', i = 2)
-#     hml_rates <- as.numeric(unlist(str_split(raw_rates, pattern = ';')))
-#     norm_rates <- hml_rates/sum(hml_rates)
-#     
-#     # could also include something that forces equal distances between targets
-#     
-#     num_h <- round(norm_rates[1]*num_bases)
-#     num_m <- round(norm_rates[2]*num_bases)
-#     num_l <- num_bases - num_h - num_m
-#     
-#     # we only care about the configuration of the targets if the targets weren't manually specified
-#     if(configs == 'U'){
-#       # get uniformly-spaced indices, rounding to nearest int when necessary
-#       all_inds <- unique(sapply(seq(from = 1, to = bc_length, length.out = num_bases), round))
-#       
-#       # randomly shuffle the selected indices
-#       all_inds <- sample(all_inds, size = length(all_inds), replace = FALSE)
-#       
-#     }
-#     else if(configs == 'R'){
-#       # only sample once to avoid identical indices across HML samples
-#       all_inds <- sample(seq(bc_length), size = num_bases, replace = FALSE)
-#       
-#     }
-#     else{
-#       # integer for # bases between
-#       splits <- str_split(configs, ':')[[1]]
-#       
-#       bases_btwn_targets <- as.integer(splits[1])
-#       first_targ_pos <- as.integer(splits[2])
-#       
-#       # if the targets "would not fit" under the current scheme, find the position the first 
-#       # base would need to be in to fit
-#       if((first_targ_pos + (num_bases-1)*bases_btwn_targets) > bc_length){
-#         first_targ_pos <- bc_length - ((num_bases-1)*bases_btwn_targets)
-#         if(first_targ_pos < 1){
-#           print('first target position out of bounds')
-#         }
-#       }
-#       
-#       all_inds <- unique(sapply(seq(from = first_targ_pos, by = bases_btwn_targets, length.out = num_bases), round))
-#       
-#       # shuffle these random inds
-#       all_inds <- sample(all_inds, size = length(all_inds), replace = FALSE)
-#       
-#     }
-#     # since all_inds are shuffled, can assign HML sequentially
-#     high_inds <- all_inds[1:num_h]
-#     med_inds <- all_inds[(num_h+1):(num_h+num_m)]
-#     low_inds <- all_inds[(num_h+num_m+1):length(all_inds)]
-#     
-#     return_list <- as.list(c(rep('High', num_h), rep('Medium', num_m), rep('Low', num_l)))
-#     hml_inds <- c(high_inds, med_inds, low_inds)
-#     names(return_list) <- hml_inds
-#     
-#     return(return_list)
-#   }
-# }
+tm_lists_res <- make_cell_type_transition_lists(cell_type_names = cell_type_names)
+uninduced_tm_list <- tm_lists_res[['uninduced_tm_list']]
+induced_tm_list <- tm_lists_res[['induced_tm_list']]
 
 
 
@@ -1079,29 +1036,27 @@ parse_sub_model_params <- function(raw_cla_submodel, selected_sub_model, sequenc
   return(return_list)
 }
 
-# here, generating pos:mutation_prob lists for transitions and transversions
-mt_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$mt_substitution_model,
-                                            selected_sub_model = input_args$mt_sub_model_params,
-                                            sequence_with_targets = baseline_seq_nucs_mt)
-mt_sub_model_params <- mt_sub_model_list[['sub_model_params_list']]
-mt_sub_prob_mat <- mt_sub_model_list[['sub_prob_mat']]
-
-# print('before parse sub model params')
-# print('before parse sub model params, baseline_seq_nucs_bc == ')
-# print(baseline_seq_nucs_bc)
-
-bc_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$bc_substitution_model,
-                                            selected_sub_model = input_args$bc_sub_model_params,
-                                            sequence_with_targets = baseline_seq_nucs_bc)
-
-# print('after parse sub model params, baseline_seq_nucs_bc == ')
-# print(baseline_seq_nucs_bc)
-# print('after parse sub model params')
-bc_sub_model_params <- bc_sub_model_list[['sub_model_params_list']]
-bc_sub_prob_mat <- bc_sub_model_list[['sub_prob_mat']]
 
 
-# print('1083')
+# # here, generating pos:mutation_prob lists for transitions and transversions
+# mt_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$mt_substitution_model,
+#                                             selected_sub_model = input_args$mt_sub_model_params,
+#                                             sequence_with_targets = baseline_seq_nucs_mt)
+# mt_sub_model_params <- mt_sub_model_list[['sub_model_params_list']]
+# mt_sub_prob_mat <- mt_sub_model_list[['sub_prob_mat']]
+# 
+# 
+# bc_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$bc_substitution_model,
+#                                             selected_sub_model = input_args$bc_sub_model_params,
+#                                             sequence_with_targets = baseline_seq_nucs_bc)
+# 
+# # print('after parse sub model params, baseline_seq_nucs_bc == ')
+# # print(baseline_seq_nucs_bc)
+# # print('after parse sub model params')
+# bc_sub_model_params <- bc_sub_model_list[['sub_model_params_list']]
+# bc_sub_prob_mat <- bc_sub_model_list[['sub_prob_mat']]
+
+
 
 # accepts a substitution model and a sequence as input, 
 # and returns a list of basepos:transition_prob for transitions
@@ -1146,217 +1101,10 @@ generate_transversion_basepos_list <- function(sequence_with_targets, sub_prob_m
     return(tv_probs)
     
   })
-  
-  # 
-  # # print('transversion_list')
-  # # print(transversion_list)
-  # 
-  # return_list <- list()
-  # return_list[['basepos_transition_list']] <- transition_list
-  # return_list[['basepos_transversion_list']] <- transversion_list
-  # 
-  # print(return_list[['basepos_transversion_list']])
-  
+
   return(transversion_list)
   
 }
-
-# NEW_generate_substitution_basepos_list <- generate_substitution_basepos_list(baseline_seq_nucs_mt, mt_sub_prob_mat)
-# print(NEW_generate_substitution_basepos_list)
-
-
-# recall that there will be a nontarget edit rate list that INCLUDES target positions because 
-# even targets are subject to background mutational processes
-
-# so here we generate the transition and transversion basepos:edit rate lists for NON-TARGET-PROCESSES
-# basepos_bc_nontarget_subprob_lists <- generate_substitution_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
-#                                                                          sub_prob_mat = bc_sub_prob_mat)
-# basepos_bc_nontarget_transition_probs <- basepos_bc_nontarget_subprob_lists[['basepos_transition_list']]
-# basepos_bc_nontarget_transversion_probs <- basepos_bc_nontarget_subprob_lists[['basepos_transversion_list']]
-basepos_bc_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
-                                                                          sub_prob_mat = bc_sub_prob_mat)
-
-# print('after basaepos_bc_nontarget_transition_probs, baseline_seq_nucs_bc == ')
-# print(baseline_seq_nucs_bc)
-
-
-basepos_bc_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
-                                                                              sub_prob_mat = bc_sub_prob_mat)
-
-# print('after basaepos_bc_nontarget_transversion_probs, baseline_seq_nucs_bc == ')
-# print(baseline_seq_nucs_bc)
-
-
-
-
-# basepos_mt_nontarget_subprob_lists <- generate_substitution_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
-#                                                                sub_prob_mat = mt_sub_prob_mat)
-# basepos_mt_nontarget_transition_probs <- basepos_mt_nontarget_subprob_lists[['basepos_transition_list']]
-# basepos_mt_nontarget_transversion_probs <- basepos_mt_nontarget_subprob_lists[['basepos_transversion_list']]
-basepos_mt_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
-                                                                          sub_prob_mat = mt_sub_prob_mat)
-# print('basepos_mt_nontarget_transition_probs == ')
-# print(basepos_mt_nontarget_transition_probs)
-basepos_mt_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
-                                                                              sub_prob_mat = mt_sub_prob_mat)
-# print('basepos_mt_nontarget_transversion_probs == ')
-# print(basepos_mt_nontarget_transversion_probs)
-
-# cat('does anything work', file = 'no_strings.txt', append = TRUE)
-# cat(paste0('length(basepos_mt_nontarget_transversion_probs) == ', length(basepos_mt_nontarget_transversion_probs)), 
-#     file = 'no_strings.txt', append = TRUE)
-# print(basepos_mt_nontarget_transversion_probs)
-# print(basepos_mt_nontarget_transversion_probs)
-# print('now the list looks like...')
-# print(basepos_mt_nontarget_transversion_probs)
-
-# parse the input background indel rates for mt and bc
-bc_bg_indel_probs <- process_cla_string(input_args$bc_bg_indel_probs, outputted_type = 'numeric')
-bc_bg_insertion_prob <- bc_bg_indel_probs[1]
-bc_bg_deletion_prob <- bc_bg_indel_probs[2]
-
-basepos_bc_nontarget_insertion_probs <- as.list(rep(bc_bg_insertion_prob, input_args$bc_length))
-basepos_bc_nontarget_deletion_probs <- as.list(rep(bc_bg_deletion_prob, input_args$bc_length))
-
-
-mt_bg_indel_probs <- process_cla_string(input_args$mt_bg_indel_probs, outputted_type = 'numeric')
-mt_bg_insertion_prob <- mt_bg_indel_probs[1]
-mt_bg_deletion_prob <- mt_bg_indel_probs[2]
-
-basepos_mt_nontarget_insertion_probs <- as.list(rep(mt_bg_insertion_prob, input_args$mito_genome_length))
-# print('basepos_mt_nontarget_insertion_probs == ')
-# print(basepos_mt_nontarget_insertion_probs)
-basepos_mt_nontarget_deletion_probs <- as.list(rep(mt_bg_deletion_prob, input_args$mito_genome_length))
-# print('basepos_mt_nontarget_deletion_probs == ')
-# print(basepos_mt_nontarget_deletion_probs)
-
-
-# NOW add heterogeneity to the non-target edit rates if appropriate
-# function that parses the input character string and returns values of correct type
-# needs its own function since values are of different types
-parse_heterogeneity_args <- function(hetero_str){
-  
-  # initialize return list that will store values to be returned
-  return_list <- list()
-  
-  no_spaces <- str_replace_all(hetero_str, pattern = ' ', replacement = '')
-  splits <- str_split(no_spaces, pattern = ';')[[1]]
-  return_list[['shape_param']] <- as.numeric(splits[1])
-  return_list[['num_bins']] <- as.integer(splits[2])
-  return_list[['agg_metric']] <- splits[3]
-  return(return_list)
-  
-}
-
-# induce non-target heterogeneity in barcode and mt, if desired/provided
-if(!is.null(input_args$mt_nontarget_heterogeneity_gamma)){
-  mt_nontarget_hetero <- parse_heterogeneity_args(input_args$mt_nontarget_heterogeneity_gamma)
-  
-  
-  basepos_mt_nontarget_transition_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_transition_probs,
-                                                                               shape_param = mt_nontarget_hetero[['shape_param']],
-                                                                               num_discrete_bins = mt_nontarget_hetero[['num_bins']],
-                                                                               bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
-  # print(paste0('NOWWWW length(basepos_mt_nontarget_transition_probs) == ', length(basepos_mt_nontarget_transition_probs)))
-  basepos_mt_nontarget_transversion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_transversion_probs,
-                                                                                 shape_param = mt_nontarget_hetero[['shape_param']],
-                                                                                 num_discrete_bins = mt_nontarget_hetero[['num_bins']],
-                                                                                 bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
-  # print(paste0('NOWWWW length(basepos_mt_nontarget_transversion_probs) == ', length(basepos_mt_nontarget_transversion_probs)))
-  basepos_mt_nontarget_insertion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_insertion_probs,
-                                                                              shape_param = mt_nontarget_hetero[['shape_param']],
-                                                                              num_discrete_bins = mt_nontarget_hetero[['num_bins']],
-                                                                              bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
-  basepos_mt_nontarget_deletion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_deletion_probs,
-                                                                             shape_param = mt_nontarget_hetero[['shape_param']],
-                                                                             num_discrete_bins = mt_nontarget_hetero[['num_bins']],
-                                                                             bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
-}
-
-if(!is.null(input_args$bc_nontarget_heterogeneity_gamma)){
-  bc_nontarget_hetero <- parse_heterogeneity_args(input_args$bc_nontarget_heterogeneity_gamma)
-  
-  basepos_bc_nontarget_transition_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_transition_probs,
-                                                                               shape_param = bc_nontarget_hetero[['shape_param']],
-                                                                               num_discrete_bins = bc_nontarget_hetero[['num_bins']],
-                                                                               bin_agg_metric = bc_nontarget_hetero[['agg_metric']])
-  basepos_bc_nontarget_transversion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_transversion_probs,
-                                                                                 shape_param = bc_nontarget_hetero[['shape_param']],
-                                                                                 num_discrete_bins = bc_nontarget_hetero[['num_bins']],
-                                                                                 bin_agg_metric = bc_nontarget_hetero[['agg_metric']])
-  basepos_bc_nontarget_insertion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_insertion_probs,
-                                                                              shape_param = bc_nontarget_hetero[['shape_param']],
-                                                                              num_discrete_bins = bc_nontarget_hetero[['num_bins']],
-                                                                              bin_agg_metric = bc_nontarget_hetero[['agg_metric']])
-  basepos_bc_nontarget_deletion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_deletion_probs,
-                                                                             shape_param = bc_nontarget_hetero[['shape_param']],
-                                                                             num_discrete_bins = bc_nontarget_hetero[['num_bins']],
-                                                                             bin_agg_metric = bc_nontarget_hetero[['agg_metric']])  
-}
-
-
-# # work in progress, don't delete:
-# # create BEAST input params if relevant
-# if(tolower(input_args$reconstruction_method) == 'beast'){
-# 
-#   mt_gamma_site_model <- create_gamma_site_model(
-#     gamma_cat_count = as.character(mt_nontarget_hetero[['num_bins']]),
-#     gamma_shape = as.character(mt_nontarget_hetero[['shape_param']]),
-#     prop_invariant = as.character(input_args$mt_invariant_sites),
-#     gamma_shape_prior_distr = NA,
-#     freq_equilibrium = "estimated",
-#     freq_prior_uniform_distr_id = 1000
-#   )
-# 
-#   bc_gamma_site_model <- create_gamma_site_model(
-#     gamma_cat_count = as.character(bc_nontarget_hetero[['num_bins']]),
-#     gamma_shape = as.character(bc_nontarget_hetero[['shape_param']]),
-#     prop_invariant = as.character(input_args$bc_invariant_sites),
-#     gamma_shape_prior_distr = NA,
-#     freq_equilibrium = "estimated",
-#     freq_prior_uniform_distr_id = 1000
-#   )
-# 
-#   # allow user to specify which gamma heterogeneity function (bc or mt) is used in reconstruction:
-#   if(input_args$chosen_gamma == 'mt_gamma_site_model'){
-#     gamma_mod <- mt_gamma_site_model
-#   } else if(input_args$chosen_gamma == 'bc_gamma_site_model'){
-#     gamma_mod <- bc_gamma_site_model
-#   }
-# 
-#   
-#   if(input_args$mt_substitution_model == 'JC'){
-#     
-#     site_mod <<- create_jc69_site_model(gamma_site_model = gamm_mod)
-#     
-#   } else if (input_args$mt_substitution_model == 'K80'){
-#     
-#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
-#     
-#   } else if (input_args$mt_substitution_model == 'K81'){
-#     
-#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
-#     
-#   } else if (input_args$mt_substitution_model == 'F81'){
-#     
-#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
-#     
-#   } else if (input_args$mt_substitution_model == 'HKY'){
-#     
-#     site_mod <<- create_hky_site_model(gamma_site_model = gamma_mod)
-#     
-#   } else if (input_args$mt_substitution_model == 'GTR'){
-#     
-#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
-#     
-#   } 
-#   
-#   
-#   
-# }
-
-
-
 
 # now create target probs lists
 # first determine if there is an editing window in which targets are more of a loose positional concept
@@ -1568,30 +1316,14 @@ get_new_nuc_targets <- function(nuc_editing_window, basepos_erc_nuc_list,
 ###################################################
 # end of the helper functions for editing window
 
-
-# if we have an editing window, add the relevant bases' positions to the editable bases
-if(input_args$be_editing_window > 0){
-  
-  new_be_targets <- get_new_be_targets(be_editing_window = input_args$be_editing_window, 
-                                       basepos_erc_be_list = basepos_erc_be_list,
-                                       decaying_editing = input_args$be_decaying_window,
-                                       baseline_seq_ints_bc = baseline_seq_ints_bc)
-  basepos_erc_be_list <- append(basepos_erc_be_list, new_be_targets)
-}
-
-if(input_args$nuclease_editing_window > 0){
-  new_nuc_targets <- get_new_nuc_targets(nuc_editing_window = input_args$nuclease_editing_window, 
-                                         basepos_erc_nuc_list = basepos_erc_nuc_list,
-                                         decaying_editing = input_args$nuclease_decaying_window,
-                                         baseline_seq_ints_bc = baseline_seq_ints_bc)
-  basepos_erc_nuc_list <- append(basepos_erc_nuc_list, new_nuc_targets)
-}
-
-
-# first a quick way of estimating mutation probabilities based on mutations/site/cell_division
-estimate_mut_prob_per_edit_pt <- function(muts_per_site_per_division, edit_pts_per_division){
-  # the intuition here is that the user can estimate the number of mutations per target site per cell division.
-  # assume that, at most, a target can undergo 1 mutation per site per division.
+# first a quick way of estimating probabilities ...
+estimate_prob_per_timept <- function(prob_event_per_cell_cycle, timepoints_per_cell_cycle){
+  # the intuition here is that the user can estimate the probability of an event occurring at a 
+  # timepoint whose resolution is finer than its cell cycle length resolution
+  # this is applicable to estimating mutation probs per edit timepoint or death probs per edit timepoint,
+  # given an overarching probability of these events per cell cycle.
+  # consider the mutation logic below:
+  # assume that, at most, a target can undergo 1 mutation per site per timepoint.
   # then the rate of NO MUTATIONS per target site per cell division is 1 - muts_per_site_per_division
   # assume independence between editing outcomes at each edit point within each round of division
   # the probability of observing this NO MUTATION RATE is given by (no_mut_per_edit_pt)^n,
@@ -1599,552 +1331,762 @@ estimate_mut_prob_per_edit_pt <- function(muts_per_site_per_division, edit_pts_p
   # and n is the number of edit timepoints in each cell cycle
   # by solving for 1-no_mut_per_edit_pt, we get a heuristic estimate of mutation prob per target per edit pt
   
-  no_muts_per_site_per_division <- 1 - muts_per_site_per_division
-  n <- edit_pts_per_division
-  no_mut_prob <- exp(log(no_muts_per_site_per_division)/n)
-  return(1 - no_mut_prob)
+  prob_no_event_per_cell_cycle <- 1 - prob_event_per_cell_cycle
+  n <- timepoints_per_cell_cycle
+  prob_no_event_at_timepoint <- exp(log(prob_no_event_per_cell_cycle)/n)
+  return(1 - prob_no_event_at_timepoint)
 }
 
+# NEW_generate_substitution_basepos_list <- generate_substitution_basepos_list(baseline_seq_nucs_mt, mt_sub_prob_mat)
+# print(NEW_generate_substitution_basepos_list)
 
 
+# recall that there will be a nontarget edit rate list that INCLUDES target positions because 
+# even targets are subject to background mutational processes
+
+# so here we generate the transition and transversion basepos:edit rate lists for NON-TARGET-PROCESSES
+# basepos_bc_nontarget_subprob_lists <- generate_substitution_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
+#                                                                          sub_prob_mat = bc_sub_prob_mat)
+# basepos_bc_nontarget_transition_probs <- basepos_bc_nontarget_subprob_lists[['basepos_transition_list']]
+# basepos_bc_nontarget_transversion_probs <- basepos_bc_nontarget_subprob_lists[['basepos_transversion_list']]
 
 
-# then we use these estimates to inform the shape of our gamma distribution
-# by setting the expected value of each gamma distribution to be our empirical edit probability for that mutation type
-insertion_prob_mean_estimate <- estimate_mut_prob_per_edit_pt(muts_per_site_per_division = input_args$nuc_insertions_per_target_per_division,
-                                                              edit_pts_per_division = input_args$cell_cycle_length/input_args$time_inc)
-deletion_prob_mean_estimate <- estimate_mut_prob_per_edit_pt(muts_per_site_per_division = input_args$nuc_deletions_per_target_per_division,
-                                                              edit_pts_per_division = input_args$cell_cycle_length/input_args$time_inc)
-be_prob_mean_estimate <- estimate_mut_prob_per_edit_pt(muts_per_site_per_division = input_args$be_mutations_per_target_per_division,
-                                                              edit_pts_per_division = input_args$cell_cycle_length/input_args$time_inc)
+# cell type-specific substitution probability matrices
+cell_type_mt_sub_prob_mat <- list()
+cell_type_bc_sub_prob_mat <- list()
+
+# cell type-specific nontarget bc mutation lists
+cell_type_basepos_bc_nontarget_transition_probs <- list()
+cell_type_basepos_bc_nontarget_transversion_probs <- list()
+cell_type_basepos_bc_nontarget_insertion_probs <- list()
+cell_type_basepos_bc_nontarget_deletion_probs <- list()
+
+# cell type-specific nontarget mt mutation lists
+cell_type_basepos_mt_nontarget_transition_probs <- list()
+cell_type_basepos_mt_nontarget_transversion_probs <- list()
+cell_type_basepos_mt_nontarget_insertion_probs <- list()
+cell_type_basepos_mt_nontarget_deletion_probs <- list()
+
+# cell type-specific target bc mutation lists
+cell_type_basepos_bc_target_transition_probs <- list()
+cell_type_basepos_bc_target_transversion_probs <- list()
+cell_type_basepos_bc_target_insertion_probs <- list()
+cell_type_basepos_bc_target_deletion_probs <- list()
+
+# cell type-specific death probabilities
+cell_type_death_probs <- list()
+
+# cell type-specific sampling fractions
+cell_type_poss_sampling_fracs <- list()
+
+# cell type-specific cell cycle lengths
+cell_type_cell_cycle_length <- list()
+
+# # cell type-specific mt/bc invariant sites
+# cell_type_mt_invariant_sites <- list()
+# cell_type_bc_invariant_sites <- list()
+
+# cell type-specific mt jitter
+cell_type_jitter_frac <- list()
 
 
-if(!is.null(basepos_erc_be_list)){
+for(celltype in cell_type_names){
   
-  # cat('\nNOT NULL BASEPOS ERC BE LIST\n', file = 'no_strings.txt', append = TRUE)
-  
-  target_config_dir_path <- file.path('target_configs', unique_run_id)
-  
-  if(!dir.exists(target_config_dir_path)){
-    dir.create(target_config_dir_path, recursive = TRUE)
+  # assign cell type-specific params that depend on editing induction
+  for(induction in c('induced_editing_params', 'uninduced_editing_params')){
+    temp_mt_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_substitution_model,
+                                                     selected_sub_model = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_sub_model_params,
+                                                     sequence_with_targets = baseline_seq_nucs_mt)
+    temp_bc_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$bc_substitution_model,
+                                                     selected_sub_model = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$bc_sub_model_params,
+                                                     sequence_with_targets = baseline_seq_nucs_bc)
+    
+    cell_type_mt_sub_prob_mat[[celltype]][[induction]] <- temp_mt_sub_model_list[['sub_prob_mat']]
+    cell_type_bc_sub_prob_mat[[celltype]][[induction]] <- temp_bc_sub_model_list[['sub_prob_mat']]
+    
+    basepos_bc_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
+                                                                              sub_prob_mat = temp_bc_sub_model_list[['sub_prob_mat']])
+    basepos_bc_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
+                                                                                  sub_prob_mat = temp_bc_sub_model_list[['sub_prob_mat']])
+    basepos_mt_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
+                                                                              sub_prob_mat = temp_mt_sub_model_list[['sub_prob_mat']])
+    basepos_mt_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
+                                                                                  sub_prob_mat = temp_mt_sub_model_list[['sub_prob_mat']])
+    
+    
+    
+    # parse the input background indel rates for mt and bc WHILE CONVERTING TO PROB PER TIMEPT RATHER THAN PROB PER CELL CYCLE
+    this_celltype_timepts_per_cc <- input_args$cell_type_dict$cell_type_params[[celltype]]$cell_cycle_length / time_inc
+    bc_bg_insertion_prob <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$bc_bg_insertion_prob_per_division,
+                                                     timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    bc_bg_deletion_prob <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$bc_bg_deletion_prob_per_division,
+                                                    timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    mt_bg_insertion_prob <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_bg_insertion_prob_per_division,
+                                                     timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    mt_bg_deletion_prob <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_bg_deletion_prob_per_division,
+                                                    timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    
+    basepos_bc_nontarget_insertion_probs <- as.list(rep(bc_bg_insertion_prob, input_args$bc_length))
+    basepos_bc_nontarget_deletion_probs <- as.list(rep(bc_bg_deletion_prob, input_args$bc_length))
+    basepos_mt_nontarget_insertion_probs <- as.list(rep(mt_bg_insertion_prob, input_args$mito_genome_length))
+    basepos_mt_nontarget_deletion_probs <- as.list(rep(mt_bg_deletion_prob, input_args$mito_genome_length))
+    
+    
+    # add gamma distribution heterogeneity to mt and bc mutation probs:
+    if(!is.null(input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_nontarget_heterogeneity_gamma)){
+      mt_nontarget_hetero <- input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_nontarget_heterogeneity_gamma
+      basepos_mt_nontarget_names_vec <- c('basepos_mt_nontarget_transition_probs',
+                                          'basepos_mt_nontarget_transversion_probs',
+                                          'basepos_mt_nontarget_insertion_probs',
+                                          'basepos_mt_nontarget_deletion_probs')
+      for (prob_list_name in basepos_mt_nontarget_names_vec){
+        assign(prob_list_name, nontarget_scale_gamma_heterogeneity(position_er_list = get(prob_list_name),
+                                                                   shape_param = mt_nontarget_hetero[['shape_param']],
+                                                                   num_discrete_bins = mt_nontarget_hetero[['num_bins']],
+                                                                   bin_agg_metric = mt_nontarget_hetero[['agg_metric']]))
+        
+      }
+    }
+    
+    if(!is.null(input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$bc_nontarget_heterogeneity_gamma)){
+      bc_nontarget_hetero <- input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$bc_nontarget_heterogeneity_gamma
+      basepos_bc_nontarget_names_vec <- c('basepos_bc_nontarget_transition_probs',
+                                          'basepos_bc_nontarget_transversion_probs',
+                                          'basepos_bc_nontarget_insertion_probs',
+                                          'basepos_bc_nontarget_deletion_probs')
+      for (prob_list_name in basepos_bc_nontarget_names_vec){
+        assign(prob_list_name, nontarget_scale_gamma_heterogeneity(position_er_list = get(prob_list_name),
+                                                                   shape_param = bc_nontarget_hetero[['shape_param']],
+                                                                   num_discrete_bins = bc_nontarget_hetero[['num_bins']],
+                                                                   bin_agg_metric = bc_nontarget_hetero[['agg_metric']]))
+        
+      }
+    }
+    
+    # if we have an editing window, add the relevant bases' positions to the editable bases
+    if(input_args$be_targets$editing_window$size > 0){
+      
+      new_be_targets <- get_new_be_targets(be_editing_window = input_args$be_targets$editing_window$size, 
+                                           basepos_erc_be_list = basepos_erc_be_list,
+                                           decaying_editing = input_args$be_targets$editing_window$decaying,
+                                           baseline_seq_ints_bc = baseline_seq_ints_bc)
+      basepos_erc_be_list <- append(basepos_erc_be_list, new_be_targets)
+    }
+    
+    if(input_args$nuclease_targets$editing_window$size > 0){
+      new_nuc_targets <- get_new_nuc_targets(nuc_editing_window = input_args$nuclease_targets$editing_window$size, 
+                                             basepos_erc_nuc_list = basepos_erc_nuc_list,
+                                             decaying_editing = input_args$nuclease_targets$editing_window$decaying,
+                                             baseline_seq_ints_bc = baseline_seq_ints_bc)
+      basepos_erc_nuc_list <- append(basepos_erc_nuc_list, new_nuc_targets)
+    }
+    
+    target_insertion_prob_mean_estimate <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$nuc_insertions_per_target_per_division, 
+                                                                    timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    target_deletion_prob_mean_estimate <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$nuc_deletions_per_target_per_division,
+                                                                   timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    target_be_prob_mean_estimate <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$be_mutations_per_target_per_division,
+                                                             timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    
+    
+    if(!is.null(basepos_erc_be_list)){
+      
+      # cat('\nNOT NULL BASEPOS ERC BE LIST\n', file = 'no_strings.txt', append = TRUE)
+      
+      # target_config_dir_path <- file.path('target_configs', unique_run_id)
+      # 
+      # if(!dir.exists(target_config_dir_path)){
+      #   dir.create(target_config_dir_path, recursive = TRUE)
+      # }
+      
+      # close(file(file.path(target_config_dir_path, 'target_pos.csv'), open = 'w'))
+      
+      if(be_mutation_type == 'transition'){
+        
+        basepos_bc_target_transition_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+                                                                                         h_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'High')]), 
+                                                                                         m_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Medium')]), 
+                                                                                         l_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Low')]),
+                                                                                         shape_param = 0.5,
+                                                                                         scale_param = target_be_prob_mean_estimate/0.5,
+                                                                                         num_bootstrap_draws = 1000)
+        basepos_bc_target_transversion_probs <- list()
+        
+      } else if(be_mutation_type == 'transversion'){
+        # if the BE causes transversions, the transition basepos edit rate list will be NULL
+        basepos_bc_target_transversion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+                                                                                           h_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'High')]), 
+                                                                                           m_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Medium')]), 
+                                                                                           l_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Low')]),
+                                                                                           shape_param = 0.5,
+                                                                                           scale_param = target_be_prob_mean_estimate/0.5,
+                                                                                           num_bootstrap_draws = 1000)
+        # basepos_bc_target_transversion_probs <- list()
+        basepos_bc_target_transition_probs <- list() # 2/4
+        
+      }  
+    } else{
+      basepos_bc_target_transversion_probs <- list()
+      basepos_bc_target_transition_probs <- list()
+    }
+    
+    
+    
+    
+    # insertion_HML_gamma_scale
+    if(!is.null(basepos_erc_nuc_list)){
+      
+      basepos_bc_target_insertion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+                                                                                      h_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'High')]), 
+                                                                                      m_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Medium')]), 
+                                                                                      l_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Low')]),
+                                                                                      shape_param = 0.5,
+                                                                                      scale_param = target_insertion_prob_mean_estimate/0.5,
+                                                                                      num_bootstrap_draws = 1000)
+      
+      basepos_bc_target_deletion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+                                                                                     h_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'High')]), 
+                                                                                     m_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Medium')]), 
+                                                                                     l_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Low')]),
+                                                                                     shape_param = 0.5,
+                                                                                     scale_param = target_deletion_prob_mean_estimate/0.5,
+                                                                                     num_bootstrap_draws = 1000)
+      
+    } else{ # if there are no nuc targets, define empty target prob lists
+      basepos_bc_target_insertion_probs <- list()
+      basepos_bc_target_deletion_probs <- list()
+    }
+    
+    # lastly, once target editing windows are finalized, 
+    # force sites to be invariant as appropriate for the non-targets
+    # note that this will simply be ALL of the mt inds since there are no mt targets
+    mt_invariant_inds <- nontarget_get_invariant_inds(eligible_invariant_sites = seq(1, length(input_args$mito_genome_length)),
+                                                      frac_invariant = input_args$cell_type_dict$cell_type_params[[celltype]]$mt_invariant_sites)
+    
+    # iterate through the invariant inds and set the mutation prob at that ind to 0 for each mutation type
+    for(ind in mt_invariant_inds){
+      basepos_mt_nontarget_transition_probs[[as.character(ind)]] <- 0
+      basepos_mt_nontarget_transversion_probs[[as.character(ind)]] <- 0
+      basepos_mt_nontarget_insertion_probs[[as.character(ind)]] <- 0
+      basepos_mt_nontarget_deletion_probs[[as.character(ind)]] <- 0
+    }
+    
+    # joint target positions of targets across all four mutation types
+    joint_bc_targets_vector <- as.integer(c(names(basepos_bc_target_transition_probs),
+                                            names(basepos_bc_target_transversion_probs),
+                                            names(basepos_bc_target_insertion_probs),
+                                            names(basepos_bc_target_deletion_probs)))
+    
+    # eligible invariant sites are those indices of the barcode NOT in the joint target position vector                                       
+    bc_eligible_invariant_sites <- setdiff(seq(1, input_args$bc_length), joint_bc_targets_vector)
+    bc_invariant_inds <- nontarget_get_invariant_inds(eligible_invariant_sites = bc_eligible_invariant_sites,
+                                                      frac_invariant = input_args$cell_type_dict$cell_type_params[[celltype]]$bc_invariant_sites)
+    
+    # now do the same iteration process for bc non-target mutation prob lists:
+    # iterate through the invariant inds and set the mutation prob at that ind to 0 for each mutation type
+    for(ind in bc_invariant_inds){
+      basepos_bc_nontarget_transition_probs[[as.character(ind)]] <- 0
+      basepos_bc_nontarget_transversion_probs[[as.character(ind)]] <- 0
+      basepos_bc_nontarget_insertion_probs[[as.character(ind)]] <- 0
+      basepos_bc_nontarget_deletion_probs[[as.character(ind)]] <- 0
+    }
+    
+    
+    # write all basepos nontarget params to cell-type-specific lists:
+    cell_type_basepos_bc_nontarget_transition_probs[[celltype]][[induction]] <- basepos_bc_nontarget_transition_probs
+    cell_type_basepos_bc_nontarget_transversion_probs[[celltype]][[induction]] <- basepos_bc_nontarget_transversion_probs
+    cell_type_basepos_bc_nontarget_insertion_probs[[celltype]][[induction]] <- basepos_bc_nontarget_insertion_probs
+    cell_type_basepos_bc_nontarget_deletion_probs[[celltype]][[induction]] <- basepos_bc_nontarget_deletion_probs
+    cell_type_basepos_mt_nontarget_transition_probs[[celltype]][[induction]] <- basepos_mt_nontarget_transition_probs
+    cell_type_basepos_mt_nontarget_transversion_probs[[celltype]][[induction]] <- basepos_mt_nontarget_transversion_probs
+    cell_type_basepos_mt_nontarget_insertion_probs[[celltype]][[induction]] <- basepos_mt_nontarget_insertion_probs
+    cell_type_basepos_mt_nontarget_deletion_probs[[celltype]][[induction]] <- basepos_mt_nontarget_deletion_probs
+    
+    # write all basepos target params to cell-type-specific lists
+    cell_type_basepos_bc_target_transition_probs[[celltype]][[induction]] <- basepos_bc_target_transition_probs
+    cell_type_basepos_bc_target_transversion_probs[[celltype]][[induction]] <- basepos_bc_target_transversion_probs
+    cell_type_basepos_bc_target_insertion_probs[[celltype]][[induction]] <- basepos_bc_target_insertion_probs
+    cell_type_basepos_bc_target_deletion_probs[[celltype]][[induction]] <- basepos_bc_target_deletion_probs
   }
   
-  close(file(file.path(target_config_dir_path, 'target_pos.csv'), open = 'w'))
+  # now for cell type-specific params that don't depend on editing induction
   
-  if(be_mutation_type == 'transition'){
-    
-    for(i in 1:length(basepos_erc_be_list)){
-      cat(paste0(names(basepos_erc_be_list)[i], ', ', unname(unlist(basepos_erc_be_list))[i], '\n'), 
-          file = file.path(target_config_dir_path, 'target_pos.csv'), append = TRUE)
-      
-    }
-    # cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "High")])) == ',
-    #            length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "High")])),
-    #            file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Medium")])) == ',
-    #            length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Medium")])),
-    #            file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\nlength(which(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Low")])) == ',
-    #            length(names(basepos_erc_be_list)[which(basepos_erc_be_list == "Low")])),
-    #            file = 'no_strings.txt', append = TRUE)
-    # if the BE causes transitions, the transversion basepos edit rate list will be empty list
-    basepos_bc_target_transition_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
-                                                                                     h_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'High')]), 
-                                                                                     m_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Medium')]), 
-                                                                                     l_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Low')]),
-                                                                                     shape_param = 0.5,
-                                                                                     scale_param = be_prob_mean_estimate/0.5,
-                                                                                     num_bootstrap_draws = 1000)
-    basepos_bc_target_transversion_probs <- list()
-    
-    # check to see if the target positions are the correct base ... 
-    # iterate through each of the target positions adn find the base at that site
-    # append these to a new text file:
-    close(file('target_positions_nucs.txt', open = 'w'))
-    for(target_ind in as.integer(names(basepos_erc_be_list))){
-      
-      cat(paste0(target_ind, ', ', baseline_seq_nucs_bc[target_ind], '\n'), file = 'target_positions_nucs.txt', append = TRUE)
-      
-    }
-  } else if(be_mutation_type == 'transversion'){
-    # if the BE causes transversions, the transition basepos edit rate list will be NULL
-    basepos_bc_target_transversion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
-                                                                                       h_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'High')]), 
-                                                                                       m_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Medium')]), 
-                                                                                       l_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Low')]),
-                                                                                       shape_param = 0.5,
-                                                                                       scale_param = be_prob_mean_estimate/0.5,
-                                                                                       num_bootstrap_draws = 1000)
-    # basepos_bc_target_transversion_probs <- list()
-    basepos_bc_target_transition_probs <- list() # 2/4
-    
-  }  
-} else{
-  basepos_bc_target_transversion_probs <- list()
-  basepos_bc_target_transition_probs <- list()
-}
-
-
-
+  # write all sampling frac params to cell type specific lists
+  poss_sampling_fracs <- as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$sampling_fractions)
+  cell_type_poss_sampling_fracs[[celltype]][[induction]] <- poss_sampling_fracs
   
-# insertion_HML_gamma_scale
-# print(paste0('is.null(basepos_erc_nuc_list) == ', is.null(basepos_erc_nuc_list))) # TRUE
-if(!is.null(basepos_erc_nuc_list)){
-  # print('HML')
-  # print(as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'High')]))
-  # print(as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Medium')]))
-  # print(as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Low')]))
-  basepos_bc_target_insertion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
-                                                                                  h_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'High')]), 
-                                                                                  m_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Medium')]), 
-                                                                                  l_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Low')]),
-                                                                                  shape_param = 0.5,
-                                                                                  scale_param = insertion_prob_mean_estimate/0.5,
-                                                                                  num_bootstrap_draws = 1000)
-  # print('insertion probs')
-  # print(basepos_bc_target_insertion_probs)
-  basepos_bc_target_deletion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
-                                                                                 h_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'High')]), 
-                                                                                 m_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Medium')]), 
-                                                                                 l_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Low')]),
-                                                                                 shape_param = 0.5,
-                                                                                 scale_param = deletion_prob_mean_estimate/0.5,
-                                                                                 num_bootstrap_draws = 1000)
+  # cell type-specific death probabilities
+  # convert prob per cell cycle to prob per timept
+  cell_death_prob_per_timept <- estimate_prob_per_timept(prob_event_per_cell_cycle = as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$death_per_cell_cycle_prob), 
+                                                                  timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+  cell_type_death_probs[[celltype]] <- cell_death_prob_per_timept
+
+  # cell type-specific cell cycle lengths
+  cell_type_cell_cycle_length[[celltype]] <- as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$cell_cycle_length)
   
-} else{ # if there are no nuc targets, define empty target prob lists
-  basepos_bc_target_insertion_probs <- list()
-  basepos_bc_target_deletion_probs <- list()
+  # # cell type-specific mt/bc invariant sites
+  # cell_type_mt_invariant_sites[[celltype]] <- as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$mt_invariant_sites)
+  # cell_type_bc_invariant_sites[[celltype]] <- as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$bc_invariant_sites)
+  
+  # cell type-specific mt jitter
+  cell_type_jitter_frac[[celltype]] <- as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$mt_jitter_fraction)
+  
+  
+  
 }
 
 
-# lastly, once target editing windows are finalized, 
-# force sites to be invariant as appropriate for the non-targets
-# note that this will simply be ALL of the mt inds since there are no mt targets
-mt_invariant_inds <- nontarget_get_invariant_inds(eligible_invariant_sites = seq(1, length(input_args$mito_genome_length)),
-                                                  frac_invariant = input_args$mt_invariant_sites)
-
-# iterate through the invariant inds and set the mutation prob at that ind to 0 for each mutation type
-for(ind in mt_invariant_inds){
-  basepos_mt_nontarget_transition_probs[[as.character(ind)]] <- 0
-  basepos_mt_nontarget_transversion_probs[[as.character(ind)]] <- 0
-  basepos_mt_nontarget_insertion_probs[[as.character(ind)]] <- 0
-  basepos_mt_nontarget_deletion_probs[[as.character(ind)]] <- 0
+# troubleshooting this stuff ... 
+if(!dir.exists('troubleshooting_pos_er')){
+  dir.create('troubleshooting_pos_er')
 }
 
+saveRDS(cell_type_basepos_bc_nontarget_transition_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_transition_probs.rds'))
+saveRDS(cell_type_basepos_bc_nontarget_transversion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_transversion_probs.rds'))
+saveRDS(cell_type_basepos_bc_nontarget_insertion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_insertion_probs.rds'))
+saveRDS(cell_type_basepos_bc_nontarget_deletion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_deletion_probs.rds'))
+# # cell type-specific nontarget bc mutation lists
+# cell_type_basepos_bc_nontarget_transition_probs <- list()
+# cell_type_basepos_bc_nontarget_transversion_probs <- list()
+# cell_type_basepos_bc_nontarget_insertion_probs <- list()
+# cell_type_basepos_bc_nontarget_deletion_probs <- list()
 
-# print('made it to 1376')
-# joint target positions of targets across all four mutation types
-joint_bc_targets_vector <- as.integer(c(names(basepos_bc_target_transition_probs),
-                                        names(basepos_bc_target_transversion_probs),
-                                        names(basepos_bc_target_insertion_probs),
-                                        names(basepos_bc_target_deletion_probs)))
+saveRDS(cell_type_basepos_mt_nontarget_transition_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_transition_probs.rds'))
+saveRDS(cell_type_basepos_mt_nontarget_transversion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_transversion_probs.rds'))
+saveRDS(cell_type_basepos_mt_nontarget_insertion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_insertion_probs.rds'))
+saveRDS(cell_type_basepos_mt_nontarget_deletion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_deletion_probs.rds'))
 
-# eligible invariant sites are those indices of the barcode NOT in the joint target position vector                                       
-bc_eligible_invariant_sites <- setdiff(seq(1, input_args$bc_length), joint_bc_targets_vector)
-bc_invariant_inds <- nontarget_get_invariant_inds(eligible_invariant_sites = bc_eligible_invariant_sites,
-                                                  frac_invariant = input_args$bc_invariant_sites)
+# # cell type-specific nontarget mt mutation lists
+# cell_type_basepos_mt_nontarget_transition_probs <- list()
+# cell_type_basepos_mt_nontarget_transversion_probs <- list()
+# cell_type_basepos_mt_nontarget_insertion_probs <- list()
+# cell_type_basepos_mt_nontarget_deletion_probs <- list()
 
-# now do the same iteration process for bc non-target mutation prob lists:
-# iterate through the invariant inds and set the mutation prob at that ind to 0 for each mutation type
-for(ind in bc_invariant_inds){
-  basepos_bc_nontarget_transition_probs[[as.character(ind)]] <- 0
-  basepos_bc_nontarget_transversion_probs[[as.character(ind)]] <- 0
-  basepos_bc_nontarget_insertion_probs[[as.character(ind)]] <- 0
-  basepos_bc_nontarget_deletion_probs[[as.character(ind)]] <- 0
-}
+saveRDS(cell_type_basepos_bc_target_transition_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_transition_probs.rds'))
+saveRDS(cell_type_basepos_bc_target_transversion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_transversion_probs.rds'))
+saveRDS(cell_type_basepos_bc_target_insertion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_insertion_probs.rds'))
+saveRDS(cell_type_basepos_bc_target_deletion_probs,
+        file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_deletion_probs.rds'))
+
+# # cell type-specific target bc mutation lists
+# cell_type_basepos_bc_target_transition_probs <- list()
+# cell_type_basepos_bc_target_transversion_probs <- list()
+# cell_type_basepos_bc_target_insertion_probs <- list()
+# cell_type_basepos_bc_target_deletion_probs <- list()
+
+# basepos_bc_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
+#                                                                           sub_prob_mat = bc_sub_prob_mat)
+
+# print('after basaepos_bc_nontarget_transition_probs, baseline_seq_nucs_bc == ')
+# print(baseline_seq_nucs_bc)
+
+
+# basepos_bc_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
+#                                                                               sub_prob_mat = bc_sub_prob_mat)
+
+# print('after basaepos_bc_nontarget_transversion_probs, baseline_seq_nucs_bc == ')
+# print(baseline_seq_nucs_bc)
 
 
 
 
+# basepos_mt_nontarget_subprob_lists <- generate_substitution_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
+#                                                                sub_prob_mat = mt_sub_prob_mat)
+# basepos_mt_nontarget_transition_probs <- basepos_mt_nontarget_subprob_lists[['basepos_transition_list']]
+# basepos_mt_nontarget_transversion_probs <- basepos_mt_nontarget_subprob_lists[['basepos_transversion_list']]
+# basepos_mt_nontarget_transition_probs <- generate_transition_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
+#                                                                           sub_prob_mat = mt_sub_prob_mat)
+# print('basepos_mt_nontarget_transition_probs == ')
+# print(basepos_mt_nontarget_transition_probs)
+# basepos_mt_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
+#                                                                               sub_prob_mat = mt_sub_prob_mat)
+# print('basepos_mt_nontarget_transversion_probs == ')
+# print(basepos_mt_nontarget_transversion_probs)
+
+# cat('does anything work', file = 'no_strings.txt', append = TRUE)
+# cat(paste0('length(basepos_mt_nontarget_transversion_probs) == ', length(basepos_mt_nontarget_transversion_probs)), 
+#     file = 'no_strings.txt', append = TRUE)
+# print(basepos_mt_nontarget_transversion_probs)
+# print(basepos_mt_nontarget_transversion_probs)
+# print('now the list looks like...')
+# print(basepos_mt_nontarget_transversion_probs)
+
+# # parse the input background indel rates for mt and bc
+# bc_bg_insertion_probs <- input_args$bc_bg_insertion_prob
+# bc_bg_deletion_prob <- inpu5_args$bc_bg_deletion_prob
+# mt_bg_insertion_probs <- input_args$mt_bg_insertion_prob
+# mt_bg_deletion_prob <- inpu5_args$mt_bg_deletion_prob
+# 
+# basepos_bc_nontarget_insertion_probs <- as.list(rep(bc_bg_insertion_prob, input_args$bc_length))
+# basepos_bc_nontarget_deletion_probs <- as.list(rep(bc_bg_deletion_prob, input_args$bc_length))
+# basepos_mt_nontarget_insertion_probs <- as.list(rep(mt_bg_insertion_prob, input_args$mito_genome_length))
+# basepos_mt_nontarget_deletion_probs <- as.list(rep(mt_bg_deletion_prob, input_args$mito_genome_length))
 
 
+# mt_bg_indel_probs <- process_cla_string(input_args$mt_bg_indel_probs, outputted_type = 'numeric')
+# mt_bg_insertion_prob <- mt_bg_indel_probs[1]
+# mt_bg_deletion_prob <- mt_bg_indel_probs[2]
 
 
+# print('basepos_mt_nontarget_insertion_probs == ')
+# print(basepos_mt_nontarget_insertion_probs)
+
+# print('basepos_mt_nontarget_deletion_probs == ')
+# print(basepos_mt_nontarget_deletion_probs)
 
 
-# # we need an is-not-null condition here, unless we put below
-# if(!is.null(input_args$be_targets)){
-#   basepos_editrate_be_list <- targets_to_list(pos_er_str = input_args$be_targets,
-#                                               nuc_or_be = 'be',
-#                                               bc_length = input_args$bc_length)
+# NOW add heterogeneity to the non-target edit rates if appropriate
+# function that parses the input character string and returns values of correct type
+# needs its own function since values are of different types
+############ changing this logic 3/24
+# parse_heterogeneity_args <- function(hetero_str){
 #   
-# } else{
-#   basepos_editrate_be_list <- NULL
+#   # initialize return list that will store values to be returned
+#   return_list <- list()
+#   
+#   no_spaces <- str_replace_all(hetero_str, pattern = ' ', replacement = '')
+#   splits <- str_split(no_spaces, pattern = ';')[[1]]
+#   return_list[['shape_param']] <- as.numeric(splits[1])
+#   return_list[['num_bins']] <- as.integer(splits[2])
+#   return_list[['agg_metric']] <- splits[3]
+#   return(return_list)
+#   
+# }
+# ############ changing this logic 3/24
+# parse_heterogeneity_args <- function(celltype){
+#   return_list <- list()
+#   
+#   return_list[['shape_param']] <- input_args$cell_type_dict$cell_type_params[[celltype]]$mt_nontarget_heterogeneity_gamma$shape_param
+#   return_list[['num_bins']] <- input_args$cell_type_dict$cell_type_params[[celltype]]$mt_nontarget_heterogeneity_gamma$num_bins
+#   return_list[['agg_metric']] <- input_args$cell_type_dict$cell_type_params[[celltype]]$mt_nontarget_heterogeneity_gamma$agg_metric
+#   
+# }
+
+
+# # induce non-target heterogeneity in barcode and mt, if desired/provided
+# if(!is.null(input_args$cell_type_dict$cell_type_params[[celltype]])){
+#   mt_nontarget_hetero <- input_args$cell_type_dict$cell_type_params[[celltype]]$mt_nontarget_heterogeneity_gamma
+#   basepos_mt_nontarget_names_vec <- c('basepos_mt_nontarget_transition_probs',
+#                                       'basepos_mt_nontarget_transversion_probs',
+#                                       'basepos_mt_nontarget_insertion_probs',
+#                                       'basepos_mt_nontarget_deletion_probs')
+#   for (prob_list_name in basepos_mt_nontarget_names_vec){
+#     assign(prob_list_name, nontarget_scale_gamma_heterogeneity(position_er_list = get(prob_list_name),
+#                                                                shape_param = mt_nontarget_hetero[['shape_param']],
+#                                                                num_discrete_bins = mt_nontarget_hetero[['num_bins']],
+#                                                                bin_agg_metric = mt_nontarget_hetero[['agg_metric']]))
+#     
+#   }
+#   
+#   # mt_nontarget_hetero <- parse_heterogeneity_args(input_args$mt_nontarget_heterogeneity_gamma)
+#   
+#   
+#   # basepos_mt_nontarget_transition_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_transition_probs,
+#   #                                                                              shape_param = mt_nontarget_hetero[['shape_param']],
+#   #                                                                              num_discrete_bins = mt_nontarget_hetero[['num_bins']],
+#   #                                                                              bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
+#   # # print(paste0('NOWWWW length(basepos_mt_nontarget_transition_probs) == ', length(basepos_mt_nontarget_transition_probs)))
+#   # basepos_mt_nontarget_transversion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_transversion_probs,
+#   #                                                                                shape_param = mt_nontarget_hetero[['shape_param']],
+#   #                                                                                num_discrete_bins = mt_nontarget_hetero[['num_bins']],
+#   #                                                                                bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
+#   # # print(paste0('NOWWWW length(basepos_mt_nontarget_transversion_probs) == ', length(basepos_mt_nontarget_transversion_probs)))
+#   # basepos_mt_nontarget_insertion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_insertion_probs,
+#   #                                                                             shape_param = mt_nontarget_hetero[['shape_param']],
+#   #                                                                             num_discrete_bins = mt_nontarget_hetero[['num_bins']],
+#   #                                                                             bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
+#   # basepos_mt_nontarget_deletion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_mt_nontarget_deletion_probs,
+#   #                                                                            shape_param = mt_nontarget_hetero[['shape_param']],
+#   #                                                                            num_discrete_bins = mt_nontarget_hetero[['num_bins']],
+#   #                                                                            bin_agg_metric = mt_nontarget_hetero[['agg_metric']])
 # }
 # 
-# if(!is.null(input_args$nuclease_targets)){
-#   basepos_editrate_nuc_list <- targets_to_list(pos_er_str = input_args$nuclease_targets,
-#                                                nuc_or_be = 'nuc',
-#                                                bc_length = input_args$bc_length)
+# if(!is.null(input_args$cell_type_dict$cell_type_params[[celltype]])){
+#   # bc_nontarget_hetero <- parse_heterogeneity_args(input_args$bc_nontarget_heterogeneity_gamma)
+#   bc_nontarget_hetero <- input_args$cell_type_dict$cell_type_params[[celltype]]$bc_nontarget_heterogeneity_gamma
+#   basepos_bc_nontarget_names_vec <- c('basepos_bc_nontarget_transition_probs',
+#                                       'basepos_bc_nontarget_transversion_probs',
+#                                       'basepos_bc_nontarget_insertion_probs',
+#                                       'basepos_bc_nontarget_deletion_probs')
+#   for (prob_list_name in basepos_bc_nontarget_names_vec){
+#     assign(prob_list_name, nontarget_scale_gamma_heterogeneity(position_er_list = get(prob_list_name),
+#                                                                shape_param = bc_nontarget_hetero[['shape_param']],
+#                                                                num_discrete_bins = bc_nontarget_hetero[['num_bins']],
+#                                                                bin_agg_metric = bc_nontarget_hetero[['agg_metric']]))
+#     
+#   }
+#   
+#   # basepos_bc_nontarget_transition_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_transition_probs,
+#   #                                                                              shape_param = bc_nontarget_hetero[['shape_param']],
+#   #                                                                              num_discrete_bins = bc_nontarget_hetero[['num_bins']],
+#   #                                                                              bin_agg_metric = bc_nontarget_hetero[['agg_metric']])
+#   # basepos_bc_nontarget_transversion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_transversion_probs,
+#   #                                                                                shape_param = bc_nontarget_hetero[['shape_param']],
+#   #                                                                                num_discrete_bins = bc_nontarget_hetero[['num_bins']],
+#   #                                                                                bin_agg_metric = bc_nontarget_hetero[['agg_metric']])
+#   # basepos_bc_nontarget_insertion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_insertion_probs,
+#   #                                                                             shape_param = bc_nontarget_hetero[['shape_param']],
+#   #                                                                             num_discrete_bins = bc_nontarget_hetero[['num_bins']],
+#   #                                                                             bin_agg_metric = bc_nontarget_hetero[['agg_metric']])
+#   # basepos_bc_nontarget_deletion_probs <- nontarget_scale_gamma_heterogeneity(position_er_list = basepos_bc_nontarget_deletion_probs,
+#   #                                                                            shape_param = bc_nontarget_hetero[['shape_param']],
+#   #                                                                            num_discrete_bins = bc_nontarget_hetero[['num_bins']],
+#   #                                                                            bin_agg_metric = bc_nontarget_hetero[['agg_metric']])  
+# }
+
+
+# # work in progress, don't delete:
+# # create BEAST input params if relevant
+# if(tolower(input_args$reconstruction_method) == 'beast'){
+# 
+#   mt_gamma_site_model <- create_gamma_site_model(
+#     gamma_cat_count = as.character(mt_nontarget_hetero[['num_bins']]),
+#     gamma_shape = as.character(mt_nontarget_hetero[['shape_param']]),
+#     prop_invariant = as.character(input_args$mt_invariant_sites),
+#     gamma_shape_prior_distr = NA,
+#     freq_equilibrium = "estimated",
+#     freq_prior_uniform_distr_id = 1000
+#   )
+# 
+#   bc_gamma_site_model <- create_gamma_site_model(
+#     gamma_cat_count = as.character(bc_nontarget_hetero[['num_bins']]),
+#     gamma_shape = as.character(bc_nontarget_hetero[['shape_param']]),
+#     prop_invariant = as.character(input_args$bc_invariant_sites),
+#     gamma_shape_prior_distr = NA,
+#     freq_equilibrium = "estimated",
+#     freq_prior_uniform_distr_id = 1000
+#   )
+# 
+#   # allow user to specify which gamma heterogeneity function (bc or mt) is used in reconstruction:
+#   if(input_args$chosen_gamma == 'mt_gamma_site_model'){
+#     gamma_mod <- mt_gamma_site_model
+#   } else if(input_args$chosen_gamma == 'bc_gamma_site_model'){
+#     gamma_mod <- bc_gamma_site_model
+#   }
+# 
+#   
+#   if(input_args$mt_substitution_model == 'JC'){
+#     
+#     site_mod <<- create_jc69_site_model(gamma_site_model = gamm_mod)
+#     
+#   } else if (input_args$mt_substitution_model == 'K80'){
+#     
+#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
+#     
+#   } else if (input_args$mt_substitution_model == 'K81'){
+#     
+#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
+#     
+#   } else if (input_args$mt_substitution_model == 'F81'){
+#     
+#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
+#     
+#   } else if (input_args$mt_substitution_model == 'HKY'){
+#     
+#     site_mod <<- create_hky_site_model(gamma_site_model = gamma_mod)
+#     
+#   } else if (input_args$mt_substitution_model == 'GTR'){
+#     
+#     site_mod <<- create_gtr_site_model(gamma_site_model = gamma_mod)
+#     
+#   } 
+#   
+#   
+#   
+# }
+
+
+
+
+
+
+
+# # if we have an editing window, add the relevant bases' positions to the editable bases
+# if(input_args$be_editing_window > 0){
+#   
+#   new_be_targets <- get_new_be_targets(be_editing_window = input_args$be_editing_window, 
+#                                        basepos_erc_be_list = basepos_erc_be_list,
+#                                        decaying_editing = input_args$be_decaying_window,
+#                                        baseline_seq_ints_bc = baseline_seq_ints_bc)
+#   basepos_erc_be_list <- append(basepos_erc_be_list, new_be_targets)
+# }
+# 
+# if(input_args$nuclease_editing_window > 0){
+#   new_nuc_targets <- get_new_nuc_targets(nuc_editing_window = input_args$nuclease_editing_window, 
+#                                          basepos_erc_nuc_list = basepos_erc_nuc_list,
+#                                          decaying_editing = input_args$nuclease_decaying_window,
+#                                          baseline_seq_ints_bc = baseline_seq_ints_bc)
+#   basepos_erc_nuc_list <- append(basepos_erc_nuc_list, new_nuc_targets)
+# }
+
+
+# # first a quick way of estimating mutation probabilities based on mutations/site/cell_division
+# estimate_mut_prob_per_edit_pt <- function(muts_per_site_per_division, edit_pts_per_division){
+#   # the intuition here is that the user can estimate the number of mutations per target site per cell division.
+#   # assume that, at most, a target can undergo 1 mutation per site per division.
+#   # then the rate of NO MUTATIONS per target site per cell division is 1 - muts_per_site_per_division
+#   # assume independence between editing outcomes at each edit point within each round of division
+#   # the probability of observing this NO MUTATION RATE is given by (no_mut_per_edit_pt)^n,
+#   # where no_mut_per_edit_pt is the probability of a mutation occurring at a site at an edit timepoint
+#   # and n is the number of edit timepoints in each cell cycle
+#   # by solving for 1-no_mut_per_edit_pt, we get a heuristic estimate of mutation prob per target per edit pt
+#   
+#   no_muts_per_site_per_division <- 1 - muts_per_site_per_division
+#   n <- edit_pts_per_division
+#   no_mut_prob <- exp(log(no_muts_per_site_per_division)/n)
+#   return(1 - no_mut_prob)
+# }
+
+
+
+
+
+
+
+
+
+# # then we use these estimates to inform the shape of our gamma distribution
+# # by setting the expected value of each gamma distribution to be our empirical edit probability for that mutation type
+# insertion_prob_mean_estimate <- estimate_mut_prob_per_edit_pt(muts_per_site_per_division = input_args$nuc_insertions_per_target_per_division,
+#                                                               edit_pts_per_division = input_args$cell_cycle_length/input_args$time_inc)
+# deletion_prob_mean_estimate <- estimate_mut_prob_per_edit_pt(muts_per_site_per_division = input_args$nuc_deletions_per_target_per_division,
+#                                                               edit_pts_per_division = input_args$cell_cycle_length/input_args$time_inc)
+# be_prob_mean_estimate <- estimate_mut_prob_per_edit_pt(muts_per_site_per_division = input_args$be_mutations_per_target_per_division,
+#                                                               edit_pts_per_division = input_args$cell_cycle_length/input_args$time_inc)
+
+
+# if(!is.null(basepos_erc_be_list)){
+#   
+#   # cat('\nNOT NULL BASEPOS ERC BE LIST\n', file = 'no_strings.txt', append = TRUE)
+#   
+#   target_config_dir_path <- file.path('target_configs', unique_run_id)
+#   
+#   if(!dir.exists(target_config_dir_path)){
+#     dir.create(target_config_dir_path, recursive = TRUE)
+#   }
+#   
+#   # close(file(file.path(target_config_dir_path, 'target_pos.csv'), open = 'w'))
+#   
+#   if(be_mutation_type == 'transition'){
+#     
+#     basepos_bc_target_transition_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+#                                                                                      h_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'High')]), 
+#                                                                                      m_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Medium')]), 
+#                                                                                      l_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Low')]),
+#                                                                                      shape_param = 0.5,
+#                                                                                      scale_param = target_be_prob_mean_estimate/0.5,
+#                                                                                      num_bootstrap_draws = 1000)
+#     basepos_bc_target_transversion_probs <- list()
+#     
+#   } else if(be_mutation_type == 'transversion'){
+#     # if the BE causes transversions, the transition basepos edit rate list will be NULL
+#     basepos_bc_target_transversion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+#                                                                                        h_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'High')]), 
+#                                                                                        m_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Medium')]), 
+#                                                                                        l_pos = as.integer(names(basepos_erc_be_list)[which(basepos_erc_be_list == 'Low')]),
+#                                                                                        shape_param = 0.5,
+#                                                                                        scale_param = target_be_prob_mean_estimate/0.5,
+#                                                                                        num_bootstrap_draws = 1000)
+#     # basepos_bc_target_transversion_probs <- list()
+#     basepos_bc_target_transition_probs <- list() # 2/4
+#     
+#   }  
 # } else{
-#   basepos_editrate_nuc_list <- NULL
+#   basepos_bc_target_transversion_probs <- list()
+#   basepos_bc_target_transition_probs <- list()
+# }
+# 
+# 
+# 
+#   
+# # insertion_HML_gamma_scale
+# if(!is.null(basepos_erc_nuc_list)){
+# 
+#   basepos_bc_target_insertion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+#                                                                                   h_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'High')]), 
+#                                                                                   m_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Medium')]), 
+#                                                                                   l_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Low')]),
+#                                                                                   shape_param = 0.5,
+#                                                                                   scale_param = target_insertion_prob_mean_estimate/0.5,
+#                                                                                   num_bootstrap_draws = 1000)
+# 
+#   basepos_bc_target_deletion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
+#                                                                                  h_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'High')]), 
+#                                                                                  m_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Medium')]), 
+#                                                                                  l_pos = as.integer(names(basepos_erc_nuc_list)[which(basepos_erc_nuc_list == 'Low')]),
+#                                                                                  shape_param = 0.5,
+#                                                                                  scale_param = target_deletion_prob_mean_estimate/0.5,
+#                                                                                  num_bootstrap_draws = 1000)
+#   
+# } else{ # if there are no nuc targets, define empty target prob lists
+#   basepos_bc_target_insertion_probs <- list()
+#   basepos_bc_target_deletion_probs <- list()
+# }
+
+
+# # lastly, once target editing windows are finalized, 
+# # force sites to be invariant as appropriate for the non-targets
+# # note that this will simply be ALL of the mt inds since there are no mt targets
+# mt_invariant_inds <- nontarget_get_invariant_inds(eligible_invariant_sites = seq(1, length(input_args$mito_genome_length)),
+#                                                   frac_invariant = input_args$mt_invariant_sites)
+# 
+# # iterate through the invariant inds and set the mutation prob at that ind to 0 for each mutation type
+# for(ind in mt_invariant_inds){
+#   basepos_mt_nontarget_transition_probs[[as.character(ind)]] <- 0
+#   basepos_mt_nontarget_transversion_probs[[as.character(ind)]] <- 0
+#   basepos_mt_nontarget_insertion_probs[[as.character(ind)]] <- 0
+#   basepos_mt_nontarget_deletion_probs[[as.character(ind)]] <- 0
+# }
+# 
+# # joint target positions of targets across all four mutation types
+# joint_bc_targets_vector <- as.integer(c(names(basepos_bc_target_transition_probs),
+#                                         names(basepos_bc_target_transversion_probs),
+#                                         names(basepos_bc_target_insertion_probs),
+#                                         names(basepos_bc_target_deletion_probs)))
+# 
+# # eligible invariant sites are those indices of the barcode NOT in the joint target position vector                                       
+# bc_eligible_invariant_sites <- setdiff(seq(1, input_args$bc_length), joint_bc_targets_vector)
+# bc_invariant_inds <- nontarget_get_invariant_inds(eligible_invariant_sites = bc_eligible_invariant_sites,
+#                                                   frac_invariant = input_args$bc_invariant_sites)
+# 
+# # now do the same iteration process for bc non-target mutation prob lists:
+# # iterate through the invariant inds and set the mutation prob at that ind to 0 for each mutation type
+# for(ind in bc_invariant_inds){
+#   basepos_bc_nontarget_transition_probs[[as.character(ind)]] <- 0
+#   basepos_bc_nontarget_transversion_probs[[as.character(ind)]] <- 0
+#   basepos_bc_nontarget_insertion_probs[[as.character(ind)]] <- 0
+#   basepos_bc_nontarget_deletion_probs[[as.character(ind)]] <- 0
 # }
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-# bc_base_fracs <- process_cla_string(input_args$bc_nuc_composition, outputted_type = 'numeric')
-
-#' # this is being sourced now!
-#' generate_non_be_target_sequence <- function(bc_length, nuc_fracs, be_target_from, num_be_targets){
-#'   #' @title Generate barcode sequence not including BE targets
-#'   #' @description This function returns a sequence of non-BE-target nucleotides into which
-#'   #' intervening BE target nucleotides are later added.
-#'   #' @return Character vector of length equal to number of non-BE-targets in barcode
-#'   #' @param bc_length integer. The length of the crispr barcode
-#'   #' @param nuc_fracs numeric. A length 4 numeric vector with relative fractions of c(A, G, C, T) in the barcode
-#'   #' @param be_target_from character. The nucleotide that is targeted by the base editor (string, 'A', 'G', 'C', or 'T')
-#'   #' @param num_be_targets integer. The number of base editing targets in the barcode
-#'   #' @note Specified targets and their respective counts take priority over nucleotide ratios
-#'   
-#'   # find number of nucleotides in the barcode that are NOT BE targets
-#'   num_non_be_targets <- bc_length - num_be_targets
-#'   
-#'   # find number of remaining As, Gs, Cs, and Ts:
-#'   # given the required nucleotide fractions, find the number of required nucleotides of each base in barcode
-#'   num_required_as <- round(bc_length * nuc_fracs[1])
-#'   num_required_gs <- round(bc_length * nuc_fracs[2])
-#'   num_required_cs <- round(bc_length * nuc_fracs[3])
-#'   num_required_ts <- round(bc_length * nuc_fracs[4])
-#'   
-#'   # the following process deals with reconciling any differences that may arise between 
-#'   # the provided fraction of each nucleotide and the number of BE targets
-#'   
-#'   # initialize our leftover_bases tracker to 0; will stay at zero if the specified number of 
-#'   # BE targets does not exceed the fraction of the barcode that should be that base
-#'   leftover_bases <- 0
-#'   
-#'   # subtract out the number of specified BE targets from the originally-inferred number of occurrences of the BE target base
-#'   # repeat this process for each of the four possible BE targets
-#'   if(be_target_from == 'A'){
-#'     num_required_as <- num_required_as - num_be_targets
-#'     # if there are more BE targets of a specific nuc than allotted, we'll have to take away from other bases' counts
-#'     if(num_required_as < 0){ 
-#'       leftover_bases <- abs(num_required_as)
-#'       num_required_as <- 0
-#'     }
-#'   } else if(be_target_from == 'G'){
-#'     num_required_gs <- num_required_gs - num_be_targets
-#'     if(num_required_gs < 0){ 
-#'       leftover_bases <- abs(num_required_gs)
-#'       num_required_gs <- 0
-#'     }
-#'   } else if(be_target_from == 'C'){
-#'     num_required_cs <- num_required_cs - num_be_targets
-#'     if(num_required_cs < 0){ 
-#'       leftover_bases <- abs(num_required_cs)
-#'       num_required_cs <- 0
-#'     }
-#'   } else if(be_target_from == 'T'){
-#'     num_required_ts <- num_required_ts - num_be_targets
-#'     if(num_required_ts < 0){ 
-#'       leftover_bases <- abs(num_required_ts)
-#'       num_required_ts <- 0
-#'     }
-#'   }
-#'   
-#'   # generate a vector of bases that are NOT BE targets
-#'   all_bases <- c('A', 'G', 'C', 'T')
-#'   non_target_bases <- setdiff(all_bases, be_target_from)
-#'   
-#'   # regardless of whether the user provided an incompatible nucleotide ratio given the inputted targets,
-#'   # we have to calculate the relative nucleotide fractions of the NON-TARGET bases
-#'   non_target_probs <- c(num_required_as, num_required_gs, 
-#'                         num_required_cs, num_required_ts) / (bc_length - num_be_targets + leftover_bases)
-#'   
-#'   if(leftover_bases > 0){
-#'     
-#'     # if the user provided incompatible nucleotide fractions and targets, we have to correct them here: 
-#'     
-#'     # disperse some extra num_bases bases across poss_bases according to probabilities poss_bases_probs
-#'     adjust_nuc_counts <- function(poss_bases, poss_bases_probs, num_bases, subtract_counts = FALSE){
-#'       # poss_bases is the eligible bases that 
-#'       selected_bases <- sample(poss_bases, size = num_bases, replace = TRUE, prob = poss_bases_probs)
-#'       adjust_table <- table(selected_bases)
-#'       
-#'       # if we are ultimately going to subtract these counts, convert to negative
-#'       # will simplify the addition process later
-#'       if(subtract_counts){
-#'         adjust_table <- adjust_table * -1
-#'       }
-#'       return(adjust_table)
-#'     }
-#'     
-#'     # get base-specific count adjustments to account for disparity between allocated target bases and nucleotide fractions
-#'     take_away_from_table <- adjust_nuc_counts(poss_bases = non_target_bases,
-#'                                               poss_bases_probs = non_target_probs[which(all_bases != be_target_from)],
-#'                                               num_bases = leftover_bases,
-#'                                               subtract_counts = TRUE)
-#'     
-#'     # default value for any AGCT not in counts is 0
-#'     for(nuc in all_bases){
-#'       if(!(nuc %in% names(take_away_from_table))){
-#'         take_away_from_table[[nuc]] <- 0
-#'       }
-#'     }
-#'     
-#'     # given the dispersion of extra base counts across non-target bases, adjust num_required nucleotides in bc sequence
-#'     num_required_as <- num_required_as + take_away_from_table[['A']]
-#'     num_required_gs <- num_required_gs + take_away_from_table[['G']]
-#'     num_required_cs <- num_required_cs + take_away_from_table[['C']]
-#'     num_required_ts <- num_required_ts + take_away_from_table[['T']]
-#'   }
-#'   
-#'   # after adjusting for errors due to incompatible target/nucleotide-ratio, adjust for rounding error:
-#'   # required_base_total is the number of bases that haven't been assigned as targets yet
-#'   required_base_total <- num_required_as + num_required_cs + num_required_gs + num_required_ts 
-#'   
-#'   if(required_base_total != num_non_be_targets){
-#'     print('in second filtering step')
-#'     # if there is rounding error causing base counts to not equal total barcode length:
-#'     if(required_base_total > num_non_be_targets){
-#'       # captures the case when we have too many bases to add based on calculations
-#'       # i.e. have to remove rounding error-induced extra base(s) from non-target
-#'       diff <- required_base_total - num_non_be_targets
-#'       rounding_change <- adjust_nuc_counts(poss_bases = all_bases,
-#'                                            poss_bases_probs = non_target_probs,
-#'                                            num_bases = diff,
-#'                                            subtract_counts = TRUE)
-#'       
-#'     }
-#'     else if(num_non_be_targets > required_base_total){
-#'       # captures the case when we have not enough bases to add based on calculations
-#'       diff <- num_non_be_targets - required_base_total
-#'       # i.e. have to add bases. unlike before, we permit changing target base count here
-#'       rounding_change <- adjust_nuc_counts(poss_bases = all_bases,
-#'                                            poss_bases_probs = non_target_probs,
-#'                                            num_bases = diff,
-#'                                            subtract_counts = FALSE)
-#'     }
-#'     
-#'     
-#'     # default value for any AGCT not in counts is 0
-#'     for(nuc in all_bases){
-#'       if(!(nuc %in% names(rounding_change))){
-#'         rounding_change[[nuc]] <- 0
-#'       }
-#'     }
-#'     num_required_as <- num_required_as - rounding_change[['A']]
-#'     num_required_gs <- num_required_gs - rounding_change[['G']]
-#'     num_required_cs <- num_required_cs - rounding_change[['C']]
-#'     num_required_ts <- num_required_ts - rounding_change[['T']]
-#'     
-#'   }
-#'   
-#'   # create a growing vector of the appropriate number of As, Gs, Cs, and Ts
-#'   # this length should be equal to the number of non_be_targets
-#'   # then shuffle it
-#'   non_target_sequence <- c(rep('A', num_required_as),
-#'                            rep('G', num_required_gs),
-#'                            rep('C', num_required_cs),
-#'                            rep('T', num_required_ts))
-#'   
-#'   # shuffle this sequence
-#'   non_target_sequence <- sample(non_target_sequence, size = length(non_target_sequence), replace = FALSE)
-#'   
-#'   return(non_target_sequence)
-#' }
-
-# comment today, don't think this is doing anything
-# # if there are no BE targets, then all of the bases in the bc are non-targets
-# if(is.null(basepos_editrate_be_list)){
-#   num_be_targets <- 0
-# } else{
-#   num_be_targets <- length(basepos_editrate_nuc_list)
-# }
-# num_non_be_targets <- input_args$bc_length - num_be_targets
-# comment today, don't think this is doing anything
-
-
-# ################## big comment 5/22
-# if(is.null(input_args$barcode_sequence)){ # if user doesn't supply the bc sequence, randomly generate ints --> chars
-#   
-#   # sample nucleotides in accordance with user-specified nucleotide ratios
-#   
-#   # note: specified targets and their respective counts take priority over nucleotide ratios
-#   
-#   nuc_fracs <- process_cla_string(input_args$bc_nuc_composition, outputted_type = 'numeric')
-#   
-#   # find number of remaining As, Gs, Cs, and Ts:
-#   num_required_as <- round(input_args$bc_length * nuc_fracs[1])
-#   num_required_gs <- round(input_args$bc_length * nuc_fracs[2])
-#   num_required_cs <- round(input_args$bc_length * nuc_fracs[3])
-#   num_required_ts <- round(input_args$bc_length * nuc_fracs[4])
-#   
-#   leftover_bases <- 0
-#   if(be_target_from == 'A'){
-#     num_required_as <- num_required_as - num_be_targets
-#     if(num_required_as < 0){ # if there are more BE targets of a specific nuc than allotted, we'll have to take away from other bases' counts
-#       leftover_bases <- abs(num_required_as)
-#       num_required_as <- 0
-#     }
-#   }
-#   else if(be_target_from == 'G'){
-#     num_required_gs <- num_required_gs - num_be_targets
-#     if(num_required_gs < 0){ # if there are more BE targets specified than allotted, keep track
-#       leftover_bases <- abs(num_required_gs)
-#       num_required_gs <- 0
-#     }
-#   }
-#   else if(be_target_from == 'C'){
-#     num_required_cs <- num_required_cs - num_be_targets
-#     if(num_required_cs < 0){ # if there are more BE targets specified than allotted, keep track
-#       leftover_bases <- abs(num_required_cs)
-#       num_required_cs <- 0
-#     }
-#   }
-#   else if(be_target_from == 'T'){
-#     num_required_ts <- num_required_ts - num_be_targets
-#     if(num_required_ts < 0){ # if there are more BE targets specified than allotted, keep track
-#       leftover_bases <- abs(num_required_ts)
-#       num_required_ts <- 0
-#     }
-#   }
-#   
-#   # distribute residual bases 
-#   all_bases <- c('A', 'G', 'C', 'T')
-#   non_target_bases <- setdiff(all_bases, be_target_from)
-#   
-#   # regardless of whether the user provided an incompatble nucleotide ratio given the inputted targets,
-#   # we have to calculate the relative nucleotide fractions of the NON-TARGET bases
-#   
-#   # recall that bc_base_fracs is ordered AGCT as well
-#   non_target_probs <- sapply(non_target_bases, function(base){
-#     if(base == be_target_from){
-#       # this will find the fraction of be_target_from that are not targets
-#       return((bc_base_fracs[which(all_bases == base)] - (num_be_targets/input_args$bc_length)))
-#     }
-#     return(bc_base_fracs[which(all_bases == base)])
-#   })
-#   
-#   if(leftover_bases > 0){
-#     
-#     # if the user provided incompatible nucleotide fractions and targets, we have to correct them here: 
-#     
-#     # disperse some extra num_bases bases across poss_bases according to probabilities poss_bases_probs
-#     adjust_nuc_counts <- function(poss_bases, poss_bases_probs, num_bases){
-#       selected_bases <- sample(poss_bases, size = num_bases, replace = TRUE, prob = poss_bases_probs)
-#       adjust_table <- table(selected_bases)
-#       
-#       return(adjust_table)
-#     }
-#     
-#     # get base-specific count adjustments to account for disparity between allocated target bases and nucleotide fractions
-#     take_away_from_table <- adjust_nuc_counts(poss_bases = non_target_bases,
-#                                               poss_bases_probs = non_target_probs,
-#                                               num_bases = leftover_bases)
-#     
-#     # given the dispersion of extra base counts across non-target bases, adjust num_required nucleotides in bc sequence
-#     num_required_as <- num_required_as - take_away_from_table[['A']]
-#     num_required_gs <- num_required_gs - take_away_from_table[['G']]
-#     num_required_cs <- num_required_cs - take_away_from_table[['C']]
-#     num_required_ts <- num_required_ts - take_away_from_table[['T']]
-#   }
-#   
-#   # after adjusting for errors due to incompatible target/nucleotide-ratio, adjust for rounding error:
-#   # required_base_total is the number of bases that haven't been assigned as targets yet
-#   required_base_total <- num_required_as + num_required_cs + num_required_gs + num_required_ts 
-#   
-#   if(required_base_total != num_non_be_targets){
-#     # if there is rounding error causing base counts to not equal total barcode length:
-#     if(required_base_total > num_non_be_targets){
-#       # captures the case when we have too many bases to add based on calculations
-#       # i.e. have to remove rounding error-induced extra base(s) from non-target
-#       # but here I guess we could remove non-target base_from 
-#       diff <- required_base_total - num_non_be_targets
-#       rounding_take_away_from <- adjust_nuc_counts(poss_bases = non_target_bases,
-#                                                    poss_bases_probs = non_target_probs,
-#                                                    num_bases = diff)
-#       num_required_as <- num_required_as - rounding_take_away_from[['A']]
-#       num_required_gs <- num_required_gs - rounding_take_away_from[['G']]
-#       num_required_cs <- num_required_cs - rounding_take_away_from[['C']]
-#       num_required_ts <- num_required_ts - rounding_take_away_from[['T']]
-#       
-#     }
-#     else if(num_non_be_targets > required_base_total){
-#       # captures the case when we have not enough bases to add based on calculations
-#       diff <- num_non_be_targets - required_base_total
-#       # i.e. have to add bases. unlike before, we permit changing target base count here
-#       rounding_add_to <- adjust_nuc_counts(poss_bases = all_bases,
-#                                            poss_bases_probs = non_target_probs,
-#                                            num_bases = diff)
-#       num_required_as <- num_required_as + rounding_add_to[['A']]
-#       num_required_gs <- num_required_gs + rounding_add_to[['G']]
-#       num_required_cs <- num_required_cs + rounding_add_to[['C']]
-#       num_required_ts <- num_required_ts + rounding_add_to[['T']]
-#     }
-#     
-#     # # SO WE COMMENT THIS PART OUT
-#     # # recalculate non-target fractions
-#     # # EDIT END OF 4/22: I THINK WE SHOULD JUST REPORT BACK THE NUM_REQUIRED, NOT FRACS
-#     # # BECAUSE WE WON'T BE SAMPLING AT THIS POINT, JUST ASSIGNING
-#     # # BUT AT THE SAME TIME, IF WE DON'T ENTER THIS IF, WE WOULD THEN NEED TO FIND RAW COUNTS
-#     # # FOR THE BASES, WHICH WOULD AGAIN REQUIRE ADJUSTING POTENTIALLY
-#     # # SO THE LATTER HALF OF THIS IF MIGHT HAVE TO BE MOVED OUTSIDE THE IF AND UNIVERSALLY APPLIED
-#     # adjusted_frac_a <- num_required_as / num_non_be_targets
-#     # adjusted_frac_g <- num_required_gs / num_non_be_targets
-#     # adjusted_frac_c <- num_required_cs / num_non_be_targets
-#     # adjusted_frac_t <- num_required_ts / num_non_be_targets  
-#     # # SO WE COMMENT THIS PART OUT
-#     
-#   }
-#   
-#   # # IF WE'RE WORKING WITH COUNTS NOW INSTEAD OF FRACITONS, CAN COMMENT THIS PART OUT TOO
-#   # # otherwise, if the user's nucleotide ratio is incompatible with the targets they specified,
-#   # # we can just use the non-target ratios to generate the barcode sequence
-#   # adjusted_frac_a <- non_target_probs[1]
-#   # adjusted_frac_g <- non_target_probs[2]
-#   # adjusted_frac_c <- non_target_probs[3]
-#   # adjusted_frac_t <- non_target_probs[4]
-#   
-#   # now we have to generate num_non_be_targets bases from our adjusted (or not) fractions
-#   # then later we'll add in the targets at positions specified by the BE target distribution 
-#   # that is included as an input parameter
-#   # # IF WE'RE WORKING WITH COUNTS NOW INSTEAD OF FRACITONS, CAN COMMENT THIS PART OUT TOO
-#   
-#   
-#   
-#   
-#   # create a growing vector of the appropriate number of As, Gs, Cs, and Ts
-#   # this length should be equal to the number of non_be_targets
-#   # then shuffle it
-#   non_target_sequence <- c(rep('A', num_required_as),
-#                            rep('G', num_required_gs),
-#                            rep('C', num_required_cs),
-#                            rep('T', num_required_ts))
-#   
-#   # shuffle this sequence
-#   non_target_sequence <- sample(non_target_sequence, size = length(non_target_sequence), replace = FALSE)
-#   
-#   baseline_seq_ints_bc <<- sample(seq(1,4), size = input_args$bc_length, replace = TRUE)
-#   baseline_seq_nucs_bc <<- sapply(baseline_seq_ints_bc, convert_int_to_nuc)
-#   
-# } else{ # if bc sequence is supplied, have to also generate the ints
-#   baseline_seq_nucs_bc <<- unlist(str_split(input_args$barcode_sequence, pattern = ''))
-#   baseline_seq_ints_bc <<- sapply(baseline_seq_nucs_bc, convert_nuc_to_int)
-# }
-# ################## big comment 5/22
-
-
-poss_sampling_fracs <- process_cla_string(input_args$sampling_fractions, outputted_type = 'numeric')
-poss_mt_afs <- process_cla_string(input_args$mt_allelic_fractions, outputted_type = 'numeric')
-poss_bc_afs <- process_cla_string(input_args$bc_allelic_fractions, outputted_type = 'numeric')
-poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, outputted_type = 'integer')
-poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
-poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
-poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob, outputted_type = 'numeric')
+# poss_sampling_fracs <- process_cla_string(input_args$sampling_fractions, outputted_type = 'numeric')
+# poss_mt_afs <- process_cla_string(input_args$mt_allelic_fractions, outputted_type = 'numeric')
+# poss_bc_afs <- process_cla_string(input_args$bc_allelic_fractions, outputted_type = 'numeric')
+poss_mt_afs <- as.numeric(input_args$mt_allelic_fractions)
+poss_bc_afs <- as.numeric(input_args$bc_allelic_fractions)
+# poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, outputted_type = 'integer')
+poss_num_bc_integrations <- as.integer(input_args$max_bc_ints_per_cell)
+# poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
+poss_num_mito_genomes <- as.integer(input_args$max_mito_genomes_per_cell)
+# poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
+# poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob,a outputted_type = 'numeric')
+poss_mt_genome_recovery_probs <- as.numeric(input_args$mt_integration_recovery_prob)
+poss_bc_integration_recovery_probs <- as.numeric(input_args$bc_integration_recovery_prob)
 poss_fasta_types <- process_cla_string(input_args$fasta_type, outputted_type = 'character')
 include_var_pos_fasta <- input_args$include_var_pos_fasta
+founder_cell_type <- as.character(input_args$cell_type_dict$founder_cell_type)
 
 
 # print('2118')
@@ -2169,24 +2111,7 @@ if(input_args$score_approach == 'both'){
 }
 
 
-# create run_specs directory if it doesn't exist:
-if(!dir.exists(file.path('output', 'run_specs', unique_run_id))){
-  dir.create(file.path('output', 'run_specs', unique_run_id), recursive = TRUE)
-}
 
-input_args_mat <- do.call(rbind, input_args)
-param_names <- rownames(input_args_mat)
-rownames(input_args_mat) <- NULL
-input_args_mat <- cbind(param_names, input_args_mat)
-input_param_colnames <- c('input_param', 'val')
-input_args_mat <- rbind(input_param_colnames, input_args_mat)
-input_args_df <- as.data.frame(input_args_mat)
-colnames(input_args_df) <- input_param_colnames
-format_input_args_df <- format.data.frame(input_args_df, justify = 'left')
-
-write.table(format_input_args_df, paste0('./output/run_specs/', unique_run_id, 
-                                         '/input_args_', unique_run_id, '.txt'), 
-            quote = FALSE, row.names = FALSE, col.names = FALSE, append = TRUE, sep = '\t')
 
 ############################# convert CLAs to forms that are used in sim
 
@@ -2482,24 +2407,24 @@ generate_downsample_integrations <- function(max_ints_per_cell_vec, recovery_rat
   
 }
 
-poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, outputted_type = 'integer')
-poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
-poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
-poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob, outputted_type = 'numeric')
+# poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, outputted_type = 'integer')
+# poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
+# poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
+# poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob, outputted_type = 'numeric')
 
-mt_recovered_genomes_df <- generate_downsample_integrations(max_ints_per_cell_vec = poss_num_mito_genomes,
-                                                      recovery_rate_vec = poss_mt_genome_recovery_probs)
+# mt_recovered_genomes_df <- generate_downsample_integrations(max_ints_per_cell_vec = poss_num_mito_genomes,
+#                                                       recovery_rate_vec = poss_mt_genome_recovery_probs)
 # print(paste0('class(mt_recovered_genomes_df) = ', class(mt_recovered_genomes_df)))
 # print(paste0('nrow(mt_recovered_genomes_df) = ', nrow(mt_recovered_genomes_df)))
 # print(mt_recovered_genomes_df)
-bc_recovered_ints_df <- generate_downsample_integrations(max_ints_per_cell_vec = poss_num_bc_integrations,
-                                                     recovery_rate_vec = poss_bc_integration_recovery_probs)
+# bc_recovered_ints_df <- generate_downsample_integrations(max_ints_per_cell_vec = poss_num_bc_integrations,
+#                                                      recovery_rate_vec = poss_bc_integration_recovery_probs)
 
-downsample_recovered_cells_df <- generate_downsample_cells(cell_sample_rate_vec = poss_sampling_fracs,
-                                                           sim_length_stopping_points = sim_length_stopping_points,
-                                                           cell_cycle_length = input_args$cell_cycle_length)
+# downsample_recovered_cells_df <- generate_downsample_cells(cell_sample_rate_vec = poss_sampling_fracs,
+#                                                            sim_length_stopping_points = sim_length_stopping_points,
+#                                                            cell_cycle_length = input_args$cell_cycle_length)
 # write.csv(downsample_recovered_cells_df, file.path('output', 'linstrings', unique_run_id, 'downsample_recovered_cells_df.csv'))
-write.csv(downsample_recovered_cells_df, paste0('downsample_recovered_cells_df_', unique_run_id, '.csv'))
+# write.csv(downsample_recovered_cells_df, paste0('downsample_recovered_cells_df_', unique_run_id, '.csv'))
 # print(paste0('class(bc_recovered_ints_df) = ', class(bc_recovered_ints_df)))
 # print(paste0('nrow(bc_recovered_ints_df) = ', nrow(bc_recovered_ints_df)))
 # print(bc_recovered_ints_df)
@@ -2525,31 +2450,40 @@ transition_matches <- c(2,1,4,3)
 transversion_matches <- c(c(3,4), c(3,4), c(1,2), c(1,2))
 
 # replace pos_er_list in here ........
-setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length,
-                      num_rows_mt, num_cols_mt, num_rows_bc, num_cols_bc, time_inc,
-                      basepos_bc_nontarget_transition_probs,
-                      basepos_bc_nontarget_transversion_probs,
-                      basepos_bc_nontarget_insertion_probs,
-                      basepos_bc_nontarget_deletion_probs,
-                      basepos_mt_nontarget_transition_probs,
-                      basepos_mt_nontarget_transversion_probs,
-                      basepos_mt_nontarget_insertion_probs,
-                      basepos_mt_nontarget_deletion_probs,
-                      basepos_bc_target_transition_probs,
-                      basepos_bc_target_transversion_probs,
-                      basepos_bc_target_insertion_probs,
-                      basepos_bc_target_deletion_probs,
-                      mt_sub_prob_mat,
-                      bc_sub_prob_mat,
-                      # pos_er_nuc_list,
-                      # er_df, pos_er_be_list, 
+setup_sim <- function(num_clusters, 
+                      init_pop_size, 
+                      sim_length, 
+                      cell_type_cell_cycle_length,
+                      num_rows_mt, 
+                      num_cols_mt, 
+                      num_rows_bc, 
+                      num_cols_bc, 
+                      time_inc,
+                      cell_type_basepos_bc_nontarget_transition_probs,
+                      cell_type_basepos_bc_nontarget_transversion_probs,
+                      cell_type_basepos_bc_nontarget_insertion_probs,
+                      cell_type_basepos_bc_nontarget_deletion_probs,
+                      cell_type_basepos_mt_nontarget_transition_probs,
+                      cell_type_basepos_mt_nontarget_transversion_probs,
+                      cell_type_basepos_mt_nontarget_insertion_probs,
+                      cell_type_basepos_mt_nontarget_deletion_probs,
+                      cell_type_basepos_bc_target_transition_probs,
+                      cell_type_basepos_bc_target_transversion_probs,
+                      cell_type_basepos_bc_target_insertion_probs,
+                      cell_type_basepos_bc_target_deletion_probs,
+                      cell_type_mt_sub_prob_mat,
+                      cell_type_bc_sub_prob_mat,
+                      cell_type_death_probs,
+                      uninduced_tm_list,
+                      induced_tm_list,
+                      differentiation_induction_timepoint,
+                      editing_induction_timepoint,
                       custom_savename, 
-                      # uniform_subs, 
-                      # uniform_indels, 
                       forced_transversions, sim_length_stopping_points, cold_startup,
-                      incoming_mt_profiles, incoming_bc_profiles,
-                      sim_time_vec_mt, sim_time_vec_bc, parent_vec, jitter_frac,
-                      mt_recovered_genomes_df, bc_recovered_ints_df, downsample_recovered_cells_df,
+                      founder_cell_type,
+                      cell_population,
+                      cell_type_jitter_frac,
+                      # mt_recovered_genomes_df, bc_recovered_ints_df, downsample_recovered_cells_df,
                       poss_fasta_types,
                       include_var_pos_fasta){
   
@@ -2559,22 +2493,37 @@ setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length
   # print('pos_mt_nontarget_transversion_probs')
   # print(pos_mt_nontarget_transversion_probs)
   
+  # if just beginning sim
   if(cold_startup){
     # print('inside cold_startup if')
     poss_times <<- seq(0, sim_length, time_inc)
     
-    incoming_mt_profiles <- lapply(seq(1, init_pop_size), function(x){return(sparseMatrix(i = c(), j = c(), 
-                                                                                          dims = c(num_rows_mt, num_cols_mt)))})
+    
+    
+    init_incoming_mt_profile <- sparseMatrix(i = c(), j = c(), 
+                                             dims = c(num_rows_mt, num_cols_mt))
     # print(incoming_mt_profiles)
-    incoming_bc_profiles <- lapply(seq(1, init_pop_size), function(x){return(sparseMatrix(i = c(), j = c(), 
-                                                                                          dims = c(num_rows_bc, num_cols_bc)))})
+    init_incoming_bc_profile <- sparseMatrix(i = c(), j = c(), 
+                                             dims = c(num_rows_bc, num_cols_bc))
     
-    sim_time_vec_mt <<- numeric()
-    sim_time_vec_bc <<- numeric()
+    cell_population <- list('1' = list('linstring' = '1',
+                                       'celltype' = founder_cell_type,
+                                       'birth_time' = 0,
+                                       'death_time' = NULL,
+                                       'parent' = NULL,
+                                       'descendants' = c(),
+                                       'alive' = TRUE,
+                                       'terminal' = TRUE,
+                                       'elig_div_points' = seq(0, sim_length, cell_type_cell_cycle_length[[founder_cell_type]]),
+                                       'incoming_mt_profiles' = init_incoming_mt_profile,
+                                       'incoming_bc_profiles' = init_incoming_bc_profile))
     
-    # here, we'll implement the parent list as being pre-defined, which is fine so long as we always allow all cells to divide (I think)
+    # sim_time_vec_mt <<- numeric()
+    # sim_time_vec_bc <<- numeric()
+    
+    # here, we'll implement the parent list as being pre-defined
     # will have to change this if i eventually change the logic of having cells divide once before mutating
-    parent_vec <- rep(0, init_pop_size)
+    # parent_vec <- rep(0, init_pop_size)
     
     # downsample_inds <<- c() # initialize downsample_inds so that we can compare later on with the checked box
     
@@ -2589,329 +2538,619 @@ setup_sim <- function(num_clusters, init_pop_size, sim_length, cell_cycle_length
   clusterExport(cl = one_cluster, c('perform_all_mt_mutations', 'perform_all_bc_mutations', 'transition_func', 'transversion_func',
                                     'insertion_func', 'deletion_func', 'bases', 'transition_matches',
                                     'transversion_matches', 'baseline_seq_ints_mt', 'baseline_seq_ints_bc',
-                                    'incoming_mt_profiles', 'incoming_bc_profiles', 
+                                    # 'incoming_mt_profiles', 'incoming_bc_profiles', 
                                     'num_deletable_bases', 'perform_deletion', 'all_deletions_one_mat',
                                     'num_rows_bc', 'num_cols_bc', 'num_rows_mt', 'num_cols_mt',
-                                    'init_pop_size',
-                                    'basepos_bc_nontarget_transition_probs',
-                                    'basepos_bc_nontarget_transversion_probs',
-                                    'basepos_bc_nontarget_insertion_probs',
-                                    'basepos_bc_nontarget_deletion_probs',
-                                    'basepos_mt_nontarget_transition_probs',
-                                    'basepos_mt_nontarget_transversion_probs',
-                                    'basepos_mt_nontarget_insertion_probs',
-                                    'basepos_mt_nontarget_deletion_probs',
-                                    'basepos_bc_target_transition_probs',
-                                    'basepos_bc_target_transversion_probs',
-                                    'basepos_bc_target_insertion_probs',
-                                    'basepos_bc_target_deletion_probs',
-                                    'mt_sub_prob_mat',
-                                    'bc_sub_prob_mat',
-                                    'cell_cycle_length', 'old_cells_at_timept', 
+                                    'init_pop_size', 
+                                    'sim_length',
+                                    'cell_type_basepos_bc_nontarget_transition_probs',
+                                    'cell_type_basepos_bc_nontarget_transversion_probs',
+                                    'cell_type_basepos_bc_nontarget_insertion_probs',
+                                    'cell_type_basepos_bc_nontarget_deletion_probs',
+                                    'cell_type_basepos_mt_nontarget_transition_probs',
+                                    'cell_type_basepos_mt_nontarget_transversion_probs',
+                                    'cell_type_basepos_mt_nontarget_insertion_probs',
+                                    'cell_type_basepos_mt_nontarget_deletion_probs',
+                                    'cell_type_basepos_bc_target_transition_probs',
+                                    'cell_type_basepos_bc_target_transversion_probs',
+                                    'cell_type_basepos_bc_target_insertion_probs',
+                                    'cell_type_basepos_bc_target_deletion_probs',
+                                    'cell_type_mt_sub_prob_mat',
+                                    'cell_type_bc_sub_prob_mat',
+                                    'cell_type_cell_cycle_length', 
+                                    'cell_type_death_probs',
+                                    'uninduced_tm_list',
+                                    'induced_tm_list',
+                                    'differentiation_induction_timepoint',
+                                    'editing_induction_timepoint',
+                                    'old_cells_at_timept', 
                                     # 'uniform_subs', 'uniform_indels',
                                     # 'er_df', 'pos_er_be_list', 'pos_er_nuc_list',  
                                     'forced_transversions', 'get_background_edit_inds', 
                                     'non_uniform_editing',
-                                    'sim_length_stopping_points', 'jitter_frac',
+                                    'sim_length_stopping_points', 
+                                    'cell_type_jitter_frac',
                                     'add_mito_jitter',
                                     'unique_run_id',
-                                    'mt_recovered_genomes_df', 'bc_recovered_ints_df', 'downsample_recovered_cells_df',
-                                    'poss_fasta_types', 'include_var_pos_fasta'),
+                                    # 'mt_recovered_genomes_df', 'bc_recovered_ints_df', 'downsample_recovered_cells_df',
+                                    'poss_fasta_types', 'include_var_pos_fasta',
+                                    'founder_cell_type'),
                 envir = environment())
   cluster_startup_end <- Sys.time()
   cluster_startup_total <<- difftime(cluster_startup_end, cluster_startup_start, units = 'secs')
   # print('right before return_list')
-  return_list <- list('lineage_info' = parent_vec, 'mutated_mt_profiles' = incoming_mt_profiles,
-                      'mutated_bc_profiles' = incoming_bc_profiles)
+  # return_list <- list('lineage_info' = parent_vec, 'mutated_mt_profiles' = incoming_mt_profiles,
+  #                     'mutated_bc_profiles' = incoming_bc_profiles)
   # print('right after return_list')
-  return(return_list)
+  # return(return_list)
+  return(cell_population)
 }
 
 # mylist <- list('a' = 2, 'b' = 32, 'c' = 3242, 'd' = 4232)
 # mylist2 <- list('e' = 121, 'f' = 23832)
 # mylist[2:3] <- mylist2
-
-multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parents, 
-                            timepoint, 
-                            # uniform_editing_indels, uniform_editing_subs,
-                            basepos_bc_nontarget_transition_probs, basepos_bc_nontarget_transversion_probs, 
-                            basepos_bc_nontarget_insertion_probs, basepos_bc_nontarget_deletion_probs,
-                            basepos_mt_nontarget_transition_probs, basepos_mt_nontarget_transversion_probs, 
-                            basepos_mt_nontarget_insertion_probs, basepos_mt_nontarget_deletion_probs, 
-                            basepos_bc_target_transition_probs, basepos_bc_target_transversion_probs, 
-                            basepos_bc_target_insertion_probs, basepos_bc_target_deletion_probs,
-                            mt_sub_prob_mat, bc_sub_prob_mat, jitter_fraction, unique_run_id,
-                            mt_recovered_genomes_df, bc_recovered_ints_df, downsample_recovered_cells_df, poss_fasta_types,
-                            include_var_pos_fasta){
-                            # pos_be_list, pos_nuc_list, editrate_df, force_all_transverions){
+multi_core_func <- function(timepoint, 
+                            sim_length,
+                            cell_population,
+                            cell_type_basepos_bc_nontarget_transition_probs, 
+                            cell_type_basepos_bc_nontarget_transversion_probs, 
+                            cell_type_basepos_bc_nontarget_insertion_probs, 
+                            cell_type_basepos_bc_nontarget_deletion_probs,
+                            cell_type_basepos_mt_nontarget_transition_probs, 
+                            cell_type_basepos_mt_nontarget_transversion_probs, 
+                            cell_type_basepos_mt_nontarget_insertion_probs, 
+                            cell_type_basepos_mt_nontarget_deletion_probs, 
+                            cell_type_basepos_bc_target_transition_probs, 
+                            cell_type_basepos_bc_target_transversion_probs, 
+                            cell_type_basepos_bc_target_insertion_probs, 
+                            cell_type_basepos_bc_target_deletion_probs,
+                            cell_type_mt_sub_prob_mat, 
+                            cell_type_bc_sub_prob_mat, 
+                            cell_type_jitter_frac, 
+                            cell_type_death_probs,
+                            uninduced_tm_list,
+                            induced_tm_list,
+                            differentiation_induction_timepoint,
+                            editing_induction_timepoint,
+                            unique_run_id){
   
-  # cat(paste0('length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions)), file = 'no_strings.txt', append = TRUE)
   
-  # cat('\nfirst line of multi core func', file = 'no_strings.txt', append = TRUE)
-  if((timepoint %% cell_cycle_length == 0) & (timepoint > 0)){
-    # cat('\ninside first if of multi core func', file = 'no_strings.txt', append = TRUE)
-    print(paste('allowing cells to divide at ', timepoint, sep = ''))
-    
-    
-    
-    num_old_cells <- old_cells_at_timept(timept = timepoint, cc_length = cell_cycle_length)
-    
-    # cat('\nafter num old cells', file = 'no_strings.txt', append = TRUE)
-    
-    most_recent_mito_start_index <- num_old_cells + 1
-    most_recent_mito_end_index <- num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size
-    
-    # cat('\nafter most recent assignments', file = 'no_strings.txt', append = TRUE)
-    # replicate profiles form one higher than the previous number of cells, onward
-    # most_recent_mito <- unlist(mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index])
-    # most_recent_mito_len <- length(most_recent_mito)
-    # copy_profiles <- rep(most_recent_mito, 2)
-    # cat(paste0('\n most_recent_mito_start_index == ', most_recent_mito_start_index, '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\n most_recent_mito_end_index == ', most_recent_mito_end_index, '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    cells_to_jitter <- mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index]
-    
-    # cat('\nafter cells to jitter', file = 'no_strings.txt', append = TRUE)
-    
-    # cat(paste0('\n PRE JITTER length(mt_profiles) == ', length(mt_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\n PRE JITTER length(bc_profiles) == ', length(bc_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    # cat(paste0('\n PRE JITTER length(cells_to_jitter) == ', length(cells_to_jitter), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\n class(cells_to_jitter[[1]]) == ', class(cells_to_jitter[[1]]), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\n class(cells_to_jitter[[1]]) == ', class(cells_to_jitter[[1]]), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    
-    # add jitter to the copied mitochondrial genomes at each division, jittering old and new copies
-    copy_profiles1 <- parLapply(cl = one_cluster, X = seq(1, length(cells_to_jitter)), 
-                                  fun = function(x){
-                                    # cat(paste0('\n in parlapply x == ', x, '\n'), 
-                                    #     file = 'no_strings.txt', append = TRUE)
-                                    # cat(paste0('\n in parlapply nrow(cells_to_jitter[[x]]) == ', nrow(cells_to_jitter[[x]]), '\n'), 
-                                    #     file = 'no_strings.txt', append = TRUE)
-                                    # cat(paste0('\n in parlapply class(cells_to_jitter[[x]]) == ', class(cells_to_jitter[[x]]), '\n'), 
-                                    #     file = 'no_strings.txt', append = TRUE)
-                                    return(add_mito_jitter(cells_to_jitter[[x]], frac_copies_lost = jitter_fraction))
-                                  })
-    # cat('\nafter copy profiles 1', file = 'no_strings.txt', append = TRUE)
-    # most_recent_mito <- add_mito_jitter()
-    copy_profiles2 <- parLapply(cl = one_cluster, X = seq(1, length(cells_to_jitter)), 
-                                    fun = function(x){
-                                      # cat(paste0('\n in parlapply COPY x == ', x, '\n'), 
-                                      #     file = 'no_strings.txt', append = TRUE)
-                                      # cat(paste0('\n in parlapply COPY nrow(cells_to_jitter[[x]]) == ', nrow(cells_to_jitter[[x]]), '\n'), 
-                                      #     file = 'no_strings.txt', append = TRUE)
-                                      # cat(paste0('\n in parlapply COPY class(cells_to_jitter[[x]]) == ', class(cells_to_jitter[[x]]), '\n'), 
-                                      #     file = 'no_strings.txt', append = TRUE)
-                                      return(add_mito_jitter(cells_to_jitter[[x]], frac_copies_lost = jitter_fraction))
-                                    })
-    
-    # cat('\nafter copy profiles 2', file = 'no_strings.txt', append = TRUE)
-    
-    # mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index] <- most_recent_mito
-    
-    # cat(paste0('\n MID JITTER length(most_recent_mito) == ', length(copy_profiles1), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    # cat(paste0('\n MID JITTER length(copy_profiles) == ', length(copy_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    
-    # cat(paste0('\n MID JITTER length(mt_profiles) == ', length(mt_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    mt_profiles <- append(mt_profiles, copy_profiles1)
-    mt_profiles <- append(mt_profiles, copy_profiles2)
-    
-    # cat(paste0('\ntimepoint = ', timepoint, '\n'), file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
-    
-    
-    
-    copy_profiles <- rep(unlist(bc_profiles[(num_old_cells + 1):(num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)]), 2) 
-    # cat(paste0('\nlength(copy_profiles) = ', length(copy_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
-    bc_profiles <- append(bc_profiles, copy_profiles)
-    # cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
-    
-    # cat(paste0('\n POST JITTER length(mt_profiles) == ', length(mt_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    # cat(paste0('\n POST JITTER length(bc_profiles) == ', length(bc_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-
-    
-    # under new framework, have to assign two new parents each division because we're not treating one cell as dividing into two new cells
-    # as opposed to one cell dividing into one new cell while also remaining in the population itself
-    parents <- append(parents, rep(seq((num_old_cells + 1), (num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)), 2))
-    
-    # cat(paste0('\nPARENTS:\n'), file = 'no_strings.txt', append = TRUE)
-    # cat(parents, file = 'no_strings.txt', append = TRUE)
-    
-    # cat('\nafter parents', file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\n length(mt_profiles) == ', length(mt_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
-    # cat(paste0('\n length(bc_profiles) == ', length(bc_profiles), '\n'), 
-    #     file = 'no_strings.txt', append = TRUE)
-    
+  # determine if this is an induced or uninduced timepoint:
+  if(timepoint >= differentiation_induction_timepoint){
+    differentiation_induced <- TRUE
+  } else{
+    differentiation_induced <- FALSE
   }
   
-  # no matter the timepoint, only the newest group of cells has to be mutated
-  # this will be equal to 2^(floor(timepoint/cell_cycle_length))*init_pop_size
-  num_cells_to_mutate <- 2^(floor(timepoint/cell_cycle_length))*init_pop_size
+  # determine if this is an induced or uninduced timepoint:
+  if(timepoint >= editing_induction_timepoint){
+    editing_induced <- 'induced_editing_params'
+  } else{
+    editing_induced <- 'uninduced_editing_params'
+  }
   
-  mt_start_time <- Sys.time()
+  ##################################### MUTATE
+  # all TERMINAL and ALIVE cells will mutate at each timepoint ...
+  # note: all terminal cells should be alive because death occurs before division and after mutation
   
-  # cat(paste0(unlist(unname(pos_mt_nt_transitions))), file = 'no_strings.txt', append = TRUE)
-  # cat('', file = 'no_strings.txt', append = TRUE)
+  cells_alive_here_bool_list <- lapply(cell_population, function(cell){
+    return((cell$terminal) & (cell$alive))
+  })
   
-  # cat('\nmade it here1\n', file = 'no_strings.txt', append = TRUE)
+  # get lineage strings corresponding to the cells dividing here
+  cell_names_alive_here <- names(cell_population)[which(as.logical(cells_alive_here_bool_list) == TRUE)]
   
-  # print(pos_mt_nt_transitions)
-  # print(environment(pos_mt_nt_transitions))
-  # print(environment(mt_profiles))
+  print('cell_names_alive here == ')
+  print(cell_names_alive_here)
   
-  # # can anyone explain to me why 1) this is necessary, 2) what problem this solves, and 3) why it works? because it does
-  # # without these, 'object 'pos_mt_nontarget_transition_probs' not found' e.g.
-  # pos_mt_nt_transitions <- pos_mt_nt_transitions
-  # pos_mt_nt_transversions <- pos_mt_nt_transversions
-  # pos_mt_nt_insertions <- pos_mt_nt_insertions
-  # pos_mt_nt_deletions <- pos_mt_nt_deletions
+  num_cells_alive_here <- length(cell_names_alive_here)
   
-  # pos_bc_nt_transitions <- pos_bc_nt_transitions 3/5
-  # pos_bc_nt_transversions <- pos_bc_nt_transversions
-  # pos_bc_nt_insertions <- pos_bc_nt_insertions
-  # pos_bc_nt_deletions <- pos_bc_nt_deletions
   
-  # pos_bc_t_transitions <- pos_bc_t_transitions
-  # pos_bc_t_transversions <- pos_bc_t_transversions
-  # pos_bc_t_insertions <- pos_bc_t_insertions
-  # pos_bc_t_deletions <- pos_bc_t_deletions
+  print(paste0('Now mutating ', num_cells_alive_here, ' cells'))
   
-  # cat('\n pos_bc_t_transitions == \n', file = 'no_strings.txt', append = TRUE)
-  # for(i in 1:length(pos_bc_t_transitions)){
-  #   cat(paste0('\n',names(pos_bc_t_transitions)[i], ' == ', unname(unlist(pos_bc_t_transitions))[i], '\n'), 
-  #       file = 'no_strings.txt', append = TRUE)
-  # }
-  # 
-  # cat('\n pos_bc_t_transversions == \n', file = 'no_strings.txt', append = TRUE)
-  # for(i in 1:length(pos_bc_t_transversions)){
-  #   cat(paste0('\n',names(pos_bc_t_transversions)[i], ' == ', unname(unlist(pos_bc_t_transversions))[i],'\n'), 
-  #       file = 'no_strings.txt', append = TRUE)
-  # }
-  # 
-  # cat('\n pos_bc_t_insertions == \n', file = 'no_strings.txt', append = TRUE)
-  # for(i in 1:length(pos_bc_t_insertions)){
-  #   cat(paste0('\n',names(pos_bc_t_insertions)[i], ' == ', unname(unlist(pos_bc_t_insertions))[i],'\n'), 
-  #       file = 'no_strings.txt', append = TRUE)
-  # }
-  # 
-  # cat('\n pos_bc_t_deletions == \n', file = 'no_strings.txt', append = TRUE)
-  # for(i in 1:length(pos_bc_t_deletions)){
-  #   cat(paste0('\n',names(pos_bc_t_deletions)[i], ' == ', unname(unlist(pos_bc_t_deletions))[i], '\n'), 
-  #       file = 'no_strings.txt', append = TRUE)
-  # }
-  
-  # cat(paste0('\n before parlapply', class(pos_mt_nt_transitions), '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\n before parlapply', length(pos_mt_nt_transitions), '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\n length(mt_profiles) == ', length(mt_profiles), '\n'), 
-  #     file = 'no_strings.txt', append = TRUE)
-  # 
-  # cat(paste0('\n seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)) == ', seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)), '\n'), 
-  #     file = 'no_strings.txt', append = TRUE)
-  
-  cat(paste0('\nperforming all mt mutations\n'), file = 'no_strings.txt', append = TRUE)
-  mutated_mt_profiles <- parLapply(cl = one_cluster, X = seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)), 
-                                   fun = function(x){
-                                     # cat(paste0('\n in lapply at x == ', x, ', length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions), '\n'), 
-                                     #     file = 'no_strings.txt', append = TRUE)
-                                     return(perform_all_mt_mutations(incoming_mut_mat = mt_profiles[[x]],
-                                                                     bg_transition_list = basepos_mt_nontarget_transition_probs,
-                                                                     bg_transversion_list = basepos_mt_nontarget_transversion_probs,
-                                                                     bg_insertion_list = basepos_mt_nontarget_insertion_probs,
-                                                                     bg_deletion_list = basepos_mt_nontarget_deletion_probs,
-                                                                     prob_sub_mat = mt_sub_prob_mat))
+  mutated_bc_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
+                                   fun = function(cell_name){
                                      
-                                   })
-  
-  # print('made it here after mt')
-  
-  # cat('\nmade it here2\n', file = 'no_strings.txt', append = TRUE)
-  
-  
-
-  mt_profiles[(length(mt_profiles)-num_cells_to_mutate+1): length(mt_profiles)] <- mutated_mt_profiles
-  
-  mt_end_time <- Sys.time()
-  
-  mt_mutation_time <- difftime(mt_end_time, mt_start_time, units = 'secs')
-  
-  mt_times <- c(mt_times, mt_mutation_time)
-  
-  bc_start_time <- Sys.time()
-  
-  # if(uniform_editing_indels & uniform_editing_subs){ # if we have uniform editing across all modality types (ie no targets supplied)
-  #   mutated_bc_profiles <- parLapply(cl =one_cluster, X = seq(length(bc_profiles)-num_cells_to_mutate +1, length(bc_profiles)), 
-  #                                    fun = function(x){
-  #                                      return(perform_all_bc_mutations(bc_profiles[[x]]))
-  #                                    })  
-  # }
-  # else{ # if either indels or substitutions are not uniform
-    
-  which_cells_mutate <- seq(length(bc_profiles)-num_cells_to_mutate +1, length(bc_profiles))
-  
-  mutated_bc_profiles <- parLapply(cl = one_cluster, X = which_cells_mutate, 
-                                   fun = function(x){
+                                     this_cell_type <- cell_population[[cell_name]]$celltype
                                      
                                      # now have to change the logic of perform_all_bc_mutations
                                      # to allow for nuc and be uniform editing flags
-                                     return(perform_all_bc_mutations(incoming_mut_mat = bc_profiles[[x]], 
-                                                                     # uniform_sub_edits = uniform_editing_subs,
-                                                                     # uniform_indel_edits = uniform_editing_indels,
-                                                                     # basepos_be_list = pos_be_list,
-                                                                     # basepos_nuc_list = pos_nuc_list,
-                                                                     # editrate_df = editrate_df,
-                                                                     bg_transition_list = basepos_bc_nontarget_transition_probs,
-                                                                     bg_transversion_list = basepos_bc_nontarget_transversion_probs,
-                                                                     bg_insertion_list = basepos_bc_nontarget_insertion_probs,
-                                                                     bg_deletion_list = basepos_bc_nontarget_deletion_probs,
-                                                                     target_transition_list = basepos_bc_target_transition_probs,
-                                                                     target_transversion_list = basepos_bc_target_transversion_probs,
-                                                                     target_insertion_list = basepos_bc_target_insertion_probs,
-                                                                     target_deletion_list = basepos_bc_target_deletion_probs,
-                                                                     prob_sub_mat = bc_sub_prob_mat,
+                                     return(perform_all_bc_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_bc_profiles, 
+                                                                     bg_transition_list = cell_type_basepos_bc_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_transversion_list = cell_type_basepos_bc_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_insertion_list = cell_type_basepos_bc_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_deletion_list = cell_type_basepos_bc_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_transition_list = cell_type_basepos_bc_target_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_transversion_list = cell_type_basepos_bc_target_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_insertion_list = cell_type_basepos_bc_target_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_deletion_list = cell_type_basepos_bc_target_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                     prob_sub_mat = cell_type_bc_sub_prob_mat[[this_cell_type]][[editing_induced]],
                                                                      timepoint_for_label = timepoint,
-                                                                     urid = unique_run_id,
-                                                                     cell_num = x))
-                                                                     # force_all_transversions = force_all_transversions))
-                                   })  
-  # print('made it here after bc')
-    # cat('\nmade it past perform_all_bc_mutations\n', file = 'no_strings.txt', append = TRUE)
-  # }
+                                                                     urid = unique_run_id))
+                                   })
+  # cat(paste0('\nAFTER PERFORM ALL BC MUTATIONS\n'), file = 'no_strings.txt', append = TRUE)
+  print('after mutated_bc_profiles')
+  
+  # rewrite the existing mut_mats for these cells with the updated profiles:
+  print(paste0('before cell population update 1, length(cell_population) == ', length(cell_population)))
+  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
+    cell_list[['incoming_bc_profiles']] <- new_profiles
+    return(cell_list)
+  }, cell_population[cell_names_alive_here], mutated_bc_profiles)
+  print(paste0('after cell population update 1, length(cell_population) == ', length(cell_population)))
   
   
-  bc_profiles[(length(bc_profiles)-num_cells_to_mutate +1): length(bc_profiles)] <- mutated_bc_profiles
+  mutated_mt_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
+                                   fun = function(cell_name){
+                                     
+                                     this_cell_type <- cell_population[[cell_name]]$celltype
+                                     
+                                     return(perform_all_mt_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_mt_profiles,
+                                                                     bg_transition_list = cell_type_basepos_mt_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_transversion_list = cell_type_basepos_mt_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_insertion_list = cell_type_basepos_mt_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_deletion_list = cell_type_basepos_mt_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                     prob_sub_mat = cell_type_mt_sub_prob_mat[[this_cell_type]][[editing_induced]]))
+                                     
+                                   })
+  print('after mutated_mt_profiles')
   
-  bc_end_time <- Sys.time()
+  print(paste0('before cell population update 2, length(cell_population) == ', length(cell_population)))
+  # rewrite the existing mut_mats for these cells with the updated profiles:
+  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
+    cell_list[['incoming_mt_profiles']] <- new_profiles
+    return(cell_list)
+  }, cell_population[cell_names_alive_here], mutated_mt_profiles)
+  print(paste0('after cell population update 2, length(cell_population) == ', length(cell_population)))
   
-  bc_mutation_time <- difftime(bc_end_time, bc_start_time, units = 'secs')
   
-  bc_times <- c(bc_times, bc_mutation_time)
+  ##################################### DIE
+  # only certain cells will die at this timepoint, according to their respective cell type's death prob
   
-  return_list <- list('mt_profiles' = mt_profiles,
-                      'bc_profiles' = bc_profiles,
-                      'mt_times' = mt_times,
-                      'bc_times' = bc_times,
-                      'parents' = parents)
-  return(return_list)
+  # only terminal (& alive) cells can die here...
+  
+  # get updated living statuses of each terminal (& alive) cell
+  # updated_living_statuses <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
+                                       # fun = function(cell_name){
+  updated_living_statuses <- lapply(cell_names_alive_here, function(cell_name){
+                                         
+                                         this_cell_type <- cell_population[[cell_name]]$celltype
+                                         death_prob <- cell_type_death_probs[[this_cell_type]]
+                                         death_occurs <- rbinom(n = 1, size = 1, prob = death_prob)
+                                         
+                                         # since we are using updated_living_statuses to replace all 
+                                         if(death_occurs){
+                                           return(FALSE)
+                                         } else if(!(death_occurs)){
+                                           return(TRUE)
+                                         }
+                                       })
+  
+  print(paste0('Number of cells dying at this timepoint: ', length(which(updated_living_statuses == FALSE))))
+  
+  # rewrite the existing alive indicators for these cells with updated_living_statuses:
+  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_statuses, death_time) {
+    cell_list[['alive']] <- new_statuses
+    cell_list[['death_time']] <- death_time
+    return(cell_list)
+  }, cell_population[cell_names_alive_here], updated_living_statuses, rep(timepoint, length(updated_living_statuses)))
+  
+  
+  
+  ##################################### DIVIDE
+  # only certain cells will divide at this timepoint
+  cells_dividing_here_bool_list <- lapply(cell_population, function(cell){
+    return((timepoint %in% cell$elig_div_points) & (cell$terminal) & (cell$alive))
+  })
+  
+  print('cells_dividing_here_bool_list == ')
+  print(cells_dividing_here_bool_list)
+  # get lineage strings corresponding to the cells dividing here
+  
+  cell_names_dividing_here <- names(cell_population)[which(as.logical(cells_dividing_here_bool_list) == TRUE)]
+  num_cells_dividing_here <- length(cell_names_dividing_here)
+  
+  # if cells divide, they are no longer terminal
+  print(paste0('Now dividing ', num_cells_dividing_here, ' cells'))
+  
+  
+  new_cell_list <- parLapply(cl = one_cluster, X = cell_names_dividing_here, 
+                             fun = function(cell_name){
+                               
+                               this_cell_type <- cell_population[[cell_name]]$celltype
+                               this_cell_jitter_frac <- cell_type_jitter_frac[[this_cell_type]]
+                               
+                               new_mitoprofiles_1 <- add_mito_jitter(mt_mutation_mat = cell_population[[cell_name]]$incoming_mt_profiles, 
+                                                                     frac_copies_lost = this_cell_jitter_frac)
+                               new_mitoprofiles_2 <- add_mito_jitter(mt_mutation_mat = cell_population[[cell_name]]$incoming_mt_profiles, 
+                                                                     frac_copies_lost = this_cell_jitter_frac)
+                               
+                               # generate daughter cell lineage strings
+                               daughter_cell_linstrings <- paste(cell_name, seq(1,2), sep = '_')
+                               
+                               
+                               # generate new daughter cell types according to whether popn has been induced
+                               if(differentiation_induced){
+                                 daughter_cell_types <- sample(names(induced_tm_list[[this_cell_type]]), 
+                                                               size = 2, replace = TRUE, 
+                                                               prob = as.numeric(induced_tm_list[[this_cell_type]]))
+                               } else if(!differentiation_induced){
+                                 daughter_cell_types <- sample(names(uninduced_tm_list[[this_cell_type]]), 
+                                                               size = 2, replace = TRUE, 
+                                                               prob = as.numeric(uninduced_tm_list[[this_cell_type]]))
+                               }
+                               
+                               # update parent cell with descendant info and to reflect changed terminal status
+                               # in order for these changes to be made, have to return this modified copy from the parallel workers, then subsequently overwite existing vals
+                               cell_population[[cell_name]]$descendants <- daughter_cell_linstrings
+                               cell_population[[cell_name]]$terminal <- FALSE
+                               cell_population[[cell_name]]$alive <- FALSE
+                               
+                               daughter_cells <- list()
+                               
+                               daughter_cells[[daughter_cell_linstrings[1]]] <- list('linstring' = daughter_cell_linstrings[1],
+                                                                                    'celltype' = daughter_cell_types[1],
+                                                                                    'birth_time' = timepoint,
+                                                                                    'death_time' = NULL,
+                                                                                    'parent' = cell_name,
+                                                                                    'descendants' = c(),
+                                                                                    'alive' = TRUE,
+                                                                                    'terminal' = TRUE,
+                                                                                    'elig_div_points' = seq(timepoint, sim_length, cell_type_cell_cycle_length[[daughter_cell_types[1]]]),
+                                                                                    'incoming_mt_profiles' = new_mitoprofiles_1,
+                                                                                    'incoming_bc_profiles' = cell_population[[cell_name]]$incoming_bc_profiles)
+                               daughter_cells[[daughter_cell_linstrings[2]]] <- list('linstring' = daughter_cell_linstrings[2],
+                                                                                 'celltype' = daughter_cell_types[2],
+                                                                                 'birth_time' = timepoint,
+                                                                                 'death_time' = NULL,
+                                                                                 'parent' = cell_name,
+                                                                                 'descendants' = c(),
+                                                                                 'alive' = TRUE,
+                                                                                 'terminal' = TRUE,
+                                                                                 'elig_div_points' = seq(timepoint, sim_length, cell_type_cell_cycle_length[[daughter_cell_types[2]]]),
+                                                                                 'incoming_mt_profiles' = new_mitoprofiles_2,
+                                                                                 'incoming_bc_profiles' = cell_population[[cell_name]]$incoming_bc_profiles)
+                               
+                                return_list <- list()
+                                return_list[['updated_parent']] <- cell_population[[cell_name]] # modified copy of the parent that will be used to overwrite the cell in the pop
+                                return_list[['new_cells']] <- daughter_cells
+                               return(return_list)
+                               
+                             })
+  
+  # split the results of this apply into updated parents and new cells:
+  daughter_cells <- lapply(new_cell_list, function(cellname){
+    cellname[['new_cells']]
+  })
+  
+  # want to retain outer names from this list
+  updated_parents <- lapply(new_cell_list, function(cellname){
+    cellname[['updated_parent']]
+  })
+  # give the updated parents names so that they can overwrite existing vals at these cell names
+  names(updated_parents) <- cell_names_dividing_here
+  
+  # overwrite now-parents
+  cell_population[cell_names_dividing_here] <- updated_parents[cell_names_dividing_here]
+  
+  
+  
+  # flatten the list of lists that was generated for daughter cells 
+  daughter_cells <- unlist(daughter_cells, recursive = FALSE)
+  
+  # append the new daughter cells to the end of the growing cell pop
+  cell_population <- append(cell_population, daughter_cells)
+  
+  print('cell population names == ')
+  print(names(cell_population))
+  
+  return(cell_population)
 }
+############################### old func 3/25
+# multi_core_func <- function(timepoint,
+#                             # mt_profiles, bc_profiles,
+#                             cell_population,
+#                             mt_times, bc_times, parents,
+#                             # uniform_editing_indels, uniform_editing_subs,
+#                             cell_type_basepos_bc_nontarget_transition_probs,
+#                             cell_type_basepos_bc_nontarget_transversion_probs,
+#                             cell_type_basepos_bc_nontarget_insertion_probs,
+#                             cell_type_basepos_bc_nontarget_deletion_probs,
+#                             cell_type_basepos_mt_nontarget_transition_probs,
+#                             cell_type_basepos_mt_nontarget_transversion_probs,
+#                             cell_type_basepos_mt_nontarget_insertion_probs,
+#                             cell_type_basepos_mt_nontarget_deletion_probs,
+#                             cell_type_basepos_bc_target_transition_probs,
+#                             cell_type_basepos_bc_target_transversion_probs,
+#                             cell_type_basepos_bc_target_insertion_probs,
+#                             cell_type_basepos_bc_target_deletion_probs,
+#                             cell_type_mt_sub_prob_mat,
+#                             cell_type_bc_sub_prob_mat,
+#                             cell_type_jitter_frac,
+#                             uninduced_tm_list,
+#                             induced_tm_list,
+#                             induction_timepoint,
+#                             unique_run_id,
+#                             mt_recovered_genomes_df, bc_recovered_ints_df, downsample_recovered_cells_df,
+#                             poss_fasta_types,
+#                             include_var_pos_fasta){
+#                             # pos_be_list, pos_nuc_list, editrate_df, force_all_transverions){
+# 
+#   # cat(paste0('length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions)), file = 'no_strings.txt', append = TRUE)
+# 
+#   # cat('\nfirst line of multi core func', file = 'no_strings.txt', append = TRUE)
+#   # don't allow cells to divide at timepoint 0
+#   if((timepoint %% cell_cycle_length == 0) & (timepoint > 0)){
+# 
+#     # cells_dividing_here_bool_list <- lapply(cell_pop, function(cell){
+#     #   return(2 %in% cell$elig_div_points)
+#     # })
+#     # cell_names_dividing_here <- names(cells_dividing_here_bool_list)[which(as.logical(cells_dividing_here_bool_list))]
+# 
+#     # cat('\ninside first if of multi core func', file = 'no_strings.txt', append = TRUE)
+#     print(paste('allowing cells to divide at ', timepoint, sep = ''))
+# 
+# 
+# 
+#     num_old_cells <- old_cells_at_timept(timept = timepoint, cc_length = cell_cycle_length)
+# 
+#     # cat('\nafter num old cells', file = 'no_strings.txt', append = TRUE)
+# 
+#     most_recent_mito_start_index <- num_old_cells + 1
+#     most_recent_mito_end_index <- num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size
+# 
+#     # cat('\nafter most recent assignments', file = 'no_strings.txt', append = TRUE)
+#     # replicate profiles form one higher than the previous number of cells, onward
+#     # most_recent_mito <- unlist(mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index])
+#     # most_recent_mito_len <- length(most_recent_mito)
+#     # copy_profiles <- rep(most_recent_mito, 2)
+#     # cat(paste0('\n most_recent_mito_start_index == ', most_recent_mito_start_index, '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+#     # cat(paste0('\n most_recent_mito_end_index == ', most_recent_mito_end_index, '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+#     cells_to_jitter <- mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index]
+# 
+#     # cat('\nafter cells to jitter', file = 'no_strings.txt', append = TRUE)
+# 
+#     # cat(paste0('\n PRE JITTER length(mt_profiles) == ', length(mt_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+#     # cat(paste0('\n PRE JITTER length(bc_profiles) == ', length(bc_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+#     # cat(paste0('\n PRE JITTER length(cells_to_jitter) == ', length(cells_to_jitter), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+#     # cat(paste0('\n class(cells_to_jitter[[1]]) == ', class(cells_to_jitter[[1]]), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+#     # cat(paste0('\n class(cells_to_jitter[[1]]) == ', class(cells_to_jitter[[1]]), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+# 
+#     # add jitter to the copied mitochondrial genomes at each division, jittering old and new copies
+#     copy_profiles1 <- parLapply(cl = one_cluster, X = seq(1, length(cells_to_jitter)),
+#                                   fun = function(x){
+#                                     # cat(paste0('\n in parlapply x == ', x, '\n'),
+#                                     #     file = 'no_strings.txt', append = TRUE)
+#                                     # cat(paste0('\n in parlapply nrow(cells_to_jitter[[x]]) == ', nrow(cells_to_jitter[[x]]), '\n'),
+#                                     #     file = 'no_strings.txt', append = TRUE)
+#                                     # cat(paste0('\n in parlapply class(cells_to_jitter[[x]]) == ', class(cells_to_jitter[[x]]), '\n'),
+#                                     #     file = 'no_strings.txt', append = TRUE)
+#                                     return(add_mito_jitter(cells_to_jitter[[x]], frac_copies_lost = jitter_fraction))
+#                                   })
+#     # cat('\nafter copy profiles 1', file = 'no_strings.txt', append = TRUE)
+#     # most_recent_mito <- add_mito_jitter()
+#     copy_profiles2 <- parLapply(cl = one_cluster, X = seq(1, length(cells_to_jitter)),
+#                                     fun = function(x){
+#                                       # cat(paste0('\n in parlapply COPY x == ', x, '\n'),
+#                                       #     file = 'no_strings.txt', append = TRUE)
+#                                       # cat(paste0('\n in parlapply COPY nrow(cells_to_jitter[[x]]) == ', nrow(cells_to_jitter[[x]]), '\n'),
+#                                       #     file = 'no_strings.txt', append = TRUE)
+#                                       # cat(paste0('\n in parlapply COPY class(cells_to_jitter[[x]]) == ', class(cells_to_jitter[[x]]), '\n'),
+#                                       #     file = 'no_strings.txt', append = TRUE)
+#                                       return(add_mito_jitter(cells_to_jitter[[x]], frac_copies_lost = jitter_fraction))
+#                                     })
+# 
+#     # cat('\nafter copy profiles 2', file = 'no_strings.txt', append = TRUE)
+# 
+#     # mt_profiles[most_recent_mito_start_index:most_recent_mito_end_index] <- most_recent_mito
+# 
+#     # cat(paste0('\n MID JITTER length(most_recent_mito) == ', length(copy_profiles1), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+#     # cat(paste0('\n MID JITTER length(copy_profiles) == ', length(copy_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+# 
+#     # cat(paste0('\n MID JITTER length(mt_profiles) == ', length(mt_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+#     mt_profiles <- append(mt_profiles, copy_profiles1)
+#     mt_profiles <- append(mt_profiles, copy_profiles2)
+# 
+#     # cat(paste0('\ntimepoint = ', timepoint, '\n'), file = 'no_strings.txt', append = TRUE)
+#     # cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
+# 
+# 
+# 
+#     copy_profiles <- rep(unlist(bc_profiles[(num_old_cells + 1):(num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)]), 2)
+#     # cat(paste0('\nlength(copy_profiles) = ', length(copy_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
+#     bc_profiles <- append(bc_profiles, copy_profiles)
+#     # cat(paste0('\nlength(bc_profiles) = ', length(bc_profiles), '\n'), file = 'no_strings.txt', append = TRUE)
+# 
+#     # cat(paste0('\n POST JITTER length(mt_profiles) == ', length(mt_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+#     # cat(paste0('\n POST JITTER length(bc_profiles) == ', length(bc_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+# 
+# 
+#     # under new framework, have to assign two new parents each division because we're not treating one cell as dividing into two new cells
+#     # as opposed to one cell dividing into one new cell while also remaining in the population itself
+#     parents <- append(parents, rep(seq((num_old_cells + 1), (num_old_cells + 2^(timepoint-cell_cycle_length)*init_pop_size)), 2))
+# 
+#     # cat(paste0('\nPARENTS:\n'), file = 'no_strings.txt', append = TRUE)
+#     # cat(parents, file = 'no_strings.txt', append = TRUE)
+# 
+#     # cat('\nafter parents', file = 'no_strings.txt', append = TRUE)
+#     # cat(paste0('\n length(mt_profiles) == ', length(mt_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+#     # cat(paste0('\n length(bc_profiles) == ', length(bc_profiles), '\n'),
+#     #     file = 'no_strings.txt', append = TRUE)
+# 
+#   }
+# 
+#   # no matter the timepoint, only the newest group of cells has to be mutated
+#   # this will be equal to 2^(floor(timepoint/cell_cycle_length))*init_pop_size
+#   num_cells_to_mutate <- 2^(floor(timepoint/cell_cycle_length))*init_pop_size
+# 
+#   mt_start_time <- Sys.time()
+# 
+#   # cat(paste0(unlist(unname(pos_mt_nt_transitions))), file = 'no_strings.txt', append = TRUE)
+#   # cat('', file = 'no_strings.txt', append = TRUE)
+# 
+#   # cat('\nmade it here1\n', file = 'no_strings.txt', append = TRUE)
+# 
+#   # print(pos_mt_nt_transitions)
+#   # print(environment(pos_mt_nt_transitions))
+#   # print(environment(mt_profiles))
+# 
+#   # # can anyone explain to me why 1) this is necessary, 2) what problem this solves, and 3) why it works? because it does
+#   # # without these, 'object 'pos_mt_nontarget_transition_probs' not found' e.g.
+#   # pos_mt_nt_transitions <- pos_mt_nt_transitions
+#   # pos_mt_nt_transversions <- pos_mt_nt_transversions
+#   # pos_mt_nt_insertions <- pos_mt_nt_insertions
+#   # pos_mt_nt_deletions <- pos_mt_nt_deletions
+# 
+#   # pos_bc_nt_transitions <- pos_bc_nt_transitions 3/5
+#   # pos_bc_nt_transversions <- pos_bc_nt_transversions
+#   # pos_bc_nt_insertions <- pos_bc_nt_insertions
+#   # pos_bc_nt_deletions <- pos_bc_nt_deletions
+# 
+#   # pos_bc_t_transitions <- pos_bc_t_transitions
+#   # pos_bc_t_transversions <- pos_bc_t_transversions
+#   # pos_bc_t_insertions <- pos_bc_t_insertions
+#   # pos_bc_t_deletions <- pos_bc_t_deletions
+# 
+#   # cat('\n pos_bc_t_transitions == \n', file = 'no_strings.txt', append = TRUE)
+#   # for(i in 1:length(pos_bc_t_transitions)){
+#   #   cat(paste0('\n',names(pos_bc_t_transitions)[i], ' == ', unname(unlist(pos_bc_t_transitions))[i], '\n'),
+#   #       file = 'no_strings.txt', append = TRUE)
+#   # }
+#   #
+#   # cat('\n pos_bc_t_transversions == \n', file = 'no_strings.txt', append = TRUE)
+#   # for(i in 1:length(pos_bc_t_transversions)){
+#   #   cat(paste0('\n',names(pos_bc_t_transversions)[i], ' == ', unname(unlist(pos_bc_t_transversions))[i],'\n'),
+#   #       file = 'no_strings.txt', append = TRUE)
+#   # }
+#   #
+#   # cat('\n pos_bc_t_insertions == \n', file = 'no_strings.txt', append = TRUE)
+#   # for(i in 1:length(pos_bc_t_insertions)){
+#   #   cat(paste0('\n',names(pos_bc_t_insertions)[i], ' == ', unname(unlist(pos_bc_t_insertions))[i],'\n'),
+#   #       file = 'no_strings.txt', append = TRUE)
+#   # }
+#   #
+#   # cat('\n pos_bc_t_deletions == \n', file = 'no_strings.txt', append = TRUE)
+#   # for(i in 1:length(pos_bc_t_deletions)){
+#   #   cat(paste0('\n',names(pos_bc_t_deletions)[i], ' == ', unname(unlist(pos_bc_t_deletions))[i], '\n'),
+#   #       file = 'no_strings.txt', append = TRUE)
+#   # }
+# 
+#   # cat(paste0('\n before parlapply', class(pos_mt_nt_transitions), '\n'), file = 'no_strings.txt', append = TRUE)
+#   # cat(paste0('\n before parlapply', length(pos_mt_nt_transitions), '\n'), file = 'no_strings.txt', append = TRUE)
+#   # cat(paste0('\n length(mt_profiles) == ', length(mt_profiles), '\n'),
+#   #     file = 'no_strings.txt', append = TRUE)
+#   #
+#   # cat(paste0('\n seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)) == ', seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)), '\n'),
+#   #     file = 'no_strings.txt', append = TRUE)
+# 
+#   cat(paste0('\nperforming all mt mutations\n'), file = 'no_strings.txt', append = TRUE)
+#   mutated_mt_profiles <- parLapply(cl = one_cluster, X = seq(length(mt_profiles)-num_cells_to_mutate+1, length(mt_profiles)),
+#                                    fun = function(x){
+#                                      # cat(paste0('\n in lapply at x == ', x, ', length(pos_mt_nt_transitions) == ', length(pos_mt_nt_transitions), '\n'),
+#                                      #     file = 'no_strings.txt', append = TRUE)
+#                                      return(perform_all_mt_mutations(incoming_mut_mat = mt_profiles[[x]],
+#                                                                      bg_transition_list = basepos_mt_nontarget_transition_probs,
+#                                                                      bg_transversion_list = basepos_mt_nontarget_transversion_probs,
+#                                                                      bg_insertion_list = basepos_mt_nontarget_insertion_probs,
+#                                                                      bg_deletion_list = basepos_mt_nontarget_deletion_probs,
+#                                                                      prob_sub_mat = mt_sub_prob_mat))
+# 
+#                                    })
+# 
+#   # print('made it here after mt')
+# 
+#   # cat('\nmade it here2\n', file = 'no_strings.txt', append = TRUE)
+# 
+# 
+# 
+#   mt_profiles[(length(mt_profiles)-num_cells_to_mutate+1): length(mt_profiles)] <- mutated_mt_profiles
+# 
+#   mt_end_time <- Sys.time()
+# 
+#   mt_mutation_time <- difftime(mt_end_time, mt_start_time, units = 'secs')
+# 
+#   mt_times <- c(mt_times, mt_mutation_time)
+# 
+#   bc_start_time <- Sys.time()
+# 
+#   # if(uniform_editing_indels & uniform_editing_subs){ # if we have uniform editing across all modality types (ie no targets supplied)
+#   #   mutated_bc_profiles <- parLapply(cl =one_cluster, X = seq(length(bc_profiles)-num_cells_to_mutate +1, length(bc_profiles)),
+#   #                                    fun = function(x){
+#   #                                      return(perform_all_bc_mutations(bc_profiles[[x]]))
+#   #                                    })
+#   # }
+#   # else{ # if either indels or substitutions are not uniform
+# 
+#   which_cells_mutate <- seq(length(bc_profiles)-num_cells_to_mutate +1, length(bc_profiles))
+# 
+#   mutated_bc_profiles <- parLapply(cl = one_cluster, X = which_cells_mutate,
+#                                    fun = function(x){
+# 
+#                                      # now have to change the logic of perform_all_bc_mutations
+#                                      # to allow for nuc and be uniform editing flags
+#                                      return(perform_all_bc_mutations(incoming_mut_mat = bc_profiles[[x]],
+#                                                                      # uniform_sub_edits = uniform_editing_subs,
+#                                                                      # uniform_indel_edits = uniform_editing_indels,
+#                                                                      # basepos_be_list = pos_be_list,
+#                                                                      # basepos_nuc_list = pos_nuc_list,
+#                                                                      # editrate_df = editrate_df,
+#                                                                      bg_transition_list = basepos_bc_nontarget_transition_probs,
+#                                                                      bg_transversion_list = basepos_bc_nontarget_transversion_probs,
+#                                                                      bg_insertion_list = basepos_bc_nontarget_insertion_probs,
+#                                                                      bg_deletion_list = basepos_bc_nontarget_deletion_probs,
+#                                                                      target_transition_list = basepos_bc_target_transition_probs,
+#                                                                      target_transversion_list = basepos_bc_target_transversion_probs,
+#                                                                      target_insertion_list = basepos_bc_target_insertion_probs,
+#                                                                      target_deletion_list = basepos_bc_target_deletion_probs,
+#                                                                      prob_sub_mat = bc_sub_prob_mat,
+#                                                                      timepoint_for_label = timepoint,
+#                                                                      urid = unique_run_id,
+#                                                                      cell_num = x))
+#                                                                      # force_all_transversions = force_all_transversions))
+#                                    })
+#   # print('made it here after bc')
+#     # cat('\nmade it past perform_all_bc_mutations\n', file = 'no_strings.txt', append = TRUE)
+#   # }
+# 
+# 
+#   bc_profiles[(length(bc_profiles)-num_cells_to_mutate +1): length(bc_profiles)] <- mutated_bc_profiles
+# 
+#   bc_end_time <- Sys.time()
+# 
+#   bc_mutation_time <- difftime(bc_end_time, bc_start_time, units = 'secs')
+# 
+#   bc_times <- c(bc_times, bc_mutation_time)
+# 
+#   return_list <- list('mt_profiles' = mt_profiles,
+#                       'bc_profiles' = bc_profiles,
+#                       'mt_times' = mt_times,
+#                       'bc_times' = bc_times,
+#                       'parents' = parents)
+#   return(return_list)
+# }
+############################### old func 3/25
 
 # list_of_lists <- list(`1` = list('G' = 0.2),
 #                       `2` = list('G' = 0.2))
@@ -2970,9 +3209,10 @@ multi_core_func <- function(mt_profiles, bc_profiles, mt_times, bc_times, parent
 # 
 # 10**(-1*(3-1))*(2-4)
 
+################# want to get rid of 3/27 but can't yet
 create_sim_arglist <- function(constant_params, hot_or_cold = 'cold', starting_mt_profiles = NULL,
                                starting_bc_profiles = NULL, time_vec_mt = NULL, time_vec_bc = NULL,
-                               vec_of_parents = NULL){
+                               vec_of_parents = NULL, cell_population = NULL){
   if(hot_or_cold == 'cold'){
     constant_params[['cold_startup']] <- TRUE
   } else{
@@ -2983,33 +3223,41 @@ create_sim_arglist <- function(constant_params, hot_or_cold = 'cold', starting_m
   constant_params[['sim_time_vec_mt']] <- time_vec_mt
   constant_params[['sim_time_vec_bc']] <- time_vec_bc
   constant_params[['parent_vec']] <- vec_of_parents
-  
+  constant_params[['cell_population']] <- cell_population
+
   return(constant_params)
 }
+################# want to get rid of 3/27 but can't yet
 
 const_sim_arglist <- list(num_clusters = input_args$num_cores, 
                           init_pop_size = input_args$num_init_cells,
                           sim_length = max(sim_length_stopping_points),
-                          cell_cycle_length = input_args$cell_cycle_length,
+                          # cell_cycle_length = input_args$cell_cycle_length,
+                          cell_type_cell_cycle_length = cell_type_cell_cycle_length,
                           num_rows_mt = max(poss_num_mito_genomes),
                           num_cols_mt = input_args$mito_genome_length,
                           num_rows_bc = max(poss_num_bc_integrations),
                           num_cols_bc = input_args$bc_length,
-                          time_inc = input_args$time_inc,
-                          basepos_bc_nontarget_transition_probs = basepos_bc_nontarget_transition_probs,
-                          basepos_bc_nontarget_transversion_probs = basepos_bc_nontarget_transversion_probs,
-                          basepos_bc_nontarget_insertion_probs = basepos_bc_nontarget_insertion_probs,
-                          basepos_bc_nontarget_deletion_probs = basepos_bc_nontarget_deletion_probs,
-                          basepos_mt_nontarget_transition_probs = basepos_mt_nontarget_transition_probs,
-                          basepos_mt_nontarget_transversion_probs = basepos_mt_nontarget_transversion_probs,
-                          basepos_mt_nontarget_insertion_probs = basepos_mt_nontarget_insertion_probs,
-                          basepos_mt_nontarget_deletion_probs = basepos_mt_nontarget_deletion_probs,
-                          basepos_bc_target_transition_probs = basepos_bc_target_transition_probs,
-                          basepos_bc_target_transversion_probs = basepos_bc_target_transversion_probs,
-                          basepos_bc_target_insertion_probs = basepos_bc_target_insertion_probs,
-                          basepos_bc_target_deletion_probs = basepos_bc_target_deletion_probs,
-                          mt_sub_prob_mat = mt_sub_prob_mat,
-                          bc_sub_prob_mat = bc_sub_prob_mat,
+                          time_inc = time_inc,
+                          cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs,
+                          cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs,
+                          cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs,
+                          cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
+                          cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs,
+                          cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs,
+                          cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs,
+                          cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs,
+                          cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs,
+                          cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs,
+                          cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs,
+                          cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
+                          cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat,
+                          cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat,
+                          cell_type_death_probs = cell_type_death_probs,
+                          uninduced_tm_list = uninduced_tm_list,
+                          induced_tm_list = induced_tm_list,
+                          differentiation_induction_timepoint = input_args$differentiation_induction_timepoint,
+                          editing_induction_timepoint = input_args$editing_induction_timepoint,
                           # uniform_subs = simulate_uniform_subs,
                           # uniform_indels = simulate_uniform_indels,
                           forced_transversions = force_transversions,
@@ -3017,38 +3265,42 @@ const_sim_arglist <- list(num_clusters = input_args$num_cores,
                           # pos_er_nuc_list = basepos_editrate_nuc_list,
                           custom_savename = custom_savename, 
                           sim_length_stopping_points = sim_length_stopping_points,
-                          jitter_frac = input_args$jitter_fraction,
-                          bc_recovered_ints_df = bc_recovered_ints_df,
-                          mt_recovered_genomes_df = mt_recovered_genomes_df,
-                          downsample_recovered_cells_df = downsample_recovered_cells_df,
+                          # jitter_frac = input_args$jitter_fraction,
+                          cell_type_jitter_frac = cell_type_jitter_frac,
+                          # bc_recovered_ints_df = bc_recovered_ints_df,
+                          # mt_recovered_genomes_df = mt_recovered_genomes_df,
+                          # downsample_recovered_cells_df = downsample_recovered_cells_df,
                           poss_fasta_types = poss_fasta_types,
-                          include_var_pos_fasta = include_var_pos_fasta)
+                          include_var_pos_fasta = include_var_pos_fasta,
+                          founder_cell_type = founder_cell_type)
 cold_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
                                        hot_or_cold = 'cold', 
                                        starting_mt_profiles = NULL,
                                        starting_bc_profiles = NULL, 
                                        time_vec_mt = NULL, 
                                        time_vec_bc = NULL,
-                                       vec_of_parents = NULL)
+                                       vec_of_parents = NULL,
+                                       cell_population = NULL)
 # print('cold_sim_arglist == ')
 # print(cold_sim_arglist)
-zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles),  do.call(setup_sim, cold_sim_arglist))
+# zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles),  do.call(setup_sim, cold_sim_arglist))
+cell_population <- do.call(setup_sim, cold_sim_arglist)
 
 for(i in 1:length(cold_sim_arglist)){
   assign(names(cold_sim_arglist)[i], cold_sim_arglist[[i]], envir = .GlobalEnv)
 }
 
-# find number of cells at each timepoint
-num_cells_each_timepoint <- c(0)
-
-for(val in poss_times){
-  
-  # adjusting for whether a cell division occurred
-  while(val %% cell_cycle_length != 0){
-    val <- val - time_inc
-  }
-  num_cells_each_timepoint <- c(num_cells_each_timepoint, init_pop_size*2^val)
-}
+# # find number of cells at each timepoint
+# num_cells_each_timepoint <- c(0)
+# 
+# for(val in poss_times){
+#   
+#   # adjusting for whether a cell division occurred
+#   while(val %% cell_cycle_length != 0){
+#     val <- val - time_inc
+#   }
+#   num_cells_each_timepoint <- c(num_cells_each_timepoint, init_pop_size*2^val)
+# }
 
 all_processes_at_stopping_point <- function(timept_savename, relative_timepoint, this_endpoint, 
                                             recon_method = tolower(input_args$reconstruction_method)){
@@ -3115,8 +3367,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
   }
   
-  save_mutation_profiles(mt_profiles = mt_profiles,
-                         bc_profiles = bc_profiles)
+  # save_mutation_profiles(mt_profiles = mt_profiles,
+  #                        bc_profiles = bc_profiles)
   
   create_lineage_strings <- function(cell_lineage){
     
@@ -3152,94 +3404,159 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     } 
     return(lineage_strings)
   }
-  lineage_strings <<- create_lineage_strings(cell_lineage)
+  # lineage_strings <<- create_lineage_strings(cell_lineage)
   
   linstring_dir_path <- file.path('output', 'linstrings', unique_run_id)
   if(!dir.exists(linstring_dir_path)){
     dir.create(linstring_dir_path, recursive = TRUE)
   }
   
-  timepoint_linstring_filename <- file.path(linstring_dir_path, paste0('lin_strings_', timept_savename, '.txt'))
+  # timepoint_linstring_filename <- file.path(linstring_dir_path, paste0('lin_strings_', timept_savename, '.txt'))
   
-  write.table(lineage_strings, timepoint_linstring_filename)
-  
-  
+  # write.table(lineage_strings, timepoint_linstring_filename)
   
   
-  create_ground_truth_tree <- function(lineage_strings, save_path, downsample_recovered_cells_df){
-    # so first we have to isolate the lineage strings of interest, which will just be (length(lineage_strings)+1)/2 if there's only one founder cell
-    terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
+  create_ground_truth_tree <- function(cell_population, urid, save_path_stem){
     
-    # split each of the terminal lineage strings into a vector of 1s and 2s, and create matrix where each gen is a column
-    # need factors for downstream conversion to as.phylo
-    terminal_lineage_df <- data.frame(t(sapply(terminal_lineage_strings, function(full_string){
-      splits <- str_split(string = full_string, pattern = '\\.')[[1]]
-      splits <- append(splits, full_string)
-      return(splits)  
-    })), stringsAsFactors = TRUE)
+    # extract all lineage strings, identify the terminal ones, then build a tree
     
-    # write.table(terminal_lineage_df, './terminal_lineage_df_pre.csv')
+    all_lineage_strings <- names(cell_population)
+    terminal_cell_booleans <- sapply(all_lineage_strings, function(cellname){
+      return(cell_population[[cellname]]$terminal)})
     
-    # if there are N columns, N-1 are generation indicators, and Nth is the lineage string
-    gen_colnames <- paste0('Gen', seq(1, ncol(terminal_lineage_df)-1))
+    terminal_node_names <- all_lineage_strings[terminal_cell_booleans]
+    internal_node_names <- all_lineage_strings[!terminal_cell_booleans]
     
-    # last column name will be the original lineage_string
-    terminal_lineage_df_colnames <- append(gen_colnames, 'lineage_string')
-    colnames(terminal_lineage_df) <- terminal_lineage_df_colnames
-    
-    # revert the lineage_string back to character from factor
-    terminal_lineage_df$lineage_string <- as.character(terminal_lineage_df$lineage_string)
-    
-    # create a formula that can be used to specify lineage relationships
-    lineage_formula <- as.formula(paste0('~', paste(colnames(terminal_lineage_df)[1:(ncol(terminal_lineage_df)-1)], collapse = '/')))
-    true_phylo <- ape::as.phylo(lineage_formula, data = terminal_lineage_df)  
-    
-    true_phylo$tip.label <- sort(terminal_lineage_df$lineage_string)
-    #########################
-    # rewriting labels into new format ... 
-    new_labels <- character()
-    for(i in 1:length(true_phylo$tip.label)){
-      # new_lab <- teststr <- '1.1.1.1.1.1.1.2'
-      newlab <- gsub(pattern = '\\.', replacement = '_', x = true_phylo$tip.label[i])
-      new_labels <- append(new_labels, newlab)
-    }
-    true_phylo$tip.label <- new_labels
-    #########################
-    
-    
-    terminal_lineage_strings <- as.character(sapply(terminal_lineage_strings, function(x){
-      return(gsub('\\.', '_', x))
-    }))
-    
-    matching_downsample_df_rows <- which(downsample_recovered_cells_df$num_terminal_cells == length(terminal_lineage_strings))
-    for(rownum in matching_downsample_df_rows){
+    # find the parent of a node (does not rely on parent-daughter relationships in cell_population list)
+    get_parent <- function(x) {
+      parts <- str_split(x, '_')[[1]]
+      if (length(parts) == 1){
+        return(NA) # Root has no parent
+      }
       
-      # raw_cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[[rownum]]
-      # print(paste0('class(raw_cells_recovered_inds) == ', class(raw_cells_recovered_inds)))
-      # print(paste0('raw_cells_recovered_inds[1] == ', raw_cells_recovered_inds[1]))
-      # print(raw_cells_recovered_inds)
-      
-      cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[rownum][[1]]
-      this_recovery_rate <- downsample_recovered_cells_df$cell_recovery_rate[rownum]
-      kept_lineage_strings <- terminal_lineage_strings[cells_recovered_inds]
-      # print(paste0('in ground truth, rownum == ', rownum))
-      # print(paste0('this recovery rate == ', this_recovery_rate))
-      # print('cells_recovered_inds == ')
-      # print(cells_recovered_inds)
-      # print('new labels == ')
-      # print(new_labels)
-      # print('kept_lineage_strings == ')
-      # print(kept_lineage_strings)
-      subset_tree <- keep.tip(true_phylo, kept_lineage_strings)
-      # subset_tree <- keep.tip(true_phylo, cells_recovered_inds)
-      
-      subset_cells_savename <- gsub(pattern = '(.*)(\\.newick)$', replacement = paste0('\\1_cell_rec_rate_', this_recovery_rate, '\\2'), x = save_path)
-      
-      write.tree(subset_tree, file = subset_cells_savename)
+      # trim off the last _#
+      return(paste(parts[-length(parts)], collapse = "_"))
     }
     
-    return(true_phylo)
+    # Create an edge list
+    edges <- as.data.frame(do.call(rbind, lapply(all_lineage_strings, function(child) {
+      parent <- get_parent(child)
+      if (!is.na(parent)){
+        return(c(parent, child))
+      }
+      return(NULL)
+    })))
+    
+    colnames(edges) <- c('parent', 'child')
+    
+    node_map <- setNames(
+      c(seq_along(terminal_node_names), (length(terminal_node_names) + 1):length(all_lineage_strings)),
+      c(terminal_node_names, internal_node_names)
+    )
+    
+    # convert edge list to numeric
+    edge_list_numeric <- cbind(
+      parent = node_map[edges$parent],
+      child  = node_map[edges$child]
+    )
+    
+    # Create the phylo object
+    tree <- list(
+      edge = edge_list_numeric,
+      tip.label = terminal_node_names,  # Leaves are nodes with no children
+      Nnode = length(internal_node_names)  # Count of internal nodes
+    )
+    
+    class(tree) <- 'phylo'
+    
+    # subset_cells_savename <- gsub(pattern = '(.*)(\\.newick)$', replacement = paste0('\\1_cell_rec_rate_', this_recovery_rate, '\\2'), x = save_path)
+    
+    write.tree(tree, file = file.path('output', 'processed_newicks', urid, paste0(save_path_stem, '.newick')))
+    
+    return(tree)
+  }  
+  # ##################### old logic 3/26
+  # create_ground_truth_tree <- function(lineage_strings, save_path, downsample_recovered_cells_df){
+  #   # so first we have to isolate the lineage strings of interest, which will just be (length(lineage_strings)+1)/2 if there's only one founder cell
+  #   terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
+  #   
+  #   # split each of the terminal lineage strings into a vector of 1s and 2s, and create matrix where each gen is a column
+  #   # need factors for downstream conversion to as.phylo
+  #   terminal_lineage_df <- data.frame(t(sapply(terminal_lineage_strings, function(full_string){
+  #     splits <- str_split(string = full_string, pattern = '\\.')[[1]]
+  #     splits <- append(splits, full_string)
+  #     return(splits)  
+  #   })), stringsAsFactors = TRUE)
+  #   
+  #   # write.table(terminal_lineage_df, './terminal_lineage_df_pre.csv')
+  #   
+  #   # if there are N columns, N-1 are generation indicators, and Nth is the lineage string
+  #   gen_colnames <- paste0('Gen', seq(1, ncol(terminal_lineage_df)-1))
+  #   
+  #   # last column name will be the original lineage_string
+  #   terminal_lineage_df_colnames <- append(gen_colnames, 'lineage_string')
+  #   colnames(terminal_lineage_df) <- terminal_lineage_df_colnames
+  #   
+  #   # revert the lineage_string back to character from factor
+  #   terminal_lineage_df$lineage_string <- as.character(terminal_lineage_df$lineage_string)
+  #   
+  #   # create a formula that can be used to specify lineage relationships
+  #   lineage_formula <- as.formula(paste0('~', paste(colnames(terminal_lineage_df)[1:(ncol(terminal_lineage_df)-1)], collapse = '/')))
+  #   true_phylo <- ape::as.phylo(lineage_formula, data = terminal_lineage_df)  
+  #   
+  #   true_phylo$tip.label <- sort(terminal_lineage_df$lineage_string)
+  #   #########################
+  #   # rewriting labels into new format ... 
+  #   new_labels <- character()
+  #   for(i in 1:length(true_phylo$tip.label)){
+  #     # new_lab <- teststr <- '1.1.1.1.1.1.1.2'
+  #     newlab <- gsub(pattern = '\\.', replacement = '_', x = true_phylo$tip.label[i])
+  #     new_labels <- append(new_labels, newlab)
+  #   }
+  #   true_phylo$tip.label <- new_labels
+  #   #########################
+  #   
+  #   
+  #   terminal_lineage_strings <- as.character(sapply(terminal_lineage_strings, function(x){
+  #     return(gsub('\\.', '_', x))
+  #   }))
+  #   
+  #   matching_downsample_df_rows <- which(downsample_recovered_cells_df$num_terminal_cells == length(terminal_lineage_strings))
+  #   for(rownum in matching_downsample_df_rows){
+  #     
+  #     # raw_cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[[rownum]]
+  #     # print(paste0('class(raw_cells_recovered_inds) == ', class(raw_cells_recovered_inds)))
+  #     # print(paste0('raw_cells_recovered_inds[1] == ', raw_cells_recovered_inds[1]))
+  #     # print(raw_cells_recovered_inds)
+  #     
+  #     cells_recovered_inds <- downsample_recovered_cells_df$which_cells_recovered[rownum][[1]]
+  #     this_recovery_rate <- downsample_recovered_cells_df$cell_recovery_rate[rownum]
+  #     kept_lineage_strings <- terminal_lineage_strings[cells_recovered_inds]
+  #     # print(paste0('in ground truth, rownum == ', rownum))
+  #     # print(paste0('this recovery rate == ', this_recovery_rate))
+  #     # print('cells_recovered_inds == ')
+  #     # print(cells_recovered_inds)
+  #     # print('new labels == ')
+  #     # print(new_labels)
+  #     # print('kept_lineage_strings == ')
+  #     # print(kept_lineage_strings)
+  #     subset_tree <- keep.tip(true_phylo, kept_lineage_strings)
+  #     # subset_tree <- keep.tip(true_phylo, cells_recovered_inds)
+  #     
+  #     subset_cells_savename <- gsub(pattern = '(.*)(\\.newick)$', replacement = paste0('\\1_cell_rec_rate_', this_recovery_rate, '\\2'), x = save_path)
+  #     
+  #     write.tree(subset_tree, file = subset_cells_savename)
+  #   }
+  #   
+  #   return(true_phylo)
+  # }
+  # ################### old logic 3/26
+  
+  if(!dir.exists(file.path('output', 'cell_populations'))){
+    dir.create(file.path('output', 'cell_populations'), recursive = TRUE)
   }
+  saveRDS(cell_population, file.path('output', 'cell_populations', paste0('cell_population_', timept_savename, '.rds')))
+  
   
   # create processed_newicks dir if it doesn't already exist
   if(!dir.exists(file.path('output', 'processed_newicks', unique_run_id))){
@@ -3247,10 +3564,14 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   }
   
   print('Writing ground truth tree for this timepoint ... ')
-  this_timepoint_ground_truth_tree <- create_ground_truth_tree(lineage_strings = lineage_strings, 
-                                                               save_path = file.path('output', 'processed_newicks', unique_run_id, 
-                                                                                     paste0('ground_truth_tree_', timept_savename, '.newick')),
-                                                               downsample_recovered_cells_df = downsample_recovered_cells_df)
+  # this_timepoint_ground_truth_tree <- create_ground_truth_tree(lineage_strings = lineage_strings, 
+  #                                                              save_path = file.path('output', 'processed_newicks', unique_run_id, 
+  #                                                                                    paste0('ground_truth_tree_', timept_savename, '.newick')),
+  #                                                              downsample_recovered_cells_df = downsample_recovered_cells_df)
+  this_timepoint_ground_truth_tree <- create_ground_truth_tree(cell_population = cell_population, 
+                                                               save_path_stem = paste0('ground_truth_tree_', timept_savename),
+                                                               urid = unique_run_id)
+  
   
   # cat('\npast save_mutation_profiles()\n', file = 'no_strings.txt', append = TRUE)
   
@@ -3317,32 +3638,60 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   if(recon_method == 'fasta_only'){
     
     
+    
       
-    non_par_create_sublist_profiles <- function(mut_profiles,  
-                                                which_integrations){ 
+    # non_par_create_sublist_profiles <- function(mut_profiles,  
+    #                                             which_integrations){ 
+    #   
+    #   created_list <- lapply(seq(1, length(mut_profiles)), function(mut_mat_num){
+    #     mut_mat <- mut_profiles[[mut_mat_num]][which_integrations, ]
+    #   })
+    #   
+    #   return(created_list)
+    # }
+    
+    make_fasta_files_new <- function(urid, profiles_list, bc_or_mt, fasta_savename_stem, num_ints_recovered){
       
-      # print(paste0('in non par, dim(profiles[[1]]) == ', dim(mut_profiles[[1]])))
-      # print(paste0('in non par, class(profiles[[1]]) == ', class(mut_profiles[[1]])))
-      # print(paste0('in non par, which_integrations == ', which_integrations))
-      # print(paste0('in non par, length(mut_profiles) == ', length(mut_profiles)))
+      # write all the way up the path to the reference seq subdir
+      if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
+        dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
+      }
       
-      created_list <- lapply(seq(1, length(mut_profiles)), function(mut_mat_num){
-        mut_mat <- mut_profiles[[mut_mat_num]][which_integrations, ]
-      })
+      terminal_lineage_strings <- names(profiles_list)
       
-      return(created_list)
+      if(bc_or_mt == 'bc'){
+        this_ref_seq <- baseline_seq_nucs_bc
+      }
+      else if(bc_or_mt == 'mt'){
+        this_ref_seq <- baseline_seq_nucs_mt
+      }
+      
+      
+      
+      fasta_savename <- file.path('output', 'processed_fastas', urid,
+                                  paste0(fasta_savename_stem, '.fasta'))
+      
+      print(paste0('in make fasta files new, num_ints_recovered == ', num_ints_recovered))
+      mut_profiles_to_fasta(profiles = profiles_list,
+                            terminal_lineage_strings = terminal_lineage_strings,
+                            include_var_pos_fasta = include_var_pos_fasta,
+                            # downsample_recovered_cells_df = downsample_recovered_cells_df,
+                            fasta_type = poss_fasta_types,
+                            number_of_integrations = num_ints_recovered,
+                            reference_seq = this_ref_seq,
+                            output_fasta_path = fasta_savename,
+                            num_cores = input_args$num_cores,
+                            run_id = urid,
+                            bc_or_mt = bc_or_mt)
+      print(paste0(bc_or_mt, ' fasta written'))
+      return()
     }
     
-    create_modified_profile_lists <- function(mito_profiles,
-                                              barcode_profiles,
+    create_modified_profile_lists <- function(cell_population,
                                               bc_integrations,
                                               mito_genomes,
                                               mito_recovery_probs,
                                               bc_recovery_probs,
-                                              mt_recovered_genomes_df, 
-                                              bc_recovered_ints_df,
-                                              which_linstrings = lineage_strings,
-                                              num_cores = input_args$num_cores,
                                               this_timept_savename = timept_savename){
       
       # cat(paste0('\nbc_recovery_probs == ', bc_recovery_probs, '\n'), file = 'no_strings.txt', append = TRUE)
@@ -3351,71 +3700,252 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
       
       if(!dir.exists(file.path('output', 'processed_lists', unique_run_id))){
         dir.create(file.path('output', 'processed_lists', unique_run_id), recursive = TRUE)
+      }
+      
+      print('Creating downsampled profile lists ... ')
+      
+      # get all possible combinations of cell sampling fracs across cell types
+      all_sampling_fracs <- expand.grid(cell_type_poss_sampling_fracs)
+      colnames(all_sampling_fracs) <- names(cell_type_poss_sampling_fracs)
+      # saveRDS(all_sampling_fracs, './test_all_sampling_fracs.rds')
+      # print('colnames(all_sampling_fracs) == ')
+      # print(colnames(all_sampling_fracs))
+      
+      # iterate through these cell sampling frac combos
+      for(i in seq_len(nrow(all_sampling_fracs))){
+        
+        # generate a name that includes the sampling rate for each cell type  
+        # cell type will be separated from its sampling frac by -
+        # cell types will be separated from one another by _
+        this_sampling_name <- paste(paste(colnames(all_sampling_fracs), as.numeric(unlist(all_sampling_fracs[i, ])), sep = '-'), collapse = '_')
+        
+        # make the downsampled terminal cell population, according to terminal, alive, and 
+        # cell type-specific sampling frac for this iteration
+        terminal_cell_population_inds <- lapply(cell_population, function(cell){
+          if((cell$terminal == FALSE) | (cell$alive == FALSE)){
+            return(FALSE)
+          }
+          this_cell_type <- cell$celltype
+          
+          # use htis particular iteration's combo of cell type recovery probs
+          this_cell_recovery_prob <- as.numeric(all_sampling_fracs[[this_cell_type]][i])
+          # print(paste0('this_cell_recovery_prob == ', this_cell_recovery_prob))
+          # print(paste0('class(this_cell_recovery_prob) == ', class(this_cell_recovery_prob)))
+          this_cell_recovered <- rbinom(n = 1, size = 1, prob = this_cell_recovery_prob)
+          
+          if(this_cell_recovered){
+            return(TRUE)
+          }
+          return(FALSE)
+        })
+        
+        
+        terminal_cell_population_names <- names(cell_population)[which(terminal_cell_population_inds == TRUE)]
+        terminal_cell_population <- cell_population[terminal_cell_population_names]
+        
+        # write ground truth tree for this downsampled cell population
+        
+      
+        for(num_bc_ints in bc_integrations){
+          
+          for(bc_int_recovery_prob in bc_recovery_probs){
+            
+            print(paste0('bc_int_recovery_prob == ', bc_int_recovery_prob))
+            
+            # for each terminal cell in the population, determine which integration(s) are recovered
+            # terminal_cell_recovered_inds <- lapply(terminal_cell_population_names, function(cellname){
+            terminal_cell_dropout_inds <- lapply(terminal_cell_population_names, function(cellname){
+              
+              # num_ints_recovered <- ceiling(num_bc_ints * bc_int_recovery_prob)
+              num_ints_recovered <- rbinom(n = 1, size = num_bc_ints, prob = bc_int_recovery_prob)
+              which_ints_recovered <- sort(sample(seq(1, num_bc_ints), size = num_ints_recovered,
+                                                  replace = FALSE))
+              which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
+              print('which_ints_dropped_out')
+              print(which_ints_dropped_out)
+              # return(which_ints_recovered)
+              return(which_ints_dropped_out)
+            })
+            
+            this_combo_name <- paste0('processed_bc_list_', num_bc_ints, 
+                                      '_integrations_recovery_prob_', bc_int_recovery_prob, 
+                                      '_sampling_', this_sampling_name, '_',
+                                      this_timept_savename)
+            bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
+            
+            these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
+              print('dropout inds')
+              print(terminal_cell_dropout_inds[[cellname]])
+              # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles[terminal_cell_recovered_inds[[cellname]], ]
+              mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
+              dropped_out_inds <- terminal_cell_dropout_inds[[cellname]]
+              if(length(dropped_out_inds) > 0){
+                mut_mat[dropped_out_inds, ] <- -1
+              }
+              
+              return(mut_mat)
+            })
+            
+            
+            print(paste0('bc_list_assign_name == ', bc_list_assign_name))
+            saveRDS(these_subsetted_profiles, bc_list_assign_name)
+            
+            # immediately write the fasta (IN THE FOR LOOP)
+            make_fasta_files_new(urid = unique_run_id, 
+                                 profiles_list = these_subsetted_profiles, 
+                                 bc_or_mt = 'bc', 
+                                 fasta_savename_stem = this_combo_name,
+                                 num_ints_recovered = num_bc_ints)
+            
+            
+            
+          }
+        }
+        
+        
+        
+        for(num_mito_genomes in mito_genomes){
+          
+          for(mito_recovery_prob in mito_recovery_probs){
+            
+            # for each terminal cell in the population, determine which integration(s) are recovered
+            # terminal_cell_recovered_genomes <- lapply(terminal_cell_population_names, function(cellname){
+            terminal_cell_dropout_inds <- lapply(terminal_cell_population_names, function(cellname){
+              
+              # num_ints_recovered <- ceiling(num_mito_genomes * mito_recovery_prob)
+              num_ints_recovered <- rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob)
+              which_ints_recovered <- sort(sample(seq(1, num_mito_genomes), size = num_ints_recovered,
+                                                  replace = FALSE))
+              which_ints_dropped_out <- setdiff(seq(1, num_mito_genomes), which_ints_recovered)
+              return(which_ints_dropped_out)
+              # return(which_ints_recovered)
+            })
+            
+            this_combo_name <- paste0('processed_bc_list_', num_mito_genomes, 
+                                      '_integrations_recovery_prob_', mito_recovery_prob, 
+                                      '_sampling_', this_sampling_name, '_',
+                                      this_timept_savename)
+            
+            mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
+            
+            these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
+              # mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles[terminal_cell_recovered_genomes[[cellname]], ]
+              mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles
+              dropped_out_inds <- terminal_cell_dropout_inds[[cellname]]
+              if(length(dropped_out_inds) > 0){
+                mut_mat[dropped_out_inds, ] <- -1
+              }
+              return(mut_mat)
+            })
+            
+            print(paste0('mt_list_assign_name == ', mt_list_assign_name))
+            saveRDS(these_subsetted_profiles, mt_list_assign_name)
+            
+            # immediately write the fasta (IN THE FOR LOOP)
+            make_fasta_files_new(urid = unique_run_id, 
+                                 profiles_list = these_subsetted_profiles, 
+                                 bc_or_mt = 'mt', 
+                                 fasta_savename_stem = this_combo_name,
+                                 num_ints_recovered = num_mito_genomes)
+            
+          }
+          
+          
+        }
+      }
+    }
+    
+    write_reference_fastas <- function(bc_or_mt,
+                                       reference_seq,
+                                       max_number_of_integrations,
+                                       run_id){
+      # regardless of whether reference seq is supplied earlier or generated here, must make compatible with number of integrations 
+      reference_seq <- rep(reference_seq, max_number_of_integrations)
+      
+      if(!dir.exists(file.path('output', 'processed_fastas', run_id, 'reference_seqs'))){
+        dir.create(file.path('output', 'processed_fastas', run_id, 'reference_seqs'), recursive = TRUE)
+      }
+      if(bc_or_mt == 'bc'){
+        write.fasta(reference_seq, names = c('REFERENCE'), file.out = file.path('output', 'processed_fastas', run_id, 'reference_seqs', 
+                                                                                paste0(bc_or_mt, '_', max_number_of_integrations, '_integrations_reference.fasta')))
+      } else if(bc_or_mt == 'mt'){
+        write.fasta(reference_seq, names = c('REFERENCE'), file.out = file.path('output', 'processed_fastas', run_id, 'reference_seqs', 
+                                                                                paste0(bc_or_mt, '_', max_number_of_integrations, '_genomes_reference.fasta')))
       }  
+    }
+    
+    
+    
+ 
+    
+      
+      
       
       # cat(paste0('\nbc_recovery_probs == \n'), file = 'no_strings.txt', append = TRUE)
       # cat(bc_recovery_probs, file = 'no_strings.txt', append = TRUE)
       # print(paste0('Now processing bc mutation profile list ...'))
       
-      print('Downsampling bc mutation profile list ... ')
+      
       # print(paste0('class(bc_recovered_ints_df) == ', class(bc_recovered_ints_df)))
       # print(paste0('nrow(bc_recovered_ints_df) == ', nrow(bc_recovered_ints_df)))
-      for(rownum in seq_len(nrow(bc_recovered_ints_df))){
-        
-        these_ints <- bc_recovered_ints_df$which_ints_recovered[rownum][[1]]
-        # print(paste0('these_ints == ', these_ints))
-        
-        this_recovery_rate <- bc_recovered_ints_df$recovery_rate[rownum]
-        # print(paste0('this_recovery_rate == ', this_recovery_rate))
-        
-        this_num_recovered_ints <- bc_recovered_ints_df$num_recovered_ints[rownum]
-        # print(paste0('this_num_recovered_ints == ', this_num_recovered_ints))
-        
-        
-        # nonparallel_time <- 
-        bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_bc_list_', this_num_recovered_ints, 
-                                                                                            '_integrations_recovery_prob_', this_recovery_rate, 
-                                                                                            '_', this_timept_savename, '.rds'))
-        
-        saveRDS(object = non_par_create_sublist_profiles(mut_profiles = barcode_profiles,
-                                                         which_integrations = these_ints),
-                file = bc_list_assign_name)
-      }
-      
-      print('Downsampling mt mutation profile list ... ')
-      # print(paste0('class(mt_recovered_genomes_df) == ', class(mt_recovered_genomes_df)))
-      # print(paste0('nrow(mt_recovered_genomes_df) == ', nrow(mt_recovered_genomes_df)))
-      
-      
-      for(rownum in seq_len(nrow(mt_recovered_genomes_df))){
-        
-        # saveRDS(mito_profiles, './troubleshoot_mito_profiles.rds')
-        # 
-        # print(paste0('class(mito_profiles[[1]] == ', class(mito_profiles[[1]])))
-        # print(paste0('length(mito_profiles) == ', length(mito_profiles)))
-        # print(paste0('dim(mito_profiles[[1]]) == ', dim(mito_profiles[[1]])))
-        
-        
-        these_genomes <- mt_recovered_genomes_df$which_ints_recovered[rownum][[1]]
-        # print(paste0('these_genomes == ', these_genomes))
-        
-        this_recovery_rate <- mt_recovered_genomes_df$recovery_rate[rownum]
-        # print(paste0('this_recovery_rate == ', this_recovery_rate))
-        
-        this_num_recovered_genomes <- mt_recovered_genomes_df$num_recovered_ints[rownum]
-        # print(paste0('this_num_recovered_genomes == ', this_num_recovered_genomes))
-        
-        mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_mt_list_', this_num_recovered_genomes, 
-                                                                                            '_copies_recovery_prob_', this_recovery_rate, 
-                                                                                            '_', this_timept_savename, '.rds'))
-        
-        
-        saveRDS(object = non_par_create_sublist_profiles(mut_profiles = mito_profiles,
-                                                         which_integrations = these_genomes),
-                file = mt_list_assign_name)
-        # print('saved RDS object for mt')
-      }
-    }
+      ######################### old approach 3/25
+      # for(rownum in seq_len(nrow(bc_recovered_ints_df))){
+      #   
+      #   these_ints <- bc_recovered_ints_df$which_ints_recovered[rownum][[1]]
+      #   # print(paste0('these_ints == ', these_ints))
+      #   
+      #   this_recovery_rate <- bc_recovered_ints_df$recovery_rate[rownum]
+      #   # print(paste0('this_recovery_rate == ', this_recovery_rate))
+      #   
+      #   this_num_recovered_ints <- bc_recovered_ints_df$num_recovered_ints[rownum]
+      #   # print(paste0('this_num_recovered_ints == ', this_num_recovered_ints))
+      #   
+      #   
+      #   # nonparallel_time <- 
+      #   bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_bc_list_', this_num_recovered_ints, 
+      #                                                                                       '_integrations_recovery_prob_', this_recovery_rate, 
+      #                                                                                       '_', this_timept_savename, '.rds'))
+      #   
+      #   saveRDS(object = non_par_create_sublist_profiles(mut_profiles = barcode_profiles,
+      #                                                    which_integrations = these_ints),
+      #           file = bc_list_assign_name)
+      # }
+      # 
+      # 
+      # # print(paste0('class(mt_recovered_genomes_df) == ', class(mt_recovered_genomes_df)))
+      # # print(paste0('nrow(mt_recovered_genomes_df) == ', nrow(mt_recovered_genomes_df)))
+      # 
+      # 
+      # for(rownum in seq_len(nrow(mt_recovered_genomes_df))){
+      #   
+      #   # saveRDS(mito_profiles, './troubleshoot_mito_profiles.rds')
+      #   # 
+      #   # print(paste0('class(mito_profiles[[1]] == ', class(mito_profiles[[1]])))
+      #   # print(paste0('length(mito_profiles) == ', length(mito_profiles)))
+      #   # print(paste0('dim(mito_profiles[[1]]) == ', dim(mito_profiles[[1]])))
+      #   
+      #   
+      #   these_genomes <- mt_recovered_genomes_df$which_ints_recovered[rownum][[1]]
+      #   # print(paste0('these_genomes == ', these_genomes))
+      #   
+      #   this_recovery_rate <- mt_recovered_genomes_df$recovery_rate[rownum]
+      #   # print(paste0('this_recovery_rate == ', this_recovery_rate))
+      #   
+      #   this_num_recovered_genomes <- mt_recovered_genomes_df$num_recovered_ints[rownum]
+      #   # print(paste0('this_num_recovered_genomes == ', this_num_recovered_genomes))
+      #   
+      #   mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('processed_mt_list_', this_num_recovered_genomes, 
+      #                                                                                       '_copies_recovery_prob_', this_recovery_rate, 
+      #                                                                                       '_', this_timept_savename, '.rds'))
+      #   
+      #   
+      #   saveRDS(object = non_par_create_sublist_profiles(mut_profiles = mito_profiles,
+      #                                                    which_integrations = these_genomes),
+      #           file = mt_list_assign_name)
+      #   # print('saved RDS object for mt')
+      # }
+      ######################### old approach 3/25
+   
     
     #   for(num_bc_ints in bc_integrations){
     #     print(paste0('Now processing for ', num_bc_ints, ' barcode integrations ...'))
@@ -3500,159 +4030,163 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     #   
     # }
     
-    create_modified_profile_lists(mito_profiles = mt_profiles,
-                                  barcode_profiles = bc_profiles,
+    create_modified_profile_lists(cell_population = cell_population,
                                   bc_integrations = poss_num_bc_integrations,
                                   mito_genomes = poss_num_mito_genomes,
-                                  mt_recovered_genomes_df = mt_recovered_genomes_df,
-                                  bc_recovered_ints_df = bc_recovered_ints_df,
                                   mito_recovery_probs = poss_mt_genome_recovery_probs,
                                   bc_recovery_probs = poss_bc_integration_recovery_probs)
     
-    make_fasta_files_new <- function(urid, this_timept_savename = timept_savename){
-      
-      # write all the way up the path to the reference seq subdir
-      if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
-        dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
-      }
-      
-      
-      # lin_string_path <- file.path('output', 'linstrings', urid)
-      # if(!dir.exists(lin_string_path)){
-      #   dir.create(lin_string_path, recursive = TRUE)
-      # }
-      # write.table(lineage_strings, file.path(lin_string_path, 'lin_strings.txt'))
-      
-      # write.table(lineage_strings, 'these_lin_strings.txt')
-      # write.table(lineage_strings, file.path('output', 'linstrings', urid, ))
-      terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
-      
-      all_processed_list_paths <- list.files(file.path('output', 'processed_lists', urid), full.names = TRUE)
-      current_timepoint <- str_extract(this_timept_savename, '(?<=_time_)[0-9.]+')
-      this_timepoint_paths <- character()
-      for(file_path in all_processed_list_paths){
-        path_time <- str_extract(file_path, '(?<=_time_)[0-9.]+(?=\\.rds)')
-        # print(paste0('path_time == ', path_time))
-        # print(paste0('this_timept_savename == ', this_timept_savename))
-        # print(paste0('current_timepoint == ', current_timepoint))
-        if(as.numeric(current_timepoint) == as.numeric(path_time)){
-          this_timepoint_paths <- append(this_timepoint_paths, file_path)
-        }
-      }
-      
-      # print('this_timepoint_paths == ')
-      # print(this_timepoint_paths)
-      
-      for(list_path in this_timepoint_paths){
-        
-        # 10/11 should print out list_path
-        
-        # print(paste0('list_path == ', list_path))
-        
-        core_name_splits <- stringr::str_split(list_path, pattern = '/')[[1]] # split path on /
-        core_name <- core_name_splits[length(core_name_splits)]
-        core_name <- substr(core_name, 1, nchar(core_name)-4)
-        
-        # is this a bc or an mt sample:
-        bc_or_mt <- str_extract(string = core_name, pattern = '(?<=processed_)(mt|bc)(?=_list)')
-        
-        if(bc_or_mt == 'bc'){
-          this_ref_seq <- baseline_seq_nucs_bc
-        }
-        else if(bc_or_mt == 'mt'){
-          this_ref_seq <- baseline_seq_nucs_mt
-        }
-        
-        # extract number of integrations/genome copies from this list's name:
-        num_ints_copies <- as.integer(str_extract(string = core_name, pattern = '(?<=_list_)\\d+'))
-        
-        # # writing ground truth tree again
-        # print('writing ground truth tree again ... ')
-        # write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
-        
-        fasta_savename <- file.path('output', 'processed_fastas', urid,
-                                    paste0(core_name, '.fasta'))
-        
-        # print(paste0('fasta_savename == ', fasta_savename))
-        
-        if(all(c('terminal', 'all_cells') %in% poss_fasta_types)){
-          poss_fasta_types <- 'both' # this will be an indicator that tells us to do the all_cells workflow first then subset to only include terminal
-        }
-        
-        mut_profiles_to_fasta(all_mut_profiles_path = list_path,
-                              # all_linstrings_path = 'these_lin_strings.txt',
-                              all_linstrings_path = timepoint_linstring_filename,
-                              include_var_pos_fasta = include_var_pos_fasta,
-                              downsample_recovered_cells_df = downsample_recovered_cells_df,
-                              # number_of_integrations = as.integer(bc_int),
-                              fasta_type = poss_fasta_types,
-                              number_of_integrations = num_ints_copies,
-                              reference_seq = this_ref_seq,
-                              # terminal_cells_only = TRUE,
-                              # depth = NULL,
-                              output_fasta_path = fasta_savename,
-                              num_cores = input_args$num_cores,
-                              run_id = urid,
-                              bc_or_mt = bc_or_mt)
-        print(paste0(bc_or_mt, ' fasta written'))
-        
-        # for(fasta_type in poss_fasta_types){
-        #   if(fasta_type == 'terminal'){
-        #     
-        #     
-        #     
-        #   }
-        #   else if(fasta_type == 'all_cells'){
-        #     
-        #     
-        #     if(include_var_pos_fasta){
-        #       
-        #     }
-        #     
-        #   }
-        # }
-        
-        # print('about to call mut_profiles_to_fasta 4742')
-        # i think for now, this will only support one integration value per run. will have to change eventually ...
-        # save mut profile as fasta
-        # mut_profiles_to_fasta(all_mut_profiles_path = list_path,
-        #                       # all_linstrings_path = 'these_lin_strings.txt',
-        #                       all_linstrings_path = timepoint_linstring_filename,
-        #                       include_var_pos_fasta = 
-        #                       # number_of_integrations = as.integer(bc_int),
-        #                       fasta_type = fasta_type,
-        #                       number_of_integrations = num_ints_copies,
-        #                       reference_seq = this_ref_seq,
-        #                       terminal_cells_only = TRUE,
-        #                       depth = NULL,
-        #                       output_fasta_path = fasta_savename,
-        #                       num_cores = input_args$num_cores,
-        #                       run_id = urid)
-        # print('writing all intermediate cells to separate fasta file')
-        # # print('about to call mut_profiles_to_fasta 4756')
-        # # print(paste0('the file we\'re trying to write all cells to: all_cells_', fasta_savename))
-        # mut_profiles_to_fasta(all_mut_profiles_path = list_path,
-        #                       # all_linstrings_path = 'these_lin_strings.txt',
-        #                       all_linstrings_path = timepoint_linstring_filename,
-        #                       # number_of_integrations = as.integer(bc_int),
-        #                       number_of_integrations = num_ints_copies,
-        #                       reference_seq = this_ref_seq,
-        #                       terminal_cells_only = FALSE,
-        #                       depth = 'all_cells',
-        #                       output_fasta_path = fasta_savename,
-        #                       num_cores = input_args$num_cores,
-        #                       run_id = urid)
-        # 
-        # 
-        
-        
-      }
-      
-      return()
-      # quit(save = 'no', status = 0)
+    # write the reference seqs for each provided number of max ints/genomes:
+    for(max_num_bc_ints in poss_num_bc_integrations){
+      write_reference_fastas(bc_or_mt = 'bc',
+                             reference_seq = baseline_seq_nucs_bc,
+                             max_number_of_integrations = max_num_bc_ints,
+                             run_id = unique_run_id)  
     }
+    for(max_num_mt_genomes in poss_num_mito_genomes){
+      write_reference_fastas(bc_or_mt = 'mt',
+                             reference_seq = baseline_seq_nucs_mt,
+                             max_number_of_integrations = max_num_mt_genomes,
+                             run_id = unique_run_id)  
+    }
+    
+    
+    
+    ########################## old 3/25
+    # make_fasta_files_new <- function(urid, this_timept_savename = timept_savename){
+    #   
+    #   # write all the way up the path to the reference seq subdir
+    #   if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
+    #     dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
+    #   }
+    #   
+    #   
+    #   # lin_string_path <- file.path('output', 'linstrings', urid)
+    #   # if(!dir.exists(lin_string_path)){
+    #   #   dir.create(lin_string_path, recursive = TRUE)
+    #   # }
+    #   # write.table(lineage_strings, file.path(lin_string_path, 'lin_strings.txt'))
+    #   
+    #   # write.table(lineage_strings, 'these_lin_strings.txt')
+    #   # write.table(lineage_strings, file.path('output', 'linstrings', urid, ))
+    #   
+    #   
+    #   terminal_lineage_strings <- lineage_strings[((length(lineage_strings) + 1)/2):length(lineage_strings)]
+    #   
+    #   all_processed_list_paths <- list.files(file.path('output', 'processed_lists', urid), full.names = TRUE)
+    #   current_timepoint <- str_extract(this_timept_savename, '(?<=_time_)[0-9.]+')
+    #   this_timepoint_paths <- character()
+    #   for(file_path in all_processed_list_paths){
+    #     path_time <- str_extract(file_path, '(?<=_time_)[0-9.]+(?=\\.rds)')
+    # 
+    #     if(as.numeric(current_timepoint) == as.numeric(path_time)){
+    #       this_timepoint_paths <- append(this_timepoint_paths, file_path)
+    #     }
+    #   }
+    #   
+    #   for(list_path in this_timepoint_paths){
+    #     
+    #     core_name_splits <- stringr::str_split(list_path, pattern = '/')[[1]] # split path on /
+    #     core_name <- core_name_splits[length(core_name_splits)]
+    #     core_name <- substr(core_name, 1, nchar(core_name)-4)
+    #     
+    #     # is this a bc or an mt sample:
+    #     bc_or_mt <- str_extract(string = core_name, pattern = '(?<=processed_)(mt|bc)(?=_list)')
+    #     
+    #     if(bc_or_mt == 'bc'){
+    #       this_ref_seq <- baseline_seq_nucs_bc
+    #     }
+    #     else if(bc_or_mt == 'mt'){
+    #       this_ref_seq <- baseline_seq_nucs_mt
+    #     }
+    #     
+    #     # extract number of integrations/genome copies from this list's name:
+    #     num_ints_copies <- as.integer(str_extract(string = core_name, pattern = '(?<=_list_)\\d+'))
+    #     
+    #     # # writing ground truth tree again
+    #     # print('writing ground truth tree again ... ')
+    #     # write.tree(true_phylo, file.path('output', 'processed_newicks', urid, 'ground_truth_tree.newick'))
+    #     
+    #     fasta_savename <- file.path('output', 'processed_fastas', urid,
+    #                                 paste0(core_name, '.fasta'))
+    #     
+    #     # print(paste0('fasta_savename == ', fasta_savename))
+    #     
+    #     if(all(c('terminal', 'all_cells') %in% poss_fasta_types)){
+    #       poss_fasta_types <- 'both' # this will be an indicator that tells us to do the all_cells workflow first then subset to only include terminal
+    #     }
+    #     
+    #     mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+    #                           all_linstrings_path = timepoint_linstring_filename,
+    #                           include_var_pos_fasta = include_var_pos_fasta,
+    #                           downsample_recovered_cells_df = downsample_recovered_cells_df,
+    #                           fasta_type = poss_fasta_types,
+    #                           number_of_integrations = num_ints_copies,
+    #                           reference_seq = this_ref_seq,
+    #                           output_fasta_path = fasta_savename,
+    #                           num_cores = input_args$num_cores,
+    #                           run_id = urid,
+    #                           bc_or_mt = bc_or_mt)
+    #     print(paste0(bc_or_mt, ' fasta written'))
+    #     
+    #     # for(fasta_type in poss_fasta_types){
+    #     #   if(fasta_type == 'terminal'){
+    #     #     
+    #     #     
+    #     #     
+    #     #   }
+    #     #   else if(fasta_type == 'all_cells'){
+    #     #     
+    #     #     
+    #     #     if(include_var_pos_fasta){
+    #     #       
+    #     #     }
+    #     #     
+    #     #   }
+    #     # }
+    #     
+    #     # print('about to call mut_profiles_to_fasta 4742')
+    #     # i think for now, this will only support one integration value per run. will have to change eventually ...
+    #     # save mut profile as fasta
+    #     # mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+    #     #                       # all_linstrings_path = 'these_lin_strings.txt',
+    #     #                       all_linstrings_path = timepoint_linstring_filename,
+    #     #                       include_var_pos_fasta = 
+    #     #                       # number_of_integrations = as.integer(bc_int),
+    #     #                       fasta_type = fasta_type,
+    #     #                       number_of_integrations = num_ints_copies,
+    #     #                       reference_seq = this_ref_seq,
+    #     #                       terminal_cells_only = TRUE,
+    #     #                       depth = NULL,
+    #     #                       output_fasta_path = fasta_savename,
+    #     #                       num_cores = input_args$num_cores,
+    #     #                       run_id = urid)
+    #     # print('writing all intermediate cells to separate fasta file')
+    #     # # print('about to call mut_profiles_to_fasta 4756')
+    #     # # print(paste0('the file we\'re trying to write all cells to: all_cells_', fasta_savename))
+    #     # mut_profiles_to_fasta(all_mut_profiles_path = list_path,
+    #     #                       # all_linstrings_path = 'these_lin_strings.txt',
+    #     #                       all_linstrings_path = timepoint_linstring_filename,
+    #     #                       # number_of_integrations = as.integer(bc_int),
+    #     #                       number_of_integrations = num_ints_copies,
+    #     #                       reference_seq = this_ref_seq,
+    #     #                       terminal_cells_only = FALSE,
+    #     #                       depth = 'all_cells',
+    #     #                       output_fasta_path = fasta_savename,
+    #     #                       num_cores = input_args$num_cores,
+    #     #                       run_id = urid)
+    #     # 
+    #     # 
+    #     
+    #     
+    #   }
+    #   
+    #   return()
+    #   # quit(save = 'no', status = 0)
+    # }
+    # ########################## old 3/25
     # compare_all_trees_beast(unique_run_id)
-    make_fasta_files_new(unique_run_id)
+    # make_fasta_files_new(unique_run_id)
   }
   
   else if (recon_method == 'score'){
@@ -5430,72 +5964,47 @@ for(t in 1:length(poss_times)){
   # has to be something like: for(t in 1:length(which.min(sim_lengths_with_breakpoints)))
   # could also make this into a while loop
   
-  cells_completed <- sum(num_cells_each_timepoint[1:t]) # should work since padded left side with zero
+  if(poss_times[t] > 0){
+    # cells_completed <- sum(num_cells_each_timepoint[1:t]) # should work since padded left side with zero
+    
+    # cat(paste0('\nNow simulating timepoint t = ', poss_times[t],'\n'), file = 'no_strings.txt', append = TRUE)
+    
+    # print(paste0('Now simulating timepoint t = ', poss_times[t], ': reaching progress ... ', 
+    #              round(100*sum(num_cells_each_timepoint[1:(t+cell_cycle_length)])/sum(num_cells_each_timepoint)), 
+    #              '%'))
+    print(paste0('Now simulating timepoint t = ', poss_times[t], ' ... '))
+    
+    # print('pos_mt_nontarget_transition_probs')
+    # print(pos_mt_nontarget_transition_probs)
+    cell_population <- multi_core_func(timepoint = poss_times[t], 
+                                       sim_length = sim_length,
+                                        cell_population = cell_population,
+                                        cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs, 
+                                        cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs, 
+                                        cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs, 
+                                        cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
+                                        cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs, 
+                                        cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs, 
+                                        cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs, 
+                                        cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs, 
+                                        cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs, 
+                                        cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs, 
+                                        cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs, 
+                                        cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
+                                        cell_type_death_probs = cell_type_death_probs,
+                                        cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat, 
+                                        cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat, 
+                                        cell_type_jitter_frac = cell_type_jitter_frac, 
+                                        uninduced_tm_list = uninduced_tm_list,
+                                        induced_tm_list = induced_tm_list,
+                                       differentiation_induction_timepoint = differentiation_induction_timepoint,
+                                       editing_induction_timepoint = editing_induction_timepoint,
+                                        unique_run_id = unique_run_id)
+
+  }
   
-  # cat(paste0('\nNow simulating timepoint t = ', poss_times[t],'\n'), file = 'no_strings.txt', append = TRUE)
   
-  print(paste0('Now simulating timepoint t = ', poss_times[t], ': reaching progress ... ', 
-               round(100*sum(num_cells_each_timepoint[1:(t+cell_cycle_length)])/sum(num_cells_each_timepoint)), 
-               '%'))
-  
-  # print('pos_mt_nontarget_transition_probs')
-  # print(pos_mt_nontarget_transition_probs)
-  
-  zeallot::`%<-%`(c(mt_profiles, bc_profiles, 
-                    sim_time_vec_mt, sim_time_vec_bc, cell_lineage), multi_core_func(mt_profiles = mt_profiles,
-                                                                                         bc_profiles = bc_profiles,
-                                                                                         mt_times = sim_time_vec_mt,
-                                                                                         bc_times = sim_time_vec_bc,
-                                                                                         parents = cell_lineage,
-                                                                                         timepoint = poss_times[t],
-                                                                                         # uniform_editing_indels = uniform_indels,
-                                                                                         # uniform_editing_subs = uniform_subs,
-                                                                                         basepos_bc_nontarget_transition_probs = basepos_bc_nontarget_transition_probs,
-                                                                                         basepos_bc_nontarget_transversion_probs = basepos_bc_nontarget_transversion_probs,
-                                                                                         basepos_bc_nontarget_insertion_probs = basepos_bc_nontarget_insertion_probs,
-                                                                                         basepos_bc_nontarget_deletion_probs = basepos_bc_nontarget_deletion_probs,
-                                                                                         basepos_mt_nontarget_transition_probs = basepos_mt_nontarget_transition_probs,
-                                                                                         basepos_mt_nontarget_transversion_probs = basepos_mt_nontarget_transversion_probs,
-                                                                                         basepos_mt_nontarget_insertion_probs = basepos_mt_nontarget_insertion_probs,
-                                                                                         basepos_mt_nontarget_deletion_probs = basepos_mt_nontarget_deletion_probs,
-                                                                                         basepos_bc_target_transition_probs = basepos_bc_target_transition_probs,
-                                                                                         basepos_bc_target_transversion_probs = basepos_bc_target_transversion_probs,
-                                                                                         basepos_bc_target_insertion_probs = basepos_bc_target_insertion_probs,
-                                                                                         basepos_bc_target_deletion_probs = basepos_bc_target_deletion_probs,
-                                                                                         mt_sub_prob_mat = mt_sub_prob_mat,
-                                                                                         bc_sub_prob_mat = bc_sub_prob_mat,
-                                                                                         jitter_fraction = jitter_frac,
-                                                                                         unique_run_id = unique_run_id
-                        ))
-      # c(mt_profiles, bc_profiles, 
-  #   sim_time_vec_mt, sim_time_vec_bc, cell_lineage) %<-% multi_core_func(mt_profiles = mt_profiles,
-  #                                                                        bc_profiles = bc_profiles,
-  #                                                                        mt_times = sim_time_vec_mt,
-  #                                                                        bc_times = sim_time_vec_bc,
-  #                                                                        parents = cell_lineage,
-  #                                                                        timepoint = poss_times[t],
-  #                                                                        # uniform_editing_indels = uniform_indels,
-  #                                                                        # uniform_editing_subs = uniform_subs,
-  #                                                                        pos_bc_nt_transitions = pos_bc_nontarget_transition_probs,
-  #                                                                        pos_bc_nt_transversions = pos_bc_nontarget_transversion_probs,
-  #                                                                        pos_bc_nt_insertions = pos_bc_nontarget_insertion_probs,
-  #                                                                        pos_bc_nt_deletions = pos_bc_nontarget_deletion_probs,
-  #                                                                        pos_mt_nt_transitions = pos_mt_nontarget_transition_probs,
-  #                                                                        pos_mt_nt_transversions = pos_mt_nontarget_transversion_probs,
-  #                                                                        pos_mt_nt_insertions = pos_mt_nontarget_insertion_probs,
-  #                                                                        pos_mt_nt_deletions = pos_mt_nontarget_deletion_probs,
-  #                                                                        pos_bc_t_transitions = pos_bc_target_transition_probs,
-  #                                                                        pos_bc_t_transversions = pos_bc_target_transversion_probs,
-  #                                                                        pos_bc_t_insertions = pos_bc_target_insertion_probs,
-  #                                                                        pos_bc_t_deletions = pos_bc_target_deletion_probs,
-  #                                                                        mt_nt_sub_mat = mt_sub_mat,
-  #                                                                        bc_nt_sub_mat = bc_sub_mat,
-  #                                                                        jitter_fraction = jitter_frac
-  #                                                                        )
-                                                                         
-                                                                         # pos_be_list = pos_er_be_list,
-                                                                         # pos_nuc_list = pos_er_nuc_list,
-                                                                         # editrate_df = er_df)
+
   
   # cat('\nafter multi_core_func\n', file = 'no_strings.txt', append = TRUE)
   if(poss_times[t] %in% sim_length_stopping_points){
@@ -5507,12 +6016,16 @@ for(t in 1:length(poss_times)){
       # cat('\ninside t != length(poss_times) before %<-%\n', file = 'no_strings.txt', append = TRUE)
       hot_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
                                             hot_or_cold = 'hot', 
-                                            starting_mt_profiles = mt_profiles,
-                                            starting_bc_profiles = bc_profiles, 
-                                            time_vec_mt = sim_time_vec_mt, 
-                                            time_vec_bc = sim_time_vec_bc,
-                                            vec_of_parents = cell_lineage)
-      zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles), do.call(setup_sim, hot_sim_arglist))
+                                            starting_mt_profiles = NULL,
+                                            starting_bc_profiles = NULL, 
+                                            time_vec_mt = NULL, 
+                                            time_vec_bc = NULL,
+                                            vec_of_parents = NULL,
+                                            cell_population = cell_population)
+      print('past hot sim arglist')
+      # zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles), do.call(setup_sim, hot_sim_arglist))
+      cell_population <- do.call(setup_sim, hot_sim_arglist)
+      print('past cell pop do call')
       # cat('\ninside t != length(poss_times) after %<-%\n', file = 'no_strings.txt', append = TRUE)
       # c(cell_lineage, mt_profiles, bc_profiles) %<-% do.call(setup_sim, hot_sim_arglist)
       
