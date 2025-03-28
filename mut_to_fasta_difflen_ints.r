@@ -1,0 +1,94 @@
+# might just get rid of fix_length
+
+ins_to_charvec <- function(ins, pos_num, ref_seq, fixed_length){
+  nuc_bases <- c('A', 'G', 'C', 'T')
+  if(ins > 0){ 
+    num_bases <- nchar(ins) - 1 # adjust for decimal point
+    
+    # differs from sapply in else{} by what is returned if base_int == 0
+    ins_bases <- sapply(seq(1, num_bases), function(ins_basenum){
+      base_int <- abs(round(ins * 10**(ins_basenum-1))) %% 10
+      if(base_int == 0){ # if we have 0.xx, get the base corresponding to 0
+        return(ref_seq[pos_num])
+      } else{
+        return(nuc_bases[base_int])
+      }
+    })
+    
+  } else{ # have to adjust for the negative sign too if less than 0
+    num_bases <- nchar(ins) - 2
+    
+    ins_bases <- sapply(seq(1, num_bases), function(ins_basenum){
+      base_int <- abs(round(ins * 10**(ins_basenum-1))) %% 10
+      
+      # print(paste0('base_int == ', base_int))
+      if(base_int == 0){ # if we have -0.xx, the base corresponding to "-0" is ''
+        if(fixed_length){
+          
+          return('?')
+        } else if(!fixed_length){
+          return('')
+        }
+      }
+      
+      # new 2/27
+      else{
+        return(nuc_bases[base_int])
+      }
+    })
+  }
+  
+  return_list <- list('num_bases_returned' = length(ins_bases),
+                      'bases_returned' = ins_bases)
+  return(return_list)
+}
+
+get_one_cell_sequence <- function(cell_int_mat, ref_seq){
+  
+  # cell_int_mat will be an n_s x l matrix where n_s is the number of downsampled integrations in the cell and l is the barcode length
+  
+  list_of_seqs <- lapply(seq(1, nrow(cell_int_mat)), function(int_num){
+    
+    this_int <- cell_int_mat[int_num, ]
+    
+    bases <- sapply(seq(1, length(this_int)), function(pos_num){
+      if(this_int[pos_num] %% 1){ # insertion
+        res <- ins_to_charvec(ins = this_int[pos_num],
+                              pos_num = pos_num,
+                              ref_seq = ref_seq,
+                              fixed_length = FALSE)
+        
+        bases <- res$bases_returned
+        collapsed_bases <- paste(bases, collapse = '')
+        return(collapsed_bases)
+      } else if(this_int[pos_num] == 0){ # no mut
+        newbase <- ref_seq[pos_num]
+      } else if(this_int[pos_num] == -1){ # deletion
+        newbase <- ''
+      } else{ # substitution
+        nuc_bases <- c('A', 'G', 'C', 'T')
+        newbase <- nuc_bases[this_int[pos_num]]
+      }
+      return(newbase)
+    })
+    
+    int_seq <- paste(bases, collapse = '')
+    
+    return(int_seq)
+  })
+  
+  return(list_of_seqs)
+}
+
+
+write_all_cell_sequences <- function(cell_mutmats, reference, output_fasta_name){
+  all_cell_seqs <- parLapply(cl = one_cluster, cell_mutmats, function(cell){
+    get_one_cell_sequence(cell_int_mat = cell,
+                          ref_seq = reference)
+  })
+  # adjust fasta name to account for terminal cells only (deprecated reason)
+  updated_output_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL', '\\2'), x = output_fasta_name)
+  write.fasta(all_cell_seqs, names = names(all_cell_seqs), file.out = updated_output_fasta_path)
+}
+
+# write_all_cell_sequences(has_nas, bc_ref_seq, output_fasta_name = 'improved_translation_by_int_prev_list.fasta')

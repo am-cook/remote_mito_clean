@@ -280,7 +280,8 @@ source('./nonuniform_muts_heterogeneous.R')
 source('./substitution_models.r')
 source('./add_intervening_be_targets_to_seq.r')
 source('./make_babette_tree.r')
-source('./mut_to_fasta_CONCAT_INTS.r')
+# source('./mut_to_fasta_CONCAT_INTS.r')
+source('./mut_to_fasta_difflen_ints.r')
 source('./parse_cell_type_specific_args.r')
 print('Files sourced ... ')
 
@@ -2494,29 +2495,29 @@ setup_sim <- function(num_clusters,
   # print(pos_mt_nontarget_transversion_probs)
   
   # if just beginning sim
-  if(cold_startup){
-    # print('inside cold_startup if')
-    poss_times <<- seq(0, sim_length, time_inc)
-    
-    
-    
-    init_incoming_mt_profile <- sparseMatrix(i = c(), j = c(), 
-                                             dims = c(num_rows_mt, num_cols_mt))
-    # print(incoming_mt_profiles)
-    init_incoming_bc_profile <- sparseMatrix(i = c(), j = c(), 
-                                             dims = c(num_rows_bc, num_cols_bc))
-    
-    cell_population <- list('1' = list('linstring' = '1',
-                                       'celltype' = founder_cell_type,
-                                       'birth_time' = 0,
-                                       'death_time' = NULL,
-                                       'parent' = NULL,
-                                       'descendants' = c(),
-                                       'alive' = TRUE,
-                                       'terminal' = TRUE,
-                                       'elig_div_points' = seq(0, sim_length, cell_type_cell_cycle_length[[founder_cell_type]]),
-                                       'incoming_mt_profiles' = init_incoming_mt_profile,
-                                       'incoming_bc_profiles' = init_incoming_bc_profile))
+  # if(cold_startup){
+  # print('inside cold_startup if')
+  poss_times <<- seq(0, sim_length, time_inc)
+  
+  
+  
+  init_incoming_mt_profile <- sparseMatrix(i = c(), j = c(), 
+                                           dims = c(num_rows_mt, num_cols_mt))
+  # print(incoming_mt_profiles)
+  init_incoming_bc_profile <- sparseMatrix(i = c(), j = c(), 
+                                           dims = c(num_rows_bc, num_cols_bc))
+  
+  cell_population <- list('1' = list('linstring' = '1',
+                                     'celltype' = founder_cell_type,
+                                     'birth_time' = 0,
+                                     'death_time' = NULL,
+                                     'parent' = NULL,
+                                     'descendants' = c(),
+                                     'alive' = TRUE,
+                                     'terminal' = TRUE,
+                                     'elig_div_points' = seq(0, sim_length, cell_type_cell_cycle_length[[founder_cell_type]]),
+                                     'incoming_mt_profiles' = init_incoming_mt_profile,
+                                     'incoming_bc_profiles' = init_incoming_bc_profile))
     
     # sim_time_vec_mt <<- numeric()
     # sim_time_vec_bc <<- numeric()
@@ -2528,7 +2529,7 @@ setup_sim <- function(num_clusters,
     # downsample_inds <<- c() # initialize downsample_inds so that we can compare later on with the checked box
     
     
-  }
+  # }
   
   # print('right before startup')
   # print(incoming_mt_pro)
@@ -2538,6 +2539,7 @@ setup_sim <- function(num_clusters,
   clusterExport(cl = one_cluster, c('perform_all_mt_mutations', 'perform_all_bc_mutations', 'transition_func', 'transversion_func',
                                     'insertion_func', 'deletion_func', 'bases', 'transition_matches',
                                     'transversion_matches', 'baseline_seq_ints_mt', 'baseline_seq_ints_bc',
+                                    'baseline_seq_nucs_mt', 'baseline_seq_nucs_bc',
                                     # 'incoming_mt_profiles', 'incoming_bc_profiles', 
                                     'num_deletable_bases', 'perform_deletion', 'all_deletions_one_mat',
                                     'num_rows_bc', 'num_cols_bc', 'num_rows_mt', 'num_cols_mt',
@@ -2574,7 +2576,9 @@ setup_sim <- function(num_clusters,
                                     'unique_run_id',
                                     # 'mt_recovered_genomes_df', 'bc_recovered_ints_df', 'downsample_recovered_cells_df',
                                     'poss_fasta_types', 'include_var_pos_fasta',
-                                    'founder_cell_type'),
+                                    'founder_cell_type',
+                                    'get_one_cell_sequence', 'ins_to_charvec' # for writing to fastas
+                                    ),
                 envir = environment())
   cluster_startup_end <- Sys.time()
   cluster_startup_total <<- difftime(cluster_startup_end, cluster_startup_start, units = 'secs')
@@ -3209,27 +3213,27 @@ multi_core_func <- function(timepoint,
 # 
 # 10**(-1*(3-1))*(2-4)
 
-################# want to get rid of 3/27 but can't yet
-create_sim_arglist <- function(constant_params, hot_or_cold = 'cold', starting_mt_profiles = NULL,
-                               starting_bc_profiles = NULL, time_vec_mt = NULL, time_vec_bc = NULL,
-                               vec_of_parents = NULL, cell_population = NULL){
-  if(hot_or_cold == 'cold'){
-    constant_params[['cold_startup']] <- TRUE
-  } else{
-    constant_params[['cold_startup']] <- FALSE
-  }
-  constant_params[['incoming_mt_profiles']] <- starting_mt_profiles
-  constant_params[['incoming_bc_profiles']] <- starting_bc_profiles
-  constant_params[['sim_time_vec_mt']] <- time_vec_mt
-  constant_params[['sim_time_vec_bc']] <- time_vec_bc
-  constant_params[['parent_vec']] <- vec_of_parents
-  constant_params[['cell_population']] <- cell_population
+# ################# want to get rid of 3/27 but can't yet
+# create_sim_arglist <- function(constant_params, hot_or_cold = 'cold', starting_mt_profiles = NULL,
+#                                starting_bc_profiles = NULL, time_vec_mt = NULL, time_vec_bc = NULL,
+#                                vec_of_parents = NULL, cell_population = NULL){
+#   if(hot_or_cold == 'cold'){
+#     constant_params[['cold_startup']] <- TRUE
+#   } else{
+#     constant_params[['cold_startup']] <- FALSE
+#   }
+#   constant_params[['incoming_mt_profiles']] <- starting_mt_profiles
+#   constant_params[['incoming_bc_profiles']] <- starting_bc_profiles
+#   constant_params[['sim_time_vec_mt']] <- time_vec_mt
+#   constant_params[['sim_time_vec_bc']] <- time_vec_bc
+#   constant_params[['parent_vec']] <- vec_of_parents
+#   constant_params[['cell_population']] <- cell_population
+# 
+#   return(constant_params)
+# }
+# ################# want to get rid of 3/27 but can't yet
 
-  return(constant_params)
-}
-################# want to get rid of 3/27 but can't yet
-
-const_sim_arglist <- list(num_clusters = input_args$num_cores, 
+sim_arglist <- list(num_clusters = input_args$num_cores, 
                           init_pop_size = input_args$num_init_cells,
                           sim_length = max(sim_length_stopping_points),
                           # cell_cycle_length = input_args$cell_cycle_length,
@@ -3273,21 +3277,21 @@ const_sim_arglist <- list(num_clusters = input_args$num_cores,
                           poss_fasta_types = poss_fasta_types,
                           include_var_pos_fasta = include_var_pos_fasta,
                           founder_cell_type = founder_cell_type)
-cold_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
-                                       hot_or_cold = 'cold', 
-                                       starting_mt_profiles = NULL,
-                                       starting_bc_profiles = NULL, 
-                                       time_vec_mt = NULL, 
-                                       time_vec_bc = NULL,
-                                       vec_of_parents = NULL,
-                                       cell_population = NULL)
+# cold_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
+#                                        hot_or_cold = 'cold', 
+#                                        starting_mt_profiles = NULL,
+#                                        starting_bc_profiles = NULL, 
+#                                        time_vec_mt = NULL, 
+#                                        time_vec_bc = NULL,
+#                                        vec_of_parents = NULL,
+#                                        cell_population = NULL)
 # print('cold_sim_arglist == ')
 # print(cold_sim_arglist)
 # zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles),  do.call(setup_sim, cold_sim_arglist))
-cell_population <- do.call(setup_sim, cold_sim_arglist)
+cell_population <- do.call(setup_sim, sim_arglist)
 
-for(i in 1:length(cold_sim_arglist)){
-  assign(names(cold_sim_arglist)[i], cold_sim_arglist[[i]], envir = .GlobalEnv)
+for(i in 1:length(sim_arglist)){
+  assign(names(sim_arglist)[i], sim_arglist[[i]], envir = .GlobalEnv)
 }
 
 # # find number of cells at each timepoint
@@ -3552,10 +3556,10 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
   # }
   # ################### old logic 3/26
   
-  if(!dir.exists(file.path('output', 'cell_populations'))){
-    dir.create(file.path('output', 'cell_populations'), recursive = TRUE)
+  if(!dir.exists(file.path('output', 'cell_populations', unique_run_id))){
+    dir.create(file.path('output', 'cell_populations', unique_run_id), recursive = TRUE)
   }
-  saveRDS(cell_population, file.path('output', 'cell_populations', paste0('cell_population_', timept_savename, '.rds')))
+  saveRDS(cell_population, file.path('output', 'cell_populations', unique_run_id, paste0('cell_population_', timept_savename, '.rds')))
   
   
   # create processed_newicks dir if it doesn't already exist
@@ -3650,42 +3654,45 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     #   return(created_list)
     # }
     
-    make_fasta_files_new <- function(urid, profiles_list, bc_or_mt, fasta_savename_stem, num_ints_recovered){
-      
-      # write all the way up the path to the reference seq subdir
-      if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
-        dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
-      }
-      
-      terminal_lineage_strings <- names(profiles_list)
-      
-      if(bc_or_mt == 'bc'){
-        this_ref_seq <- baseline_seq_nucs_bc
-      }
-      else if(bc_or_mt == 'mt'){
-        this_ref_seq <- baseline_seq_nucs_mt
-      }
-      
-      
-      
-      fasta_savename <- file.path('output', 'processed_fastas', urid,
-                                  paste0(fasta_savename_stem, '.fasta'))
-      
-      print(paste0('in make fasta files new, num_ints_recovered == ', num_ints_recovered))
-      mut_profiles_to_fasta(profiles = profiles_list,
-                            terminal_lineage_strings = terminal_lineage_strings,
-                            include_var_pos_fasta = include_var_pos_fasta,
-                            # downsample_recovered_cells_df = downsample_recovered_cells_df,
-                            fasta_type = poss_fasta_types,
-                            number_of_integrations = num_ints_recovered,
-                            reference_seq = this_ref_seq,
-                            output_fasta_path = fasta_savename,
-                            num_cores = input_args$num_cores,
-                            run_id = urid,
-                            bc_or_mt = bc_or_mt)
-      print(paste0(bc_or_mt, ' fasta written'))
-      return()
-    }
+    # make_fasta_files_new <- function(urid, profiles_list, bc_or_mt, fasta_savename_stem, num_ints_recovered){
+    #   
+    #   # write all the way up the path to the reference seq subdir
+    #   if(!dir.exists(file.path('output', 'processed_fastas', urid, 'reference_seqs'))){
+    #     dir.create(file.path('output', 'processed_fastas', urid, 'reference_seqs'), recursive = TRUE)
+    #   }
+    #   
+    #   terminal_lineage_strings <- names(profiles_list)
+    #   
+    #   if(bc_or_mt == 'bc'){
+    #     this_ref_seq <- baseline_seq_nucs_bc
+    #   }
+    #   else if(bc_or_mt == 'mt'){
+    #     this_ref_seq <- baseline_seq_nucs_mt
+    #   }
+    #   
+    #   
+    #   
+    #   fasta_savename <- file.path('output', 'processed_fastas', urid,
+    #                               paste0(fasta_savename_stem, '.fasta'))
+    #   print(paste0('fasta_savename == ', fasta_savename))
+    #   
+    #   print(paste0('fasta_type == ', poss_fasta_types))
+    #   
+    #   print(paste0('in make fasta files new, num_ints_recovered == ', num_ints_recovered))
+    #   mut_profiles_to_fasta(profiles = profiles_list,
+    #                         terminal_lineage_strings = terminal_lineage_strings,
+    #                         include_var_pos_fasta = include_var_pos_fasta,
+    #                         # downsample_recovered_cells_df = downsample_recovered_cells_df,
+    #                         fasta_type = poss_fasta_types,
+    #                         number_of_integrations = num_ints_recovered,
+    #                         reference_seq = this_ref_seq,
+    #                         output_fasta_path = fasta_savename,
+    #                         num_cores = input_args$num_cores,
+    #                         run_id = urid,
+    #                         bc_or_mt = bc_or_mt)
+    #   print(paste0(bc_or_mt, ' fasta written'))
+    #   return()
+    # }
     
     create_modified_profile_lists <- function(cell_population,
                                               bc_integrations,
@@ -3743,8 +3750,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         terminal_cell_population_names <- names(cell_population)[which(terminal_cell_population_inds == TRUE)]
         terminal_cell_population <- cell_population[terminal_cell_population_names]
         
-        # write ground truth tree for this downsampled cell population
-        
+        print(paste0('here, length(terminal_cell_population) == ', length(terminal_cell_population)))
       
         for(num_bc_ints in bc_integrations){
           
@@ -3754,18 +3760,30 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
             
             # for each terminal cell in the population, determine which integration(s) are recovered
             # terminal_cell_recovered_inds <- lapply(terminal_cell_population_names, function(cellname){
-            terminal_cell_dropout_inds <- lapply(terminal_cell_population_names, function(cellname){
+            these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
               
               # num_ints_recovered <- ceiling(num_bc_ints * bc_int_recovery_prob)
-              num_ints_recovered <- rbinom(n = 1, size = num_bc_ints, prob = bc_int_recovery_prob)
-              which_ints_recovered <- sort(sample(seq(1, num_bc_ints), size = num_ints_recovered,
-                                                  replace = FALSE))
-              which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
-              print('which_ints_dropped_out')
-              print(which_ints_dropped_out)
-              # return(which_ints_recovered)
-              return(which_ints_dropped_out)
+              num_ints_recovered <- max(c(rbinom(n = 1, size = num_bc_ints, prob = bc_int_recovery_prob), 1)) # RECOVER AT LEAST ONE
+              which_ints_recovered <- sample(seq(1, num_bc_ints), size = num_ints_recovered,
+                                                  replace = FALSE)
+            
+              # which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
+              # 
+              # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
+              # if(length(which_ints_dropped_out) > 0){
+              #   mut_mat[which_ints_dropped_out, ] <- -1
+              # }
+              
+              mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles[which_ints_recovered, ]
+              
+              # by default, slicing one row from a matrix converts to numeric in R
+              if(num_ints_recovered == 1){
+                mut_mat <- matrix(mut_mat, nrow = 1)
+              }
+              
+              return(mut_mat)
             })
+            names(these_subsetted_profiles) <- terminal_cell_population_names
             
             this_combo_name <- paste0('processed_bc_list_', num_bc_ints, 
                                       '_integrations_recovery_prob_', bc_int_recovery_prob, 
@@ -3773,30 +3791,45 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                       this_timept_savename)
             bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
             
-            these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
-              print('dropout inds')
-              print(terminal_cell_dropout_inds[[cellname]])
-              # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles[terminal_cell_recovered_inds[[cellname]], ]
-              mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
-              dropped_out_inds <- terminal_cell_dropout_inds[[cellname]]
-              if(length(dropped_out_inds) > 0){
-                mut_mat[dropped_out_inds, ] <- -1
-              }
-              
-              return(mut_mat)
-            })
+            # these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
+            #   print('dropout inds')
+            #   print(terminal_cell_dropout_inds[[cellname]])
+            #   # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles[terminal_cell_recovered_inds[[cellname]], ]
+            #   
+            # })
+            # names(these_subsetted_profiles) <- terminal_cell_population_names
             
             
             print(paste0('bc_list_assign_name == ', bc_list_assign_name))
             saveRDS(these_subsetted_profiles, bc_list_assign_name)
             
             # immediately write the fasta (IN THE FOR LOOP)
-            make_fasta_files_new(urid = unique_run_id, 
-                                 profiles_list = these_subsetted_profiles, 
-                                 bc_or_mt = 'bc', 
-                                 fasta_savename_stem = this_combo_name,
-                                 num_ints_recovered = num_bc_ints)
+            fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+            if(!dir.exists(fasta_dir_path)){
+              dir.create(fasta_dir_path, recursive = TRUE)
+            }
+            fasta_savename <- file.path(fasta_dir_path, paste0(this_combo_name, '.fasta'))
             
+            write_all_cell_sequences(cell_mutmats = these_subsetted_profiles, 
+                                     reference = baseline_seq_nucs_bc, 
+                                     output_fasta_name = fasta_savename)
+            
+            # mut_profiles_to_fasta(profiles = these_subsetted_profiles,
+            #                       terminal_lineage_strings = names(these_subsetted_profiles),
+            #                       include_var_pos_fasta = include_var_pos_fasta,
+            #                       fasta_type = poss_fasta_types,
+            #                       number_of_integrations = num_bc_ints,
+            #                       reference_seq = baseline_seq_nucs_bc,
+            #                       output_fasta_path = fasta_savename,
+            #                       num_cores = input_args$num_cores,
+            #                       run_id = unique_run_id,
+            #                       bc_or_mt = 'bc')
+            # make_fasta_files_new(urid = unique_run_id, 
+            #                      profiles_list = these_subsetted_profiles, 
+            #                      bc_or_mt = 'bc', 
+            #                      fasta_savename_stem = this_combo_name,
+            #                      num_ints_recovered = num_bc_ints)
+            # 
             
             
           }
@@ -3810,16 +3843,25 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
             
             # for each terminal cell in the population, determine which integration(s) are recovered
             # terminal_cell_recovered_genomes <- lapply(terminal_cell_population_names, function(cellname){
-            terminal_cell_dropout_inds <- lapply(terminal_cell_population_names, function(cellname){
-              
-              # num_ints_recovered <- ceiling(num_mito_genomes * mito_recovery_prob)
-              num_ints_recovered <- rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob)
-              which_ints_recovered <- sort(sample(seq(1, num_mito_genomes), size = num_ints_recovered,
-                                                  replace = FALSE))
-              which_ints_dropped_out <- setdiff(seq(1, num_mito_genomes), which_ints_recovered)
-              return(which_ints_dropped_out)
-              # return(which_ints_recovered)
-            })
+            # terminal_cell_dropout_inds <- lapply(terminal_cell_population_names, function(cellname){
+            #   
+            #   # num_ints_recovered <- ceiling(num_mito_genomes * mito_recovery_prob)
+            #   num_ints_recovered <- rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob)
+            #   which_ints_recovered <- sort(sample(seq(1, num_mito_genomes), size = num_ints_recovered,
+            #                                       replace = FALSE))
+            #   which_ints_dropped_out <- setdiff(seq(1, num_mito_genomes), which_ints_recovered)
+            #   return(which_ints_dropped_out)
+            #   # return(which_ints_recovered)
+            # })
+            # these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
+            #   # mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles[terminal_cell_recovered_genomes[[cellname]], ]
+            #   mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles
+            #   dropped_out_inds <- terminal_cell_dropout_inds[[cellname]]
+            #   if(length(dropped_out_inds) > 0){
+            #     mut_mat[dropped_out_inds, ] <- -1
+            #   }
+            #   return(mut_mat)
+            # })
             
             this_combo_name <- paste0('processed_bc_list_', num_mito_genomes, 
                                       '_integrations_recovery_prob_', mito_recovery_prob, 
@@ -3828,25 +3870,65 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
             
             mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
             
+            
+            
             these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
-              # mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles[terminal_cell_recovered_genomes[[cellname]], ]
-              mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles
-              dropped_out_inds <- terminal_cell_dropout_inds[[cellname]]
-              if(length(dropped_out_inds) > 0){
-                mut_mat[dropped_out_inds, ] <- -1
+              
+              # num_ints_recovered <- ceiling(num_bc_ints * bc_int_recovery_prob)
+              num_ints_recovered <- max(c(rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob), 1)) # RECOVER AT LEAST ONE
+              which_ints_recovered <- sample(seq(1, num_mito_genomes), size = num_ints_recovered,
+                                             replace = FALSE)
+              # which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
+              # 
+              # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
+              # if(length(which_ints_dropped_out) > 0){
+              #   mut_mat[which_ints_dropped_out, ] <- -1
+              # }
+              
+              mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles[which_ints_recovered, ]
+              
+              # by default, slicing one row from a matrix converts to numeric in R
+              if(num_ints_recovered == 1){
+                mut_mat <- matrix(mut_mat, nrow = 1)
               }
+              
               return(mut_mat)
             })
+            
+            names(these_subsetted_profiles) <- terminal_cell_population_names
             
             print(paste0('mt_list_assign_name == ', mt_list_assign_name))
             saveRDS(these_subsetted_profiles, mt_list_assign_name)
             
+            fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+            if(!dir.exists(fasta_dir_path)){
+              dir.create(fasta_dir_path, recursive = TRUE)
+            }
+            fasta_savename <- file.path(fasta_dir_path, paste0(this_combo_name, '.fasta'))
+            
             # immediately write the fasta (IN THE FOR LOOP)
-            make_fasta_files_new(urid = unique_run_id, 
-                                 profiles_list = these_subsetted_profiles, 
-                                 bc_or_mt = 'mt', 
-                                 fasta_savename_stem = this_combo_name,
-                                 num_ints_recovered = num_mito_genomes)
+            write_all_cell_sequences(cell_mutmats = these_subsetted_profiles, 
+                                     reference = baseline_seq_nucs_mt, 
+                                     output_fasta_name = fasta_savename)
+            
+            
+            # mut_profiles_to_fasta(profiles = these_subsetted_profiles,
+            #                       terminal_lineage_strings = names(these_subsetted_profiles),
+            #                       include_var_pos_fasta = include_var_pos_fasta,
+            #                       fasta_type = poss_fasta_types,
+            #                       number_of_integrations = num_mito_genomes,
+            #                       reference_seq = baseline_seq_nucs_mt,
+            #                       output_fasta_path = fasta_savename,
+            #                       num_cores = input_args$num_cores,
+            #                       run_id = unique_run_id,
+            #                       bc_or_mt = 'mt')
+            
+  
+            # make_fasta_files_new(urid = unique_run_id, 
+            #                      profiles_list = these_subsetted_profiles, 
+            #                      bc_or_mt = 'mt', 
+            #                      fasta_savename_stem = this_combo_name,
+            #                      num_ints_recovered = num_mito_genomes)
             
           }
           
@@ -6008,31 +6090,35 @@ for(t in 1:length(poss_times)){
   
   # cat('\nafter multi_core_func\n', file = 'no_strings.txt', append = TRUE)
   if(poss_times[t] %in% sim_length_stopping_points){
-    stopCluster(one_cluster)
+    # stopCluster(one_cluster)
     all_processes_at_stopping_point(timept_savename = paste0(custom_savename, '_time_', poss_times[t]), relative_timepoint = t, this_endpoint = poss_times[t])
     
-    # if this isn't the last time point, need to restart the cluster and continue to simulate
-    if(t != length(poss_times)){
-      # cat('\ninside t != length(poss_times) before %<-%\n', file = 'no_strings.txt', append = TRUE)
-      hot_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
-                                            hot_or_cold = 'hot', 
-                                            starting_mt_profiles = NULL,
-                                            starting_bc_profiles = NULL, 
-                                            time_vec_mt = NULL, 
-                                            time_vec_bc = NULL,
-                                            vec_of_parents = NULL,
-                                            cell_population = cell_population)
-      print('past hot sim arglist')
-      # zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles), do.call(setup_sim, hot_sim_arglist))
-      cell_population <- do.call(setup_sim, hot_sim_arglist)
-      print('past cell pop do call')
-      # cat('\ninside t != length(poss_times) after %<-%\n', file = 'no_strings.txt', append = TRUE)
-      # c(cell_lineage, mt_profiles, bc_profiles) %<-% do.call(setup_sim, hot_sim_arglist)
-      
-      for(i in 1:length(hot_sim_arglist)){
-        assign(names(hot_sim_arglist)[i], hot_sim_arglist[[i]], envir = .GlobalEnv)
-      }  
-      # cat('\ninside t != length(poss_times) after assign\n', file = 'no_strings.txt', append = TRUE)
+    # # if this isn't the last time point, need to restart the cluster and continue to simulate
+    # if(t != length(poss_times)){
+    #   # cat('\ninside t != length(poss_times) before %<-%\n', file = 'no_strings.txt', append = TRUE)
+    #   hot_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
+    #                                         hot_or_cold = 'hot', 
+    #                                         starting_mt_profiles = NULL,
+    #                                         starting_bc_profiles = NULL, 
+    #                                         time_vec_mt = NULL, 
+    #                                         time_vec_bc = NULL,
+    #                                         vec_of_parents = NULL,
+    #                                         cell_population = cell_population)
+    #   print('past hot sim arglist')
+    #   # zeallot::`%<-%`(c(cell_lineage, mt_profiles, bc_profiles), do.call(setup_sim, hot_sim_arglist))
+    #   cell_population <- do.call(setup_sim, hot_sim_arglist)
+    #   print('past cell pop do call')
+    #   # cat('\ninside t != length(poss_times) after %<-%\n', file = 'no_strings.txt', append = TRUE)
+    #   # c(cell_lineage, mt_profiles, bc_profiles) %<-% do.call(setup_sim, hot_sim_arglist)
+    #   
+    #   for(i in 1:length(hot_sim_arglist)){
+    #     assign(names(hot_sim_arglist)[i], hot_sim_arglist[[i]], envir = .GlobalEnv)
+    #   }  
+    #   # cat('\ninside t != length(poss_times) after assign\n', file = 'no_strings.txt', append = TRUE)
+    # }
+    
+    if(t == length(poss_times)){
+      stopCluster(one_cluster)
     }
     
     
