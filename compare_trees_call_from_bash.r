@@ -45,19 +45,20 @@ if(!input_args$ground_truth_tree_path == ''){ # if a ground truth tree path is p
     print('!(input_args$fasta_file_path')
     timept <- sub('.*time_([0-9]+\\.?[0-9]*).*', '\\1', input_args$fasta_file_path)
     print(paste0('timept == ', timept))
-    cell_rec_rate <- sub('.*cell_rec_rate_([0-9]+\\.?[0-9]*).*', '\\1', input_args$fasta_file_path)
-    print(paste0('cell_rec_rate == ', cell_rec_rate))
+    # cell_rec_rate <- sub('.*cell_rec_rate_([0-9]+\\.?[0-9]*).*', '\\1', input_args$fasta_file_path)
+    # print(paste0('cell_rec_rate == ', cell_rec_rate))
     
     print(paste0('getwd() == ', getwd()))
     ground_truth_trees <- list.files(file.path(output_dir_stem, 'processed_newicks', input_args$run_id))
     print('ground_truth_trees == ')
     print(ground_truth_trees)
     
-    timept_rec_rate_pattern <- paste0('ground_truth_.*time_', timept, '_cell_rec_rate_', cell_rec_rate)
-    print(paste0('timept_rec_rate_pattern == ', timept_rec_rate_pattern))
+    # timept_rec_rate_pattern <- paste0('ground_truth_.*time_', timept, '_cell_rec_rate_', cell_rec_rate)
+    timept_pattern <- paste0('ground_truth_.*time_', timept)
+    print(paste0('timept_pattern == ', timept_pattern))
     
     
-    matching_gt_tree_path <- ground_truth_trees[grep(pattern = timept_rec_rate_pattern, x = ground_truth_trees)]
+    matching_gt_tree_path <- ground_truth_trees[grep(pattern = timept_pattern, x = ground_truth_trees)]
     
     print(paste0('matching_gt_tree_path == ', matching_gt_tree_path))
     
@@ -104,7 +105,7 @@ recon_tree <- read.tree(file.path(output_dir_stem, 'processed_fastas', input_arg
 
 # subset ground truth tree to only include those tip labels present in recon tree:
 recon_tips <- recon_tree$tip.label
-subset_gt_tree <- drop.tip(ground_truth_tree, setdiff(ground_truth_tree$tip.label, recon_tip))
+subset_gt_tree <- drop.tip(ground_truth_tree, setdiff(ground_truth_tree$tip.label, recon_tips))
 
 midpt_recon_tree <- midpoint(recon_tree)
 rf_dist <-  phangorn::RF.dist(recon_tree, subset_gt_tree, normalize = TRUE)

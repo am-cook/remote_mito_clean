@@ -169,7 +169,7 @@ option_list <- list(
   make_option(c('-S', '--score_approach'), type = 'character', default = NULL,
               help = 'relevant if reconstruction_method == "score": mutation score approach {"af", "bin"} (if both: "both" or "af; bin"'),
   make_option('--fasta_type', type = 'character', default = 'terminal',
-              help = 'relevant if reconstruction_method == "fasta_only": any (combination) of "terminal; all_cells"'),
+              help = 'relevant if reconstruction_method == "fasta_only": any (combination) of "[terminal, all_cells]; if all_cells included, will write fasta for every intermediate cell"'),
   make_option('--include_var_pos_fasta', type = 'logical', default = FALSE,
               help = 'relevant if reconstruction_method == "fasta_only": boolen, whether to also write out fasta(s) that only include variable positions across seqs'),
   make_option('--chosen_gamma', type = 'character', default = 'mt_gamma_site_model',
@@ -528,9 +528,9 @@ classify_be_mutation_type <- function(from_base, to_base){
 }
 if(!is.null(input_args$be_conversion_pattern)){
   be_target_fromto <- parse_be_example(input_args$be_conversion_pattern)
-  be_target_origin <- be_target_fromto[['from_base']]
+  be_target_from <- be_target_fromto[['from_base']]
   be_target_to <- be_target_fromto[['to_base']]
-  be_mutation_type <- classify_be_mutation_type(from_base = be_target_origin,
+  be_mutation_type <- classify_be_mutation_type(from_base = be_target_from,
                                                 to_base = be_target_to)  
 }
 
@@ -610,7 +610,7 @@ if(input_args$time_inc == 'auto'){
 
 # convert base fractions from a character string to a numeric vector
 # bc_base_fracs <- process_cla_string(input_args$bc_nuc_composition, outputted_type = 'numeric')
-bc_base_fracs <- c(input_args$bc_nuc_composition$frac_a,
+barcode_base_fracs <- c(input_args$bc_nuc_composition$frac_a,
                    input_args$bc_nuc_composition$frac_g,
                    input_args$bc_nuc_composition$frac_c,
                    input_args$bc_nuc_composition$frac_t)
@@ -618,7 +618,7 @@ bc_base_fracs <- c(input_args$bc_nuc_composition$frac_a,
 
 # WORKING ON THIS 5/23
 # updated way to construct a barcode sequence with targets at the correct positions
-create_bc_sequence <- function(be_target_origin = be_target_origin,
+create_bc_sequence <- function(be_target_origin = be_target_from,
                                bc_length = input_args$bc_length, 
                                be_targets_counts = input_args$be_targets$num_targets,
                                nuc_targets_counts = input_args$nuclease_targets$num_targets,
@@ -626,7 +626,8 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
                                nuc_targets_classfracs = input_args$nuclease_targets$edit_rate_class_fractions,
                                be_targets_configs = input_args$be_targets$config,
                                nuc_targets_configs = input_args$nuclease_targets$config,
-                               path_to_bc_seq = input_args$barcode_sequence){
+                               path_to_bc_seq = input_args$barcode_sequence,
+                               bc_base_fracs = barcode_base_fracs){
   
   # be_targets_counts refers to the argument that specifies how many targets there are
   # be_targets_configs refers to how targets are dispersed throughout the barcode, ie Random, Uniform, Spaced
@@ -668,6 +669,7 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
   
   # if there is a provided be target config
   if(!is.null(be_targets_configs)){
+    print('in !is.null(be_targets_configs)')
     # now parse the inputted target configurations
     parsed_be_target_config <- parse_target_config(be_targets_configs)
     be_target_config_pattern <- parsed_be_target_config[['config']]
@@ -764,7 +766,8 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
       # cat(paste0('\nnum_be_targets == ', num_be_targets, '\n'), file = 'no_strings.txt', append = TRUE)
       
       # the total number of targets is computed by summing the number of HML targets in be_target_setup
-      bc_sequence_no_targets <- generate_non_be_target_sequence(bc_length = bc_length, 
+
+      bc_sequence_no_targets <- generate_non_be_target_sequence(barcode_length = bc_length, 
                                                                 nuc_fracs = bc_base_fracs,
                                                                 target_from = be_target_origin,
                                                                 be_target_count = num_be_targets)
@@ -797,12 +800,12 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
       # can still use generate_non_be_target_sequence() to get the sequence since it considers nuc fractions
       # note that we specify num_be_targets = 0 so that we don't return a truncated sequence here
       bc_sequence_with_targets <- generate_non_be_target_sequence(
-        bc_length = bc_length, 
+        barcode_length = bc_length, 
         nuc_fracs = bc_base_fracs,
         target_from = be_target_origin,
         be_target_count = 0
       )
-      
+
       
       return_list[['bc_seq']] <- bc_sequence_with_targets
       return_list[['be_basepos_editrate_classes']] <- be_target_setup
@@ -847,7 +850,7 @@ create_bc_sequence <- function(be_target_origin = be_target_origin,
     }
     
     # new home 2/26
-    return_list[['bc_seq']] <- generate_non_be_target_sequence(bc_length = bc_length,
+    return_list[['bc_seq']] <- generate_non_be_target_sequence(barcode_length = bc_length,
                                                                nuc_fracs = bc_base_fracs,
                                                                target_from = 'A',
                                                                be_target_count = 0)
@@ -2079,13 +2082,38 @@ poss_mt_afs <- as.numeric(input_args$mt_allelic_fractions)
 poss_bc_afs <- as.numeric(input_args$bc_allelic_fractions)
 # poss_num_bc_integrations <- process_cla_string(input_args$max_bc_ints_per_cell, outputted_type = 'integer')
 poss_num_bc_integrations <- as.integer(input_args$max_bc_ints_per_cell)
+
+if(input_args$include_bc_umis){
+  
+  # generate 15 bp umis that will be prepended to barcode sequences. will be scaffold for alignment
+  bc_int_umis <- as.character(lapply(seq(1:max(poss_num_bc_integrations)), function(int_num){
+    paste(sample(c('A', 'G', 'C', 'T'), size = 15, replace = TRUE), collapse = '')
+  }))
+  
+  collapsed_one_integration <- paste(baseline_seq_nucs_bc, collapse = '')
+  
+  # modify baseline seq to include the integration UMIs:
+  bc_reference_with_int_umis <- paste(bc_int_umis, collapsed_one_integration, sep = '', collapse = '')
+  
+  if(!dir.exists(file.path('output', 'processed_fastas', unique_run_id, 'reference_seqs'))){
+    dir.create(file.path('output', 'processed_fastas', unique_run_id, 'reference_seqs'), recursive = TRUE)
+  }
+  write.fasta(bc_reference_with_int_umis, 
+              names = c('REFERENCE'), 
+              file.out = file.path('output', 'processed_fastas', unique_run_id, 'reference_seqs', 
+                                    paste0('bc_reference_including_int_umis.fasta')))
+}
+
+
+
 # poss_num_mito_genomes <- process_cla_string(input_args$max_mito_genomes_per_cell, outputted_type = 'integer')
 poss_num_mito_genomes <- as.integer(input_args$max_mito_genomes_per_cell)
 # poss_mt_genome_recovery_probs <- process_cla_string(input_args$mt_genome_recovery_prob, outputted_type = 'numeric')
 # poss_bc_integration_recovery_probs <- process_cla_string(input_args$bc_integration_recovery_prob,a outputted_type = 'numeric')
 poss_mt_genome_recovery_probs <- as.numeric(input_args$mt_integration_recovery_prob)
 poss_bc_integration_recovery_probs <- as.numeric(input_args$bc_integration_recovery_prob)
-poss_fasta_types <- process_cla_string(input_args$fasta_type, outputted_type = 'character')
+# poss_fasta_types <- process_cla_string(input_args$fasta_type, outputted_type = 'character')
+poss_fasta_types <- as.character(input_args$fasta_type)
 include_var_pos_fasta <- input_args$include_var_pos_fasta
 founder_cell_type <- as.character(input_args$cell_type_dict$founder_cell_type)
 
@@ -2577,7 +2605,8 @@ setup_sim <- function(num_clusters,
                                     # 'mt_recovered_genomes_df', 'bc_recovered_ints_df', 'downsample_recovered_cells_df',
                                     'poss_fasta_types', 'include_var_pos_fasta',
                                     'founder_cell_type',
-                                    'get_one_cell_sequence', 'ins_to_charvec' # for writing to fastas
+                                    'get_one_cell_sequence', 'ins_to_charvec', # for writing to fastas
+                                    'bc_int_umis'
                                     ),
                 envir = environment())
   cluster_startup_end <- Sys.time()
@@ -2619,6 +2648,9 @@ multi_core_func <- function(timepoint,
                             unique_run_id){
   
   
+  ######## DIVIDE, THEN DIE, THEN MUTATE
+  
+  
   # determine if this is an induced or uninduced timepoint:
   if(timepoint >= differentiation_induction_timepoint){
     differentiation_induced <- TRUE
@@ -2633,113 +2665,6 @@ multi_core_func <- function(timepoint,
     editing_induced <- 'uninduced_editing_params'
   }
   
-  ##################################### MUTATE
-  # all TERMINAL and ALIVE cells will mutate at each timepoint ...
-  # note: all terminal cells should be alive because death occurs before division and after mutation
-  
-  cells_alive_here_bool_list <- lapply(cell_population, function(cell){
-    return((cell$terminal) & (cell$alive))
-  })
-  
-  # get lineage strings corresponding to the cells dividing here
-  cell_names_alive_here <- names(cell_population)[which(as.logical(cells_alive_here_bool_list) == TRUE)]
-  
-  print('cell_names_alive here == ')
-  print(cell_names_alive_here)
-  
-  num_cells_alive_here <- length(cell_names_alive_here)
-  
-  
-  print(paste0('Now mutating ', num_cells_alive_here, ' cells'))
-  
-  mutated_bc_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
-                                   fun = function(cell_name){
-                                     
-                                     this_cell_type <- cell_population[[cell_name]]$celltype
-                                     
-                                     # now have to change the logic of perform_all_bc_mutations
-                                     # to allow for nuc and be uniform editing flags
-                                     return(perform_all_bc_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_bc_profiles, 
-                                                                     bg_transition_list = cell_type_basepos_bc_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_transversion_list = cell_type_basepos_bc_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_insertion_list = cell_type_basepos_bc_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_deletion_list = cell_type_basepos_bc_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_transition_list = cell_type_basepos_bc_target_transition_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_transversion_list = cell_type_basepos_bc_target_transversion_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_insertion_list = cell_type_basepos_bc_target_insertion_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_deletion_list = cell_type_basepos_bc_target_deletion_probs[[this_cell_type]][[editing_induced]],
-                                                                     prob_sub_mat = cell_type_bc_sub_prob_mat[[this_cell_type]][[editing_induced]],
-                                                                     timepoint_for_label = timepoint,
-                                                                     urid = unique_run_id))
-                                   })
-  # cat(paste0('\nAFTER PERFORM ALL BC MUTATIONS\n'), file = 'no_strings.txt', append = TRUE)
-  print('after mutated_bc_profiles')
-  
-  # rewrite the existing mut_mats for these cells with the updated profiles:
-  print(paste0('before cell population update 1, length(cell_population) == ', length(cell_population)))
-  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
-    cell_list[['incoming_bc_profiles']] <- new_profiles
-    return(cell_list)
-  }, cell_population[cell_names_alive_here], mutated_bc_profiles)
-  print(paste0('after cell population update 1, length(cell_population) == ', length(cell_population)))
-  
-  
-  mutated_mt_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
-                                   fun = function(cell_name){
-                                     
-                                     this_cell_type <- cell_population[[cell_name]]$celltype
-                                     
-                                     return(perform_all_mt_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_mt_profiles,
-                                                                     bg_transition_list = cell_type_basepos_mt_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_transversion_list = cell_type_basepos_mt_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_insertion_list = cell_type_basepos_mt_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_deletion_list = cell_type_basepos_mt_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
-                                                                     prob_sub_mat = cell_type_mt_sub_prob_mat[[this_cell_type]][[editing_induced]]))
-                                     
-                                   })
-  print('after mutated_mt_profiles')
-  
-  print(paste0('before cell population update 2, length(cell_population) == ', length(cell_population)))
-  # rewrite the existing mut_mats for these cells with the updated profiles:
-  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
-    cell_list[['incoming_mt_profiles']] <- new_profiles
-    return(cell_list)
-  }, cell_population[cell_names_alive_here], mutated_mt_profiles)
-  print(paste0('after cell population update 2, length(cell_population) == ', length(cell_population)))
-  
-  
-  ##################################### DIE
-  # only certain cells will die at this timepoint, according to their respective cell type's death prob
-  
-  # only terminal (& alive) cells can die here...
-  
-  # get updated living statuses of each terminal (& alive) cell
-  # updated_living_statuses <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
-                                       # fun = function(cell_name){
-  updated_living_statuses <- lapply(cell_names_alive_here, function(cell_name){
-                                         
-                                         this_cell_type <- cell_population[[cell_name]]$celltype
-                                         death_prob <- cell_type_death_probs[[this_cell_type]]
-                                         death_occurs <- rbinom(n = 1, size = 1, prob = death_prob)
-                                         
-                                         # since we are using updated_living_statuses to replace all 
-                                         if(death_occurs){
-                                           return(FALSE)
-                                         } else if(!(death_occurs)){
-                                           return(TRUE)
-                                         }
-                                       })
-  
-  print(paste0('Number of cells dying at this timepoint: ', length(which(updated_living_statuses == FALSE))))
-  
-  # rewrite the existing alive indicators for these cells with updated_living_statuses:
-  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_statuses, death_time) {
-    cell_list[['alive']] <- new_statuses
-    cell_list[['death_time']] <- death_time
-    return(cell_list)
-  }, cell_population[cell_names_alive_here], updated_living_statuses, rep(timepoint, length(updated_living_statuses)))
-  
-  
   
   ##################################### DIVIDE
   # only certain cells will divide at this timepoint
@@ -2747,15 +2672,15 @@ multi_core_func <- function(timepoint,
     return((timepoint %in% cell$elig_div_points) & (cell$terminal) & (cell$alive))
   })
   
-  print('cells_dividing_here_bool_list == ')
-  print(cells_dividing_here_bool_list)
+  # print('cells_dividing_here_bool_list == ')
+  # print(cells_dividing_here_bool_list)
   # get lineage strings corresponding to the cells dividing here
   
   cell_names_dividing_here <- names(cell_population)[which(as.logical(cells_dividing_here_bool_list) == TRUE)]
   num_cells_dividing_here <- length(cell_names_dividing_here)
   
   # if cells divide, they are no longer terminal
-  print(paste0('Now dividing ', num_cells_dividing_here, ' cells'))
+  # print(paste0('Now dividing ', num_cells_dividing_here, ' cells'))
   
   
   new_cell_list <- parLapply(cl = one_cluster, X = cell_names_dividing_here, 
@@ -2827,7 +2752,6 @@ multi_core_func <- function(timepoint,
     cellname[['new_cells']]
   })
   
-  # want to retain outer names from this list
   updated_parents <- lapply(new_cell_list, function(cellname){
     cellname[['updated_parent']]
   })
@@ -2845,8 +2769,121 @@ multi_core_func <- function(timepoint,
   # append the new daughter cells to the end of the growing cell pop
   cell_population <- append(cell_population, daughter_cells)
   
-  print('cell population names == ')
-  print(names(cell_population))
+  # print('cell population names == ')
+  # print(names(cell_population))
+  
+  
+  
+  ##################################### DIE
+  
+  cells_alive_here_bool_list <- lapply(cell_population, function(cell){
+    return((cell$terminal) & (cell$alive))
+  })
+  
+  # get lineage strings corresponding to the cells dividing here
+  cell_names_alive_here <- names(cell_population)[which(as.logical(cells_alive_here_bool_list) == TRUE)]
+  
+  # print('cell_names_alive here == ')
+  # print(cell_names_alive_here)
+  
+  num_cells_alive_here <- length(cell_names_alive_here)
+  # only certain cells will die at this timepoint, according to their respective cell type's death prob
+  
+  # only terminal (& alive) cells can die here...
+  
+  # get updated living statuses of each terminal (& alive) cell
+  # updated_living_statuses <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
+  # fun = function(cell_name){
+  updated_living_statuses <- lapply(cell_names_alive_here, function(cell_name){
+    
+    this_cell_type <- cell_population[[cell_name]]$celltype
+    death_prob <- cell_type_death_probs[[this_cell_type]]
+    death_occurs <- rbinom(n = 1, size = 1, prob = death_prob)
+    
+    # since we are using updated_living_statuses to replace all 
+    if(death_occurs){
+      return(FALSE)
+    } else if(!(death_occurs)){
+      return(TRUE)
+    }
+  })
+  
+  # print(paste0('Number of cells dying at this timepoint: ', length(which(updated_living_statuses == FALSE))))
+  
+  # rewrite the existing alive indicators for these cells with updated_living_statuses:
+  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_statuses, death_time) {
+    cell_list[['alive']] <- new_statuses
+    cell_list[['death_time']] <- death_time
+    return(cell_list)
+  }, cell_population[cell_names_alive_here], updated_living_statuses, rep(timepoint, length(updated_living_statuses)))
+  
+  
+  ##################################### MUTATE
+  # all TERMINAL and ALIVE cells will mutate at each timepoint ...
+  # have to regenerate this list in case some cells died in the previous step
+  cells_alive_here_bool_list <- lapply(cell_population, function(cell){
+    return((cell$terminal) & (cell$alive))
+  })
+  # get lineage strings corresponding to the cells dividing here
+  cell_names_alive_here <- names(cell_population)[which(as.logical(cells_alive_here_bool_list) == TRUE)]
+  
+  print(cell_names_alive_here)
+  
+  # print(paste0('Now mutating ', num_cells_alive_here, ' cells'))
+  
+  mutated_bc_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
+                                   fun = function(cell_name){
+                                     
+                                     this_cell_type <- cell_population[[cell_name]]$celltype
+                                     
+                                     # now have to change the logic of perform_all_bc_mutations
+                                     # to allow for nuc and be uniform editing flags
+                                     return(perform_all_bc_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_bc_profiles, 
+                                                                     bg_transition_list = cell_type_basepos_bc_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_transversion_list = cell_type_basepos_bc_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_insertion_list = cell_type_basepos_bc_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_deletion_list = cell_type_basepos_bc_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_transition_list = cell_type_basepos_bc_target_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_transversion_list = cell_type_basepos_bc_target_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_insertion_list = cell_type_basepos_bc_target_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                     target_deletion_list = cell_type_basepos_bc_target_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                     prob_sub_mat = cell_type_bc_sub_prob_mat[[this_cell_type]][[editing_induced]],
+                                                                     timepoint_for_label = timepoint,
+                                                                     urid = unique_run_id))
+                                   })
+  # cat(paste0('\nAFTER PERFORM ALL BC MUTATIONS\n'), file = 'no_strings.txt', append = TRUE)
+  # print('after mutated_bc_profiles')
+  
+  # rewrite the existing mut_mats for these cells with the updated profiles:
+  # print(paste0('before cell population update 1, length(cell_population) == ', length(cell_population)))
+  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
+    cell_list[['incoming_bc_profiles']] <- new_profiles
+    return(cell_list)
+  }, cell_population[cell_names_alive_here], mutated_bc_profiles)
+  # print(paste0('after cell population update 1, length(cell_population) == ', length(cell_population)))
+  
+  
+  mutated_mt_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
+                                   fun = function(cell_name){
+                                     
+                                     this_cell_type <- cell_population[[cell_name]]$celltype
+                                     
+                                     return(perform_all_mt_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_mt_profiles,
+                                                                     bg_transition_list = cell_type_basepos_mt_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_transversion_list = cell_type_basepos_mt_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_insertion_list = cell_type_basepos_mt_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                     bg_deletion_list = cell_type_basepos_mt_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                     prob_sub_mat = cell_type_mt_sub_prob_mat[[this_cell_type]][[editing_induced]]))
+                                     
+                                   })
+  # print('after mutated_mt_profiles')
+  
+  # print(paste0('before cell population update 2, length(cell_population) == ', length(cell_population)))
+  # rewrite the existing mut_mats for these cells with the updated profiles:
+  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
+    cell_list[['incoming_mt_profiles']] <- new_profiles
+    return(cell_list)
+  }, cell_population[cell_names_alive_here], mutated_mt_profiles)
   
   return(cell_population)
 }
@@ -3699,6 +3736,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                               mito_genomes,
                                               mito_recovery_probs,
                                               bc_recovery_probs,
+                                              poss_fasta_types,
+                                              bc_umis,
                                               this_timept_savename = timept_savename){
       
       # cat(paste0('\nbc_recovery_probs == ', bc_recovery_probs, '\n'), file = 'no_strings.txt', append = TRUE)
@@ -3709,230 +3748,305 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         dir.create(file.path('output', 'processed_lists', unique_run_id), recursive = TRUE)
       }
       
-      print('Creating downsampled profile lists ... ')
-      
-      # get all possible combinations of cell sampling fracs across cell types
-      all_sampling_fracs <- expand.grid(cell_type_poss_sampling_fracs)
-      colnames(all_sampling_fracs) <- names(cell_type_poss_sampling_fracs)
-      # saveRDS(all_sampling_fracs, './test_all_sampling_fracs.rds')
-      # print('colnames(all_sampling_fracs) == ')
-      # print(colnames(all_sampling_fracs))
-      
-      # iterate through these cell sampling frac combos
-      for(i in seq_len(nrow(all_sampling_fracs))){
+      if('all_cells' %in% poss_fasta_types){
         
-        # generate a name that includes the sampling rate for each cell type  
-        # cell type will be separated from its sampling frac by -
-        # cell types will be separated from one another by _
-        this_sampling_name <- paste(paste(colnames(all_sampling_fracs), as.numeric(unlist(all_sampling_fracs[i, ])), sep = '-'), collapse = '_')
-        
-        # make the downsampled terminal cell population, according to terminal, alive, and 
-        # cell type-specific sampling frac for this iteration
-        terminal_cell_population_inds <- lapply(cell_population, function(cell){
-          if((cell$terminal == FALSE) | (cell$alive == FALSE)){
-            return(FALSE)
-          }
-          this_cell_type <- cell$celltype
-          
-          # use htis particular iteration's combo of cell type recovery probs
-          this_cell_recovery_prob <- as.numeric(all_sampling_fracs[[this_cell_type]][i])
-          # print(paste0('this_cell_recovery_prob == ', this_cell_recovery_prob))
-          # print(paste0('class(this_cell_recovery_prob) == ', class(this_cell_recovery_prob)))
-          this_cell_recovered <- rbinom(n = 1, size = 1, prob = this_cell_recovery_prob)
-          
-          if(this_cell_recovered){
-            return(TRUE)
-          }
-          return(FALSE)
+        # write all bc profiles to fasta (and save mutational profiles to list)
+        all_bc_profiles <- lapply(cell_population, function(cell){
+          cell$incoming_bc_profiles
         })
         
+        bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('bc_all_cells_', this_timept_savename, '.rds'))
+        saveRDS(all_bc_profiles, bc_list_assign_name)
         
-        terminal_cell_population_names <- names(cell_population)[which(terminal_cell_population_inds == TRUE)]
-        terminal_cell_population <- cell_population[terminal_cell_population_names]
-        
-        print(paste0('here, length(terminal_cell_population) == ', length(terminal_cell_population)))
-      
-        for(num_bc_ints in bc_integrations){
-          
-          for(bc_int_recovery_prob in bc_recovery_probs){
-            
-            print(paste0('bc_int_recovery_prob == ', bc_int_recovery_prob))
-            
-            # for each terminal cell in the population, determine which integration(s) are recovered
-            # terminal_cell_recovered_inds <- lapply(terminal_cell_population_names, function(cellname){
-            these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
-              
-              # num_ints_recovered <- ceiling(num_bc_ints * bc_int_recovery_prob)
-              num_ints_recovered <- max(c(rbinom(n = 1, size = num_bc_ints, prob = bc_int_recovery_prob), 1)) # RECOVER AT LEAST ONE
-              which_ints_recovered <- sample(seq(1, num_bc_ints), size = num_ints_recovered,
-                                                  replace = FALSE)
-            
-              # which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
-              # 
-              # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
-              # if(length(which_ints_dropped_out) > 0){
-              #   mut_mat[which_ints_dropped_out, ] <- -1
-              # }
-              
-              mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles[which_ints_recovered, ]
-              
-              # by default, slicing one row from a matrix converts to numeric in R
-              if(num_ints_recovered == 1){
-                mut_mat <- matrix(mut_mat, nrow = 1)
-              }
-              
-              return(mut_mat)
-            })
-            names(these_subsetted_profiles) <- terminal_cell_population_names
-            
-            this_combo_name <- paste0('processed_bc_list_', num_bc_ints, 
-                                      '_integrations_recovery_prob_', bc_int_recovery_prob, 
-                                      '_sampling_', this_sampling_name, '_',
-                                      this_timept_savename)
-            bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
-            
-            # these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
-            #   print('dropout inds')
-            #   print(terminal_cell_dropout_inds[[cellname]])
-            #   # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles[terminal_cell_recovered_inds[[cellname]], ]
-            #   
-            # })
-            # names(these_subsetted_profiles) <- terminal_cell_population_names
-            
-            
-            print(paste0('bc_list_assign_name == ', bc_list_assign_name))
-            saveRDS(these_subsetted_profiles, bc_list_assign_name)
-            
-            # immediately write the fasta (IN THE FOR LOOP)
-            fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
-            if(!dir.exists(fasta_dir_path)){
-              dir.create(fasta_dir_path, recursive = TRUE)
-            }
-            fasta_savename <- file.path(fasta_dir_path, paste0(this_combo_name, '.fasta'))
-            
-            write_all_cell_sequences(cell_mutmats = these_subsetted_profiles, 
-                                     reference = baseline_seq_nucs_bc, 
-                                     output_fasta_name = fasta_savename)
-            
-            # mut_profiles_to_fasta(profiles = these_subsetted_profiles,
-            #                       terminal_lineage_strings = names(these_subsetted_profiles),
-            #                       include_var_pos_fasta = include_var_pos_fasta,
-            #                       fasta_type = poss_fasta_types,
-            #                       number_of_integrations = num_bc_ints,
-            #                       reference_seq = baseline_seq_nucs_bc,
-            #                       output_fasta_path = fasta_savename,
-            #                       num_cores = input_args$num_cores,
-            #                       run_id = unique_run_id,
-            #                       bc_or_mt = 'bc')
-            # make_fasta_files_new(urid = unique_run_id, 
-            #                      profiles_list = these_subsetted_profiles, 
-            #                      bc_or_mt = 'bc', 
-            #                      fasta_savename_stem = this_combo_name,
-            #                      num_ints_recovered = num_bc_ints)
-            # 
-            
-            
-          }
+        fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+        if(!dir.exists(fasta_dir_path)){
+          dir.create(fasta_dir_path, recursive = TRUE)
         }
         
+        fasta_savename <- file.path(fasta_dir_path, paste0('bc_all_cells_', this_timept_savename, '.fasta'))
+        
+        write_all_cell_sequences(cell_mutmats = all_bc_profiles, 
+                                 reference = baseline_seq_nucs_bc, 
+                                 bc_integration_umis = rep(list(bc_umis), length(all_bc_profiles)), # need list of all ints for each cell
+                                 output_fasta_name = fasta_savename,
+                                 fasta_type = 'ALL_CELLS')
         
         
-        for(num_mito_genomes in mito_genomes){
+        # write all mt profiles to fasta (and save mutational profiles to list)
+        all_mt_profiles <- lapply(cell_population, function(cell){
+          cell$incoming_mt_profiles
+        })
+        
+        mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('mt_all_cells_', this_timept_savename, '.rds'))
+        saveRDS(all_mt_profiles, mt_list_assign_name)
+        
+        fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+        if(!dir.exists(fasta_dir_path)){
+          dir.create(fasta_dir_path, recursive = TRUE)
+        }
+        
+        fasta_savename <- file.path(fasta_dir_path, paste0('mt_all_cells_', this_timept_savename, '.fasta'))
+        
+        write_all_cell_sequences(cell_mutmats = all_mt_profiles, 
+                                 reference = baseline_seq_nucs_mt, 
+                                 output_fasta_name = fasta_savename,
+                                 fasta_type = 'ALL_CELLS')
+      }
+      
+      
+      if('terminal' %in% poss_fasta_types){
+      
+        print('Creating downsampled profile lists ... ')
+        
+        # get all possible combinations of cell sampling fracs across cell types
+        all_sampling_fracs <- expand.grid(cell_type_poss_sampling_fracs)
+        colnames(all_sampling_fracs) <- names(cell_type_poss_sampling_fracs)
+        # saveRDS(all_sampling_fracs, './test_all_sampling_fracs.rds')
+        # print('colnames(all_sampling_fracs) == ')
+        # print(colnames(all_sampling_fracs))
+        
+        # iterate through these cell sampling frac combos
+        for(i in seq_len(nrow(all_sampling_fracs))){
           
-          for(mito_recovery_prob in mito_recovery_probs){
-            
-            # for each terminal cell in the population, determine which integration(s) are recovered
-            # terminal_cell_recovered_genomes <- lapply(terminal_cell_population_names, function(cellname){
-            # terminal_cell_dropout_inds <- lapply(terminal_cell_population_names, function(cellname){
-            #   
-            #   # num_ints_recovered <- ceiling(num_mito_genomes * mito_recovery_prob)
-            #   num_ints_recovered <- rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob)
-            #   which_ints_recovered <- sort(sample(seq(1, num_mito_genomes), size = num_ints_recovered,
-            #                                       replace = FALSE))
-            #   which_ints_dropped_out <- setdiff(seq(1, num_mito_genomes), which_ints_recovered)
-            #   return(which_ints_dropped_out)
-            #   # return(which_ints_recovered)
-            # })
-            # these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
-            #   # mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles[terminal_cell_recovered_genomes[[cellname]], ]
-            #   mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles
-            #   dropped_out_inds <- terminal_cell_dropout_inds[[cellname]]
-            #   if(length(dropped_out_inds) > 0){
-            #     mut_mat[dropped_out_inds, ] <- -1
-            #   }
-            #   return(mut_mat)
-            # })
-            
-            this_combo_name <- paste0('processed_bc_list_', num_mito_genomes, 
-                                      '_integrations_recovery_prob_', mito_recovery_prob, 
-                                      '_sampling_', this_sampling_name, '_',
-                                      this_timept_savename)
-            
-            mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
-            
-            
-            
-            these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
-              
-              # num_ints_recovered <- ceiling(num_bc_ints * bc_int_recovery_prob)
-              num_ints_recovered <- max(c(rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob), 1)) # RECOVER AT LEAST ONE
-              which_ints_recovered <- sample(seq(1, num_mito_genomes), size = num_ints_recovered,
-                                             replace = FALSE)
-              # which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
-              # 
-              # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
-              # if(length(which_ints_dropped_out) > 0){
-              #   mut_mat[which_ints_dropped_out, ] <- -1
-              # }
-              
-              mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles[which_ints_recovered, ]
-              
-              # by default, slicing one row from a matrix converts to numeric in R
-              if(num_ints_recovered == 1){
-                mut_mat <- matrix(mut_mat, nrow = 1)
-              }
-              
-              return(mut_mat)
-            })
-            
-            names(these_subsetted_profiles) <- terminal_cell_population_names
-            
-            print(paste0('mt_list_assign_name == ', mt_list_assign_name))
-            saveRDS(these_subsetted_profiles, mt_list_assign_name)
-            
-            fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
-            if(!dir.exists(fasta_dir_path)){
-              dir.create(fasta_dir_path, recursive = TRUE)
+          # generate a name that includes the sampling rate for each cell type  
+          # cell type will be separated from its sampling frac by -
+          # cell types will be separated from one another by _
+          this_sampling_name <- paste(paste(colnames(all_sampling_fracs), as.numeric(unlist(all_sampling_fracs[i, ])), sep = '-'), collapse = '_')
+          
+          # make the downsampled terminal cell population, according to terminal, alive, and 
+          # cell type-specific sampling frac for this iteration
+          terminal_cell_population_inds <- lapply(cell_population, function(cell){
+            if((cell$terminal == FALSE) | (cell$alive == FALSE)){
+              return(FALSE)
             }
-            fasta_savename <- file.path(fasta_dir_path, paste0(this_combo_name, '.fasta'))
+            this_cell_type <- cell$celltype
             
-            # immediately write the fasta (IN THE FOR LOOP)
-            write_all_cell_sequences(cell_mutmats = these_subsetted_profiles, 
-                                     reference = baseline_seq_nucs_mt, 
-                                     output_fasta_name = fasta_savename)
+            # use htis particular iteration's combo of cell type recovery probs
+            this_cell_recovery_prob <- as.numeric(all_sampling_fracs[[this_cell_type]][i])
+            # print(paste0('this_cell_recovery_prob == ', this_cell_recovery_prob))
+            # print(paste0('class(this_cell_recovery_prob) == ', class(this_cell_recovery_prob)))
+            this_cell_recovered <- rbinom(n = 1, size = 1, prob = this_cell_recovery_prob)
             
+            if(this_cell_recovered){
+              return(TRUE)
+            }
+            return(FALSE)
+          })
+          
+          
+          terminal_cell_population_names <- names(cell_population)[which(terminal_cell_population_inds == TRUE)]
+          terminal_cell_population <- cell_population[terminal_cell_population_names]
+          
+          # print(paste0('here, length(terminal_cell_population) == ', length(terminal_cell_population)))
+        
+          for(num_bc_ints in bc_integrations){
             
-            # mut_profiles_to_fasta(profiles = these_subsetted_profiles,
-            #                       terminal_lineage_strings = names(these_subsetted_profiles),
-            #                       include_var_pos_fasta = include_var_pos_fasta,
-            #                       fasta_type = poss_fasta_types,
-            #                       number_of_integrations = num_mito_genomes,
-            #                       reference_seq = baseline_seq_nucs_mt,
-            #                       output_fasta_path = fasta_savename,
-            #                       num_cores = input_args$num_cores,
-            #                       run_id = unique_run_id,
-            #                       bc_or_mt = 'mt')
-            
-  
-            # make_fasta_files_new(urid = unique_run_id, 
-            #                      profiles_list = these_subsetted_profiles, 
-            #                      bc_or_mt = 'mt', 
-            #                      fasta_savename_stem = this_combo_name,
-            #                      num_ints_recovered = num_mito_genomes)
-            
+            for(bc_int_recovery_prob in bc_recovery_probs){
+              
+              
+              
+              # print(paste0('bc_int_recovery_prob == ', bc_int_recovery_prob))
+              
+              # for each terminal cell in the population, determine which integration(s) are recovered
+              # terminal_cell_recovered_inds <- lapply(terminal_cell_population_names, function(cellname){
+              profiles_and_umis <- lapply(terminal_cell_population, function(cell){
+                
+                # num_ints_recovered <- ceiling(num_bc_ints * bc_int_recovery_prob)
+                num_ints_recovered <- max(c(rbinom(n = 1, size = num_bc_ints, prob = bc_int_recovery_prob), 1)) # RECOVER AT LEAST ONE
+                which_ints_recovered <- sort(sample(seq(1, num_bc_ints), size = num_ints_recovered,
+                                                    replace = FALSE))
+                
+                # subset the bc integration umis to only include those corresponding to selected-for integrations
+                these_bc_int_umis <- bc_umis[which_ints_recovered]
+              
+                # which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
+                # 
+                # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
+                # if(length(which_ints_dropped_out) > 0){
+                #   mut_mat[which_ints_dropped_out, ] <- -1
+                # }
+                
+                mut_mat <- cell$incoming_bc_profiles[which_ints_recovered, ]
+                
+                # by default, slicing one row from a matrix converts to numeric in R
+                if(num_ints_recovered == 1){
+                  mut_mat <- matrix(mut_mat, nrow = 1)
+                }
+                
+                return_list <- list()
+                return_list[['mut_mat']] <- mut_mat
+                return_list[['recovered_umis']] <- these_bc_int_umis
+                
+                return(return_list)
+              })
+              
+              print('here1')
+              
+              these_subsetted_profiles <- lapply(profiles_and_umis, function(cell){
+                cell[['mut_mat']]
+              })
+              names(these_subsetted_profiles) <- terminal_cell_population_names
+              
+              print('here2')
+              these_recovered_umis <- lapply(profiles_and_umis, function(cell){
+                cell[['recovered_umis']]
+              })
+              print('here3')
+              
+              this_combo_name <- paste0('processed_bc_list_', num_bc_ints, 
+                                        '_integrations_recovery_prob_', bc_int_recovery_prob, 
+                                        '_sampling_', this_sampling_name, '_',
+                                        this_timept_savename)
+              bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
+              
+              # these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
+              #   print('dropout inds')
+              #   print(terminal_cell_dropout_inds[[cellname]])
+              #   # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles[terminal_cell_recovered_inds[[cellname]], ]
+              #   
+              # })
+              # names(these_subsetted_profiles) <- terminal_cell_population_names
+              
+              
+              # print(paste0('bc_list_assign_name == ', bc_list_assign_name))
+              saveRDS(these_subsetted_profiles, bc_list_assign_name)
+               
+              # immediately write the fasta (IN THE FOR LOOP)
+              fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+              if(!dir.exists(fasta_dir_path)){
+                dir.create(fasta_dir_path, recursive = TRUE)
+              }
+              fasta_savename <- file.path(fasta_dir_path, paste0(this_combo_name, '.fasta'))
+              
+              print(paste0('prior to call, class(these_recovered_umis) == ', class(these_recovered_umis)))
+              print(these_recovered_umis)
+              write_all_cell_sequences(cell_mutmats = these_subsetted_profiles, 
+                                       reference = baseline_seq_nucs_bc, 
+                                       bc_integration_umis = these_recovered_umis,
+                                       output_fasta_name = fasta_savename,
+                                       fasta_type = 'TERMINAL')
+              
+              # mut_profiles_to_fasta(profiles = these_subsetted_profiles,
+              #                       terminal_lineage_strings = names(these_subsetted_profiles),
+              #                       include_var_pos_fasta = include_var_pos_fasta,
+              #                       fasta_type = poss_fasta_types,
+              #                       number_of_integrations = num_bc_ints,
+              #                       reference_seq = baseline_seq_nucs_bc,
+              #                       output_fasta_path = fasta_savename,
+              #                       num_cores = input_args$num_cores,
+              #                       run_id = unique_run_id,
+              #                       bc_or_mt = 'bc')
+              # make_fasta_files_new(urid = unique_run_id, 
+              #                      profiles_list = these_subsetted_profiles, 
+              #                      bc_or_mt = 'bc', 
+              #                      fasta_savename_stem = this_combo_name,
+              #                      num_ints_recovered = num_bc_ints)
+              # 
+              
+              
+            }
           }
           
           
+          
+          for(num_mito_genomes in mito_genomes){
+            
+            for(mito_recovery_prob in mito_recovery_probs){
+              
+              # for each terminal cell in the population, determine which integration(s) are recovered
+              # terminal_cell_recovered_genomes <- lapply(terminal_cell_population_names, function(cellname){
+              # terminal_cell_dropout_inds <- lapply(terminal_cell_population_names, function(cellname){
+              #   
+              #   # num_ints_recovered <- ceiling(num_mito_genomes * mito_recovery_prob)
+              #   num_ints_recovered <- rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob)
+              #   which_ints_recovered <- sort(sample(seq(1, num_mito_genomes), size = num_ints_recovered,
+              #                                       replace = FALSE))
+              #   which_ints_dropped_out <- setdiff(seq(1, num_mito_genomes), which_ints_recovered)
+              #   return(which_ints_dropped_out)
+              #   # return(which_ints_recovered)
+              # })
+              # these_subsetted_profiles <- lapply(terminal_cell_population_names, function(cellname){
+              #   # mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles[terminal_cell_recovered_genomes[[cellname]], ]
+              #   mut_mat <- terminal_cell_population[[cellname]]$incoming_mt_profiles
+              #   dropped_out_inds <- terminal_cell_dropout_inds[[cellname]]
+              #   if(length(dropped_out_inds) > 0){
+              #     mut_mat[dropped_out_inds, ] <- -1
+              #   }
+              #   return(mut_mat)
+              # })
+              
+              this_combo_name <- paste0('processed_bc_list_', num_mito_genomes, 
+                                        '_integrations_recovery_prob_', mito_recovery_prob, 
+                                        '_sampling_', this_sampling_name, '_',
+                                        this_timept_savename)
+              
+              mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(this_combo_name, '.rds'))
+              
+              
+              
+              these_subsetted_profiles <- lapply(terminal_cell_population, function(cell){
+                
+                # num_ints_recovered <- ceiling(num_bc_ints * bc_int_recovery_prob)
+                num_ints_recovered <- max(c(rbinom(n = 1, size = num_mito_genomes, prob = mito_recovery_prob), 1)) # RECOVER AT LEAST ONE
+                which_ints_recovered <- sort(sample(seq(1, num_mito_genomes), size = num_ints_recovered,
+                                               replace = FALSE))
+                # which_ints_dropped_out <- setdiff(seq(1, num_bc_ints), which_ints_recovered)
+                # 
+                # mut_mat <- terminal_cell_population[[cellname]]$incoming_bc_profiles
+                # if(length(which_ints_dropped_out) > 0){
+                #   mut_mat[which_ints_dropped_out, ] <- -1
+                # }
+                
+                mut_mat <- cell$incoming_mt_profiles[which_ints_recovered, ]
+                
+                # by default, slicing one row from a matrix converts to numeric in R
+                if(num_ints_recovered == 1){
+                  mut_mat <- matrix(mut_mat, nrow = 1)
+                }
+                
+                return(mut_mat)
+              })
+              
+              # names(these_subsetted_profiles) <- terminal_cell_population_names
+              
+              # print(paste0('mt_list_assign_name == ', mt_list_assign_name))
+              saveRDS(these_subsetted_profiles, mt_list_assign_name)
+              
+              fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+              if(!dir.exists(fasta_dir_path)){
+                dir.create(fasta_dir_path, recursive = TRUE)
+              }
+              fasta_savename <- file.path(fasta_dir_path, paste0(this_combo_name, '.fasta'))
+              
+              # immediately write the fasta (IN THE FOR LOOP)
+              write_all_cell_sequences(cell_mutmats = these_subsetted_profiles, 
+                                       reference = baseline_seq_nucs_mt, 
+                                       output_fasta_name = fasta_savename,
+                                       fasta_type = 'TERMINAL')
+              
+              
+              # mut_profiles_to_fasta(profiles = these_subsetted_profiles,
+              #                       terminal_lineage_strings = names(these_subsetted_profiles),
+              #                       include_var_pos_fasta = include_var_pos_fasta,
+              #                       fasta_type = poss_fasta_types,
+              #                       number_of_integrations = num_mito_genomes,
+              #                       reference_seq = baseline_seq_nucs_mt,
+              #                       output_fasta_path = fasta_savename,
+              #                       num_cores = input_args$num_cores,
+              #                       run_id = unique_run_id,
+              #                       bc_or_mt = 'mt')
+              
+    
+              # make_fasta_files_new(urid = unique_run_id, 
+              #                      profiles_list = these_subsetted_profiles, 
+              #                      bc_or_mt = 'mt', 
+              #                      fasta_savename_stem = this_combo_name,
+              #                      num_ints_recovered = num_mito_genomes)
+              
+            }
+            
+            
+          }
         }
       }
     }
@@ -4111,12 +4225,16 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     #   
     #   
     # }
+    print(paste0('class(bc_int_umis) == ', class(bc_int_umis)))
+    print(bc_int_umis)
     
     create_modified_profile_lists(cell_population = cell_population,
                                   bc_integrations = poss_num_bc_integrations,
                                   mito_genomes = poss_num_mito_genomes,
                                   mito_recovery_probs = poss_mt_genome_recovery_probs,
-                                  bc_recovery_probs = poss_bc_integration_recovery_probs)
+                                  bc_recovery_probs = poss_bc_integration_recovery_probs,
+                                  poss_fasta_types = poss_fasta_types,
+                                  bc_umis = bc_int_umis)
     
     # write the reference seqs for each provided number of max ints/genomes:
     for(max_num_bc_ints in poss_num_bc_integrations){
@@ -6091,7 +6209,8 @@ for(t in 1:length(poss_times)){
   # cat('\nafter multi_core_func\n', file = 'no_strings.txt', append = TRUE)
   if(poss_times[t] %in% sim_length_stopping_points){
     # stopCluster(one_cluster)
-    all_processes_at_stopping_point(timept_savename = paste0(custom_savename, '_time_', poss_times[t]), relative_timepoint = t, this_endpoint = poss_times[t])
+    all_processes_at_stopping_point(timept_savename = paste0(custom_savename, '_time_', poss_times[t]), 
+                                    relative_timepoint = t, this_endpoint = poss_times[t])
     
     # # if this isn't the last time point, need to restart the cluster and continue to simulate
     # if(t != length(poss_times)){

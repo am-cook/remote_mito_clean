@@ -43,7 +43,7 @@ ins_to_charvec <- function(ins, pos_num, ref_seq, fixed_length){
   return(return_list)
 }
 
-get_one_cell_sequence <- function(cell_int_mat, ref_seq){
+get_one_cell_sequence <- function(cell_int_mat, ref_seq, these_bc_int_umis = NULL){
   
   # cell_int_mat will be an n_s x l matrix where n_s is the number of downsampled integrations in the cell and l is the barcode length
   
@@ -74,6 +74,12 @@ get_one_cell_sequence <- function(cell_int_mat, ref_seq){
     
     int_seq <- paste(bases, collapse = '')
     
+    if(!is.null(these_bc_int_umis)){
+      this_int_umi <- these_bc_int_umis[int_num]  
+      int_seq <- paste0(this_int_umi, int_seq)
+    }
+    
+    
     return(int_seq)
   })
   
@@ -81,14 +87,34 @@ get_one_cell_sequence <- function(cell_int_mat, ref_seq){
 }
 
 
-write_all_cell_sequences <- function(cell_mutmats, reference, output_fasta_name){
-  all_cell_seqs <- parLapply(cl = one_cluster, cell_mutmats, function(cell){
-    get_one_cell_sequence(cell_int_mat = cell,
-                          ref_seq = reference)
-  })
+write_all_cell_sequences <- function(cell_mutmats, reference, output_fasta_name, fasta_type, bc_integration_umis = NULL){
+  
+  # print('beginning of write all sequences')
+  if(!is.null(bc_integration_umis)){
+    # print('not null')
+    # print(paste0('class(bc_integration_umis) == ', class(bc_integration_umis)))
+    # print(bc_integration_umis)
+    
+    # print(paste0('class(cell_mutmats) == ', class(cell_mutmats)))
+    # print(cell_mutmats)
+    
+    all_cell_seqs <- parLapply(cl = one_cluster, seq(1, length(cell_mutmats)), function(cellnum){
+      get_one_cell_sequence(cell_int_mat = cell_mutmats[[cellnum]],
+                            these_bc_int_umis = bc_integration_umis[[cellnum]],
+                            ref_seq = reference)
+    })  
+  } else{
+    # print('null')
+    all_cell_seqs <- parLapply(cl = one_cluster, seq(1, length(cell_mutmats)), function(cellnum){
+      get_one_cell_sequence(cell_int_mat = cell_mutmats[[cellnum]],
+                            ref_seq = reference)
+    })
+  }
+  
+  # print('end of write all sequences')
   # adjust fasta name to account for terminal cells only (deprecated reason)
-  updated_output_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_TERMINAL', '\\2'), x = output_fasta_name)
-  write.fasta(all_cell_seqs, names = names(all_cell_seqs), file.out = updated_output_fasta_path)
+  updated_output_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_', fasta_type, '\\2'), x = output_fasta_name)
+  write.fasta(all_cell_seqs, names = names(cell_mutmats), file.out = updated_output_fasta_path)
 }
 
 # write_all_cell_sequences(has_nas, bc_ref_seq, output_fasta_name = 'improved_translation_by_int_prev_list.fasta')

@@ -6,12 +6,12 @@ suppressPackageStartupMessages({
 
  
  
-generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, be_target_count){
+generate_non_be_target_sequence <- function(barcode_length, nuc_fracs, target_from, be_target_count){
   #' @title Generate barcode sequence not including BE targets
   #' @description This function returns a sequence of non-BE-target nucleotides into which
   #' intervening BE target nucleotides are later added.
   #' @return Character vector of length equal to number of non-BE-targets in barcode
-  #' @param bc_length integer. The desired end length of the crispr barcode
+  #' @param barcode_length integer. The desired end length of the crispr barcode
   #' @param nuc_fracs numeric. A length 4 numeric vector with relative fractions of c(A, G, C, T) in the barcode
   #' @param target_from character. The nucleotide that is targeted by the base editor (string, 'A', 'G', 'C', or 'T')
   #' @param be_target_count integer. The number of base editing targets in the barcode
@@ -21,20 +21,20 @@ generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, b
   # # note that this assumes there is no base-specific nuclease target
   if(be_target_count == 0){
     # non_target_sequence <- sample(non_target_sequence, size = length(non_target_sequence), replace = FALSE)
-    return(sample(c('A', 'G', 'C', 'T'), size = bc_length, replace = TRUE))
+    return(sample(c('A', 'G', 'C', 'T'), size = barcode_length, replace = TRUE))
     # return(non_target_sequence)
     # return()
   }
   
   # find number of nucleotides in the barcode that are NOT BE targets
-  num_non_be_targets <- bc_length - be_target_count
+  num_non_be_targets <- barcode_length - be_target_count
   
   # find number of remaining As, Gs, Cs, and Ts:
   # given the required nucleotide fractions, find the number of required nucleotides of each base in barcode
-  num_required_as <- round(bc_length * nuc_fracs[1])
-  num_required_gs <- round(bc_length * nuc_fracs[2])
-  num_required_cs <- round(bc_length * nuc_fracs[3])
-  num_required_ts <- round(bc_length * nuc_fracs[4])
+  num_required_as <- round(barcode_length * nuc_fracs[1])
+  num_required_gs <- round(barcode_length * nuc_fracs[2])
+  num_required_cs <- round(barcode_length * nuc_fracs[3])
+  num_required_ts <- round(barcode_length * nuc_fracs[4])
   
   # the following process deals with reconciling any differences that may arise between 
   # the provided fraction of each nucleotide and the number of BE targets
@@ -86,7 +86,7 @@ generate_non_be_target_sequence <- function(bc_length, nuc_fracs, target_from, b
   # regardless of whether the user provided an incompatible nucleotide ratio given the inputted targets,
   # we have to calculate the relative nucleotide fractions of the NON-TARGET bases
   non_target_probs <- c(num_required_as, num_required_gs, 
-                        num_required_cs, num_required_ts) / (bc_length - be_target_count + leftover_bases)
+                        num_required_cs, num_required_ts) / (barcode_length - be_target_count + leftover_bases)
   
   if(leftover_bases > 0){
     
