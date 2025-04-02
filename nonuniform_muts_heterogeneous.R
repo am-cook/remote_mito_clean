@@ -388,10 +388,11 @@ get_background_edit_inds <- function(num_rows, num_cols, bg_pos_er_list, mut_typ
   
   # cat('\nmade it here2.26\n', file = 'no_strings.txt', append = TRUE)
   
-  if(length(coords) == 0){
-    return_list <- list('num_edits' = FALSE, 'i_coords' = FALSE, 'j_coords' = FALSE)
-    return(return_list)
-  }
+  ################## unnecessary 4/2
+  # if(length(coords) == 0){
+  #   return_list <- list('num_edits' = FALSE, 'i_coords' = FALSE, 'j_coords' = FALSE)
+  #   return(return_list)
+  # }
   
   # cat('\nmade it here2.27\n', file = 'no_strings.txt', append = TRUE)
   
@@ -600,7 +601,7 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   
   # cat('\nmade it here1.3\n', file = 'no_strings.txt', append = TRUE)
   
-  time_num_transitions <- uniform_res[['num_edits']]
+  num_transitions <- uniform_res[['num_edits']]
   transition_i_coords <- uniform_res[['i_coords']]
   transition_j_coords <- uniform_res[['j_coords']]
   
@@ -612,9 +613,9 @@ transition_func <- function(mut_mat, num_rows, num_cols, baseline_ints,
   #                                                                        uniform_edit_prob = uniform_transition_prob)
   
   # get_background_edit_inds() will return FALSE if no edits have occurred
-  if(time_num_transitions != FALSE){
+  if(num_transitions != 0){
     if(verbose){
-      cat(paste0('\nin time_num_transitions\n'), file = 'no_strings.txt', append = TRUE)  
+      cat(paste0('\nin num_transitions\n'), file = 'no_strings.txt', append = TRUE)  
     }
     
     # cat('in here at all ...', file = 'no_strings.txt', append = TRUE)
@@ -968,7 +969,7 @@ transversion_func <- function(mut_mat, num_rows, num_cols, bg_transversion_pos_e
   
   # cat('\nmade it past uniform res \n', file = 'no_strings.txt', append = TRUE)
   
-  time_num_transversions <- uniform_res[['num_edits']]
+  num_transversions <- uniform_res[['num_edits']]
   transversion_i_coords <- uniform_res[['i_coords']]
   transversion_j_coords <- uniform_res[['j_coords']]
   
@@ -1011,7 +1012,7 @@ transversion_func <- function(mut_mat, num_rows, num_cols, bg_transversion_pos_e
   # if some edits occurred, perform necessary transversions
   # we allow the user to force transversions in the non-uniform editing but not the uniform
   # time_num_tranversions == TRUE when some mutation coordinates were actually generated
-  if(time_num_transversions != FALSE){
+  if(num_transversions != 0){
     # cat(paste0('before timenumtransversion post indices func in trasnversion'), file = 'no_strings.txt', append = TRUE)
     mut_mat <- post_indices_transversion_func(i_coords = transversion_i_coords,
                                               j_coords = transversion_j_coords,
@@ -1246,20 +1247,20 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
           cat(paste0('\ntrying to add an insertion to a deletion site at ', i_coords[x], ', ', j_coords[x], '!!\n'), file = 'no_strings.txt', append = TRUE)
           
           
-          i_coords_path <- paste0('i_coords_', run_id, '.rds')
-          j_coords_path <- paste0('j_coords_', run_id, '.rds')
-          elig_ints_path <- paste0('elig_ints_', run_id, '.rds')
-          mutmat_path <- paste0('pre_insertion_mutmat_', run_id, '.rds')
-          
-          
-          # using i_coords_path as a proxy for whether the other files were also written 
-          if(!file.exists(i_coords_path)){
-            saveRDS(i_coords, file = i_coords_path)
-            saveRDS(j_coords, file = j_coords_path)
-            saveRDS(elig_ints, file = elig_ints_path)
-            saveRDS(incoming_mat, file = mutmat_path)
-            
-          }
+          # i_coords_path <- paste0('i_coords_', run_id, '.rds')
+          # j_coords_path <- paste0('j_coords_', run_id, '.rds')
+          # elig_ints_path <- paste0('elig_ints_', run_id, '.rds')
+          # mutmat_path <- paste0('pre_insertion_mutmat_', run_id, '.rds')
+          # 
+          # 
+          # # using i_coords_path as a proxy for whether the other files were also written 
+          # if(!file.exists(i_coords_path)){
+          #   saveRDS(i_coords, file = i_coords_path)
+          #   saveRDS(j_coords, file = j_coords_path)
+          #   saveRDS(elig_ints, file = elig_ints_path)
+          #   saveRDS(incoming_mat, file = mutmat_path)
+          #   
+          # }
           
           
           
@@ -1299,7 +1300,7 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
                                           bg_pos_er_list = bg_ins_pos_er_list,
                                           mut_type = 'insertion',
                                           verbose = verbose)
-  time_num_insertions <- uniform_res[['num_edits']]
+  num_insertions <- uniform_res[['num_edits']]
   insertion_i_coords <- uniform_res[['i_coords']]
   insertion_j_coords <- uniform_res[['j_coords']]
   
@@ -1307,7 +1308,7 @@ insertion_func <- function(mut_mat, num_rows, num_cols, bg_ins_pos_er_list,
   #                                                                            uniform_edit_prob = uniform_insertion_prob)
   
   # get_background_edit_inds() will return FALSE if no edits have occurred
-  if(time_num_insertions != FALSE){
+  if(num_insertions != 0){
     mut_mat <- post_indices_insertion_func(i_coords = insertion_i_coords,
                                            j_coords = insertion_j_coords,
                                            incoming_mat = mut_mat)
@@ -1439,11 +1440,11 @@ perform_deletion <- function(ival, jval, del_length, mat_name, num_cols){
   if(del_length < deletable_here){ # if we can't delete every base at this position, delete as many as del_length allows
     mat_name[ival, jval] <- round(old_val, digits = nchar(old_val) - del_length - 2) 
   } else if(del_length == deletable_here){ # if we have an exact match, it's easy because we just convert to -1
-    mat_name[ival, jval] <- -1
+    mat_name[ival, jval] <- -1L
   } else if(del_length > deletable_here){ # if the deletion has length longer than number of bases we can delete at this position
     
     # this looks right, since by setting mat_name[ival, jval] <- -1, we are deleting deletable_here bases  
-    mat_name[ival, jval] <- -1
+    mat_name[ival, jval] <- -1L
     jval <- jval - 1 # we extend the deletion to the left for simplicity
     return(perform_deletion(ival, jval, del_length - deletable_here, mat_name, num_cols))
   }
@@ -1468,10 +1469,146 @@ all_deletions_one_mat <- function(i, j, d, old_mat, num_cols){
 }
 
 deletion_func <- function(mut_mat, num_rows, num_cols, bg_del_pos_er_list, uniform = TRUE,
-                          target_del_pos_er_list = NULL, verbose = FALSE){
+                          target_del_pos_er_list = NULL, verbose = FALSE, interdeletion_dropout_prob = 0,
+                          interdeletion_dropout_radius = 0){
   # we accept both the BE pos er list AND nuc pos er list in deletions because there may be elevated substitution rates at cut sites
   
   # Accepts sparse matrix as input, and adds to it the deletions that occur
+  multi_edit_bc_dropout <- function(deletion_mut_mat, bc_profile, deletion_radius, dropout_prob){
+    
+    find_deletions_within_radius <- function(delmat, radius) {
+      deletion_positions <- delmat[, 2]  
+      if(length(deletion_positions) < 2){ # no inter-target dropout if fewer than 2 deletions
+        return(matrix(NA, nrow = 0, ncol = 2)) 
+      }
+      pairwise_deletion_locs <- t(combn(deletion_positions, 2))  # pairwise deletion location positions
+      
+      inter_target_dropout_pairs <- matrix(pairwise_deletion_locs[abs(pairwise_deletion_locs[, 1] - pairwise_deletion_locs[, 2]) <= radius, ], 
+                                           ncol =2)  
+      return(inter_target_dropout_pairs)
+    }
+    
+    # get integrations nums present
+    unique_integrations <- unique(deletion_mut_mat[, 1])
+    
+    dropped_out_intervening_positions <- lapply(unique_integrations, function(int_num) {
+      
+      # get deletion positions for this integration
+      int_delmat <- matrix(deletion_mut_mat[deletion_mut_mat[, 1] == int_num, ], ncol = 2)
+      
+      # find if/which deletion events occurred within deletion_radius of one another
+      dropout_pairs <- find_deletions_within_radius(int_delmat, deletion_radius)
+      
+      # write these pairs to a matrix
+      if(nrow(dropout_pairs) > 0){
+        cbind(int_num, dropout_pairs) 
+      } else{
+        NULL
+      }
+    })
+    
+    
+    
+    # stack results across integration numbers
+    result_matrix <- do.call(rbind, dropped_out_intervening_positions)
+    
+    
+    res <- apply(result_matrix, MARGIN = 1, function(row){
+      # for each pair of muts that could have dropped out, probabilistically determine if dropout occurred:
+      dropout_occurs <- rbinom(n = 1, size = 1, prob = dropout_prob)
+      
+      # only set intervening seqs to -1 if dropout occurs
+      if(dropout_occurs){
+        bc_profile[as.integer(row[1]), row[2]:row[3]] <<- -1L # global update to bc mutmat
+      }
+      
+    })
+    
+    
+    return(bc_profile)
+    
+    # no need to return anything since bc_mat is being updated globally 
+    # return()
+  }  
+  # multi_edit_bc_dropout <- function(deletion_mut_mat, bc_profile, deletion_radius, dropout_prob){
+  #   
+  #   cat(paste0('entering multi_edit_bc_dropout\n'), file = 'no_strings.txt', append = TRUE)
+  #   # find the indices of the new deletions at this timepoint
+  #   # new_deletion_inds <- which(deletion_mut_mat == -1, arr.ind = TRUE)
+  #   # sorted_new_deletion_inds <- new_deletion_inds[order(new_deletion_inds[, 'row']), ]
+  #   
+  #   # radius <- 5
+  #   
+  #   find_deletions_within_radius <- function(delmat, radius) {
+  #     deletion_positions <- delmat[, 2]  
+  #     if(length(deletion_positions) < 2){ # no inter-target dropout if fewer than 2 deletions
+  #       return(matrix(NA, nrow = 0, ncol = 2)) 
+  #     }
+  #     pairwise_deletion_locs <- t(combn(deletion_positions, 2))  # pairwise deletion location positions
+  #     
+  #     inter_target_dropout_pairs <- matrix(pairwise_deletion_locs[abs(pairwise_deletion_locs[, 1] - pairwise_deletion_locs[, 2]) <= radius, ], 
+  #                                          ncol = 2)
+  #     
+  #     if(nrow(inter_target_dropout_pairs) > 0){
+  #       return(inter_target_dropout_pairs)
+  #     } else{
+  #       return(matrix(data = NA, nrow = 0, ncol = 1))
+  #     }
+  #     # return(inter_target_dropout_pairs)
+  #   }
+  #   
+  #   # get integrations nums present
+  #   unique_integrations <- unique(deletion_mut_mat[, 1])
+  #   cat('unique integrations == ', file = 'no_strings.txt', append = TRUE)
+  #   for(i in 1:length(unique_integrations)){
+  #     cat(paste0(unique_integrations[i], '\n'), file = 'no_strings.txt', append = TRUE)
+  #   }
+  #   
+  #   cat(paste0('after unique_integrations\n'), file = 'no_strings.txt', append = TRUE)
+  #   
+  #   dropped_out_intervening_positions <- lapply(unique_integrations, function(int_num) {
+  #     
+  #     # get deletion positions for this integration
+  #     int_delmat <- deletion_mut_mat[deletion_mut_mat[, 1] == int_num, ]
+  #     
+  #     # find if/which deletion events occurred within deletion_radius of one another
+  #     dropout_pairs <- find_deletions_within_radius(int_delmat, deletion_radius)
+  #     
+  #     cat(paste0('right before nrow(dropout_pairs) > 0\n'), file = 'no_strings.txt', append = TRUE)
+  #     # write these pairs to a matrix
+  #     if(nrow(dropout_pairs) > 0){
+  #       cbind(int_num, dropout_pairs) 
+  #     } else{
+  #       NULL
+  #     }
+  #     cat(paste0('right after nrow(dropout_pairs) > 0\n'), file = 'no_strings.txt', append = TRUE)
+  #   })
+  #   cat(paste0('after dropped_out_intervening_positions(apply)\n'), file = 'no_strings.txt', append = TRUE)
+  #   
+  #   cat(paste0('length(dropped_out_intervening_positions) == ', length(dropped_out_intervening_positions), '\n'), file = 'no_strings.txt', append = TRUE)
+  #   # stack results across integration numbers
+  #   
+  #   # NULL will not count toward length
+  #   if(length(dropped_out_intervening_positions) > 0){
+  #     result_matrix <- do.call(rbind, dropped_out_intervening_positions)
+  #     cat(paste0('dropout prob == ', dropout_prob, '\n'), file = 'no_strings.txt', append = TRUE)
+  #     cat(paste0('nrow(result_matrix) == ', nrow(result_matrix), '\n'), file = 'no_strings.txt', append = TRUE)
+  #     res <- apply(result_matrix, MARGIN = 1, function(row){
+  #       # for each pair of muts that could have dropped out, probabilistically determine if dropout occurred:
+  #       dropout_occurs <- rbinom(n = 1, size = 1, prob = dropout_prob)
+  #       
+  #       # only set intervening seqs to -1 if dropout occurs
+  #       if(dropout_occurs == 1){
+  #         cat(paste0('dropout occurred from ', row[2], ' to ', row[3], '\n'), file = 'no_strings.txt', append = TRUE)
+  #         bc_profile[row[1], row[2]:row[3]] <<- -1 # global update to bc mutmat
+  #       }
+  #       
+  #     })
+  #   }
+  #   
+  #   
+  #   return(bc_profile)
+  # }
   
   # cat('\nmade it into deletion \n', file = 'no_strings.txt', append = TRUE)
   
@@ -1491,7 +1628,7 @@ deletion_func <- function(mut_mat, num_rows, num_cols, bg_del_pos_er_list, unifo
                                           mut_type = 'deletion',
                                           verbose = verbose)
   # cat('\nafter get background edit inds in deletion \n', file = 'no_strings.txt', append = TRUE)
-  time_num_deletions <- uniform_res[['num_edits']]
+  num_deletions <- uniform_res[['num_edits']]
   start_i_coords <- uniform_res[['i_coords']]
   start_j_coords <- uniform_res[['j_coords']]
   
@@ -1499,11 +1636,32 @@ deletion_func <- function(mut_mat, num_rows, num_cols, bg_del_pos_er_list, unifo
   #                                                                                           uniform_edit_prob = uniform_deletion_prob)
   
   # get_background_edit_inds() will return FALSE if no edits have occurred
-  # cat('\nbefore post indices deletion func in deletion \n', file = 'no_strings.txt', append = TRUE)
-  if(time_num_deletions != FALSE){
+  # cat('\nbefore start post indices deletion func in deletion \n', file = 'no_strings.txt', append = TRUE)
+  
+  # cat('\nnum_deletions == \n', file = 'no_strings.txt', append = TRUE)
+  # cat(paste0(num_deletions, '\n'), file = 'no_strings.txt', append = TRUE)
+  
+  if(num_deletions != 0){
     mut_mat <- post_indices_deletion_func(i_coords = start_i_coords,
                                           j_coords = start_j_coords,
                                           incoming_mat = mut_mat)
+    
+    # cat(paste0('in start, ', interdeletion_dropout_prob, ', ', interdeletion_dropout_radius), 
+    #     file = 'no_strings.txt', append = TRUE)
+    # if we are allowing dropout of intervening barcode seqs due to >=2 simultaneous deletions:
+    if((interdeletion_dropout_prob > 0) & (interdeletion_dropout_radius > 0)){
+      # make a matrix of the starting i and j coords of the new deletions:
+      deletion_ijs_this_timepoint <- cbind(start_i_coords, start_j_coords)
+      # cat('################\n', file = 'no_strings.txt', append = TRUE)
+      # cat('i_coord, j_coord == \n', file = 'no_strings.txt', append = TRUE)
+      # for(i in 1:length(start_j_coords)){
+      #   cat(paste0(start_i_coords[i], ', ', start_j_coords[i], '\n'), file = 'no_strings.txt', append = TRUE)
+      # }
+      multi_edit_bc_dropout(deletion_mut_mat = deletion_ijs_this_timepoint, 
+                            bc_profile = mut_mat, 
+                            deletion_radius = interdeletion_dropout_radius, 
+                            dropout_prob = interdeletion_dropout_prob)
+    }
   }
   # cat('\nafter post indices deletion func in deletion \n', file = 'no_strings.txt', append = TRUE)
   
@@ -1548,10 +1706,37 @@ deletion_func <- function(mut_mat, num_rows, num_cols, bg_del_pos_er_list, unifo
   # if(nu_deletion_i_coords == TRUE){ # if no edits were made (raised by FALSE flag)
   # if((nu_transition_i_coords[1] != FALSE) & (length(nu_deletion_i_coords) > 0)){
   # cat('\nbefore pidf editing deletions', file = 'no_strings.txt', append = TRUE)
+  # cat('\nbefore nu post indices deletion func in deletion \n', file = 'no_strings.txt', append = TRUE)
+  
+  # cat('\nnum_deletions == \n', file = 'no_strings.txt', append = TRUE)
+  # cat(paste0(num_deletions, '\n'), file = 'no_strings.txt', append = TRUE)
   if(nu_deletion_i_coords[1] != FALSE){
     mut_mat <- post_indices_deletion_func(i_coords = nu_deletion_i_coords,
                                           j_coords = nu_deletion_j_coords,
                                           incoming_mat = mut_mat)
+    # if we are allowing dropout of intervening barcode seqs due to >=2 simultaneous deletions:
+    if((interdeletion_dropout_prob > 0) & (interdeletion_dropout_radius > 0)){
+      
+      # cat(paste0('in nu, ', interdeletion_dropout_prob, ', ', interdeletion_dropout_radius, '\n'), file = 'no_strings.txt', append = TRUE)
+      # make a matrix of the starting i and j coords of the new deletions:
+      deletion_ijs_this_timepoint <- cbind(nu_deletion_i_coords, nu_deletion_j_coords)
+      
+      # for(i in 1:nrow(deletion_ijs_this_timepoint)){
+      #   cat(paste0(deletion_ijs_this_timepoint[i, 1], ', ', deletion_ijs_this_timepoint[i, 2], '\n'), file = 'no_strings.txt', append = TRUE)
+      # }
+      
+      # cat('################\n', file = 'no_strings.txt', append = TRUE)
+      # cat('i_coord, j_coord == \n', file = 'no_strings.txt', append = TRUE)
+      # for(i in 1:length(nu_deletion_j_coords)){
+      #   cat(paste0(nu_deletion_i_coords[i], ', ', nu_deletion_j_coords[i], '\n'), file = 'no_strings.txt', append = TRUE)
+      # }
+      # saveRDS(deletion_ijs_this_timepoint, 'deletion_ijs_this_timepoint.rds')
+      
+      multi_edit_bc_dropout(deletion_mut_mat = deletion_ijs_this_timepoint, 
+                            bc_profile = mut_mat, 
+                            deletion_radius = interdeletion_dropout_radius, 
+                            dropout_prob = interdeletion_dropout_prob)
+    }
   }
   # cat('\nafter pidf editing deletions', file = 'no_strings.txt', append = TRUE)
   
@@ -1594,7 +1779,7 @@ perform_all_mt_mutations <- function(incoming_mut_mat,
                                       # uniform_transition_prob = transition_prob_mt,
                                       bg_transition_pos_er_list = bg_transition_list,
                                       baseline_ints = baseline_seq_ints_mt,
-                                      verbose = TRUE)
+                                      verbose = FALSE)
   # cat(paste0('\nPOST_TRANSITION sum(incoming_mut_mat) == ', sum(incoming_mut_mat)), file = 'no_strings.txt', append = TRUE)
   
   # cat(paste0('\n after first call to transition_func == ', length(bg_transition_list), '\n'), file = 'no_strings.txt', append = TRUE)
@@ -1610,7 +1795,7 @@ perform_all_mt_mutations <- function(incoming_mut_mat,
                                         bg_transversion_pos_er_list = bg_transversion_list,
                                         baseline_ints = baseline_seq_ints_mt,
                                         bg_sub_prob_mat = prob_sub_mat,
-                                        verbose = TRUE)
+                                        verbose = FALSE)
   # cat(paste0('\nPOST_TRANSVERSION sum(incoming_mut_mat) == ', sum(incoming_mut_mat)), file = 'no_strings.txt', append = TRUE)
   # cat('after transversion func\n', file = 'no_strings.txt', append = TRUE)
   # cat('finished transversion_func\n', file = 'outfile.txt', append = TRUE)
@@ -1618,7 +1803,7 @@ perform_all_mt_mutations <- function(incoming_mut_mat,
                                      num_rows = num_rows_mt, 
                                      num_cols = num_cols_mt, 
                                      bg_ins_pos_er_list = bg_insertion_list,
-                                     verbose = TRUE)
+                                     verbose = FALSE)
                                      # uniform_insertion_prob = insertion_prob_mt)
   # cat(paste0('\nPOST_INSERTION sum(incoming_mut_mat) == ', sum(incoming_mut_mat)), file = 'no_strings.txt', append = TRUE)
   
@@ -1628,7 +1813,7 @@ perform_all_mt_mutations <- function(incoming_mut_mat,
                                     num_rows = num_rows_mt, 
                                     num_cols = num_cols_mt, 
                                     bg_del_pos_er_list = bg_deletion_list,
-                                    verbose = TRUE)
+                                    verbose = FALSE)
   # cat(paste0('\nPOST_DELETION sum(incoming_mut_mat) == ', sum(incoming_mut_mat)), file = 'no_strings.txt', append = TRUE)
                                     # uniform_deletion_prob = deletion_prob_mt)
   # cat('after deletion func\n', file = 'no_strings.txt', append = TRUE)
@@ -1648,7 +1833,10 @@ perform_all_bc_mutations <- function(incoming_mut_mat,
                                      prob_sub_mat,
                                      timepoint_for_label = '',
                                      urid = NULL,
-                                     cell_num = NULL
+                                     cell_num = NULL,
+                                     interdel_dropout_radius,
+                                     interdel_dropout_prob
+                                     
                                      # uniform_sub_edits = TRUE, 
                                      # uniform_indel_edits = TRUE,
                                      # basepos_be_list = NULL, basepos_nuc_list = NULL,
@@ -1788,7 +1976,12 @@ perform_all_bc_mutations <- function(incoming_mut_mat,
                                     num_cols = num_cols_bc, 
                                     # uniform = uniform_indel_edits,
                                     bg_del_pos_er_list = bg_deletion_list, 
-                                    target_del_pos_er_list = target_deletion_list)  
+                                    target_del_pos_er_list = target_deletion_list,
+                                    interdeletion_dropout_prob = interdel_dropout_prob,
+                                    interdeletion_dropout_radius = interdel_dropout_radius)  
+  
+  
+  
   # cat('after bc deletion func\n', file = 'no_strings.txt', append = TRUE)
   # cat(paste0('sum(incoming_mut_mat) after deletion  = ', sum(incoming_mut_mat),  '\n'),
   #     file = 'outfile_nummuts.txt',

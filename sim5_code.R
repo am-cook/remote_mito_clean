@@ -669,7 +669,6 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
   
   # if there is a provided be target config
   if(!is.null(be_targets_configs)){
-    print('in !is.null(be_targets_configs)')
     # now parse the inputted target configurations
     parsed_be_target_config <- parse_target_config(be_targets_configs)
     be_target_config_pattern <- parsed_be_target_config[['config']]
@@ -2514,7 +2513,9 @@ setup_sim <- function(num_clusters,
                       cell_type_jitter_frac,
                       # mt_recovered_genomes_df, bc_recovered_ints_df, downsample_recovered_cells_df,
                       poss_fasta_types,
-                      include_var_pos_fasta){
+                      include_var_pos_fasta,
+                      interdeletion_dropout_radius,
+                      interdeletion_dropout_prob){
   
   # print('basepos_mt_nontarget_transition_probs')
   # print(basepos_mt_nontarget_transition_probs)
@@ -2529,10 +2530,10 @@ setup_sim <- function(num_clusters,
   
   
   
-  init_incoming_mt_profile <- sparseMatrix(i = c(), j = c(), 
+  init_incoming_mt_profile <- sparseMatrix(i = c(1), j = c(1), x = c(0L),
                                            dims = c(num_rows_mt, num_cols_mt))
   # print(incoming_mt_profiles)
-  init_incoming_bc_profile <- sparseMatrix(i = c(), j = c(), 
+  init_incoming_bc_profile <- sparseMatrix(i = c(1), j = c(1), x = c(0L),
                                            dims = c(num_rows_bc, num_cols_bc))
   
   cell_population <- list('1' = list('linstring' = '1',
@@ -2606,7 +2607,9 @@ setup_sim <- function(num_clusters,
                                     'poss_fasta_types', 'include_var_pos_fasta',
                                     'founder_cell_type',
                                     'get_one_cell_sequence', 'ins_to_charvec', # for writing to fastas
-                                    'bc_int_umis'
+                                    'bc_int_umis',
+                                    'interdeletion_dropout_radius',
+                                    'interdeletion_dropout_prob'
                                     ),
                 envir = environment())
   cluster_startup_end <- Sys.time()
@@ -2645,7 +2648,9 @@ multi_core_func <- function(timepoint,
                             induced_tm_list,
                             differentiation_induction_timepoint,
                             editing_induction_timepoint,
-                            unique_run_id){
+                            unique_run_id,
+                            interdeletion_dropout_radius,
+                            interdeletion_dropout_prob){
   
   
   ######## DIVIDE, THEN DIE, THEN MUTATE
@@ -2849,7 +2854,9 @@ multi_core_func <- function(timepoint,
                                                                      target_deletion_list = cell_type_basepos_bc_target_deletion_probs[[this_cell_type]][[editing_induced]],
                                                                      prob_sub_mat = cell_type_bc_sub_prob_mat[[this_cell_type]][[editing_induced]],
                                                                      timepoint_for_label = timepoint,
-                                                                     urid = unique_run_id))
+                                                                     urid = unique_run_id,
+                                                                     interdel_dropout_radius = interdeletion_dropout_radius,
+                                                                     interdel_dropout_prob = interdeletion_dropout_prob))
                                    })
   # cat(paste0('\nAFTER PERFORM ALL BC MUTATIONS\n'), file = 'no_strings.txt', append = TRUE)
   # print('after mutated_bc_profiles')
@@ -3271,49 +3278,51 @@ multi_core_func <- function(timepoint,
 # ################# want to get rid of 3/27 but can't yet
 
 sim_arglist <- list(num_clusters = input_args$num_cores, 
-                          init_pop_size = input_args$num_init_cells,
-                          sim_length = max(sim_length_stopping_points),
-                          # cell_cycle_length = input_args$cell_cycle_length,
-                          cell_type_cell_cycle_length = cell_type_cell_cycle_length,
-                          num_rows_mt = max(poss_num_mito_genomes),
-                          num_cols_mt = input_args$mito_genome_length,
-                          num_rows_bc = max(poss_num_bc_integrations),
-                          num_cols_bc = input_args$bc_length,
-                          time_inc = time_inc,
-                          cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs,
-                          cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs,
-                          cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs,
-                          cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
-                          cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs,
-                          cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs,
-                          cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs,
-                          cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs,
-                          cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs,
-                          cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs,
-                          cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs,
-                          cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
-                          cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat,
-                          cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat,
-                          cell_type_death_probs = cell_type_death_probs,
-                          uninduced_tm_list = uninduced_tm_list,
-                          induced_tm_list = induced_tm_list,
-                          differentiation_induction_timepoint = input_args$differentiation_induction_timepoint,
-                          editing_induction_timepoint = input_args$editing_induction_timepoint,
-                          # uniform_subs = simulate_uniform_subs,
-                          # uniform_indels = simulate_uniform_indels,
-                          forced_transversions = force_transversions,
-                          # pos_er_be_list = basepos_editrate_be_list,
-                          # pos_er_nuc_list = basepos_editrate_nuc_list,
-                          custom_savename = custom_savename, 
-                          sim_length_stopping_points = sim_length_stopping_points,
-                          # jitter_frac = input_args$jitter_fraction,
-                          cell_type_jitter_frac = cell_type_jitter_frac,
-                          # bc_recovered_ints_df = bc_recovered_ints_df,
-                          # mt_recovered_genomes_df = mt_recovered_genomes_df,
-                          # downsample_recovered_cells_df = downsample_recovered_cells_df,
-                          poss_fasta_types = poss_fasta_types,
-                          include_var_pos_fasta = include_var_pos_fasta,
-                          founder_cell_type = founder_cell_type)
+                    init_pop_size = input_args$num_init_cells,
+                    sim_length = max(sim_length_stopping_points),
+                    # cell_cycle_length = input_args$cell_cycle_length,
+                    cell_type_cell_cycle_length = cell_type_cell_cycle_length,
+                    num_rows_mt = max(poss_num_mito_genomes),
+                    num_cols_mt = input_args$mito_genome_length,
+                    num_rows_bc = max(poss_num_bc_integrations),
+                    num_cols_bc = input_args$bc_length,
+                    time_inc = time_inc,
+                    cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs,
+                    cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs,
+                    cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs,
+                    cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
+                    cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs,
+                    cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs,
+                    cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs,
+                    cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs,
+                    cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs,
+                    cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs,
+                    cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs,
+                    cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
+                    cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat,
+                    cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat,
+                    cell_type_death_probs = cell_type_death_probs,
+                    uninduced_tm_list = uninduced_tm_list,
+                    induced_tm_list = induced_tm_list,
+                    differentiation_induction_timepoint = input_args$differentiation_induction_timepoint,
+                    editing_induction_timepoint = input_args$editing_induction_timepoint,
+                    # uniform_subs = simulate_uniform_subs,
+                    # uniform_indels = simulate_uniform_indels,
+                    forced_transversions = force_transversions,
+                    # pos_er_be_list = basepos_editrate_be_list,
+                    # pos_er_nuc_list = basepos_editrate_nuc_list,
+                    custom_savename = custom_savename, 
+                    sim_length_stopping_points = sim_length_stopping_points,
+                    # jitter_frac = input_args$jitter_fraction,
+                    cell_type_jitter_frac = cell_type_jitter_frac,
+                    # bc_recovered_ints_df = bc_recovered_ints_df,
+                    # mt_recovered_genomes_df = mt_recovered_genomes_df,
+                    # downsample_recovered_cells_df = downsample_recovered_cells_df,
+                    poss_fasta_types = poss_fasta_types,
+                    include_var_pos_fasta = include_var_pos_fasta,
+                    founder_cell_type = founder_cell_type,
+                    interdeletion_dropout_radius = input_args$nuclease_targets$interdeletion_dropout_radius,
+                    interdeletion_dropout_prob = input_args$nuclease_targets$interdeletion_dropout_prob)
 # cold_sim_arglist <- create_sim_arglist(constant_params = const_sim_arglist, 
 #                                        hot_or_cold = 'cold', 
 #                                        starting_mt_profiles = NULL,
@@ -6199,7 +6208,9 @@ for(t in 1:length(poss_times)){
                                         induced_tm_list = induced_tm_list,
                                        differentiation_induction_timepoint = differentiation_induction_timepoint,
                                        editing_induction_timepoint = editing_induction_timepoint,
-                                        unique_run_id = unique_run_id)
+                                        unique_run_id = unique_run_id,
+                                       interdeletion_dropout_prob = interdeletion_dropout_prob,
+                                       interdeletion_dropout_radius = interdeletion_dropout_radius)
 
   }
   
