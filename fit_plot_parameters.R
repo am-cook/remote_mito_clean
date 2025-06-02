@@ -1,5 +1,8 @@
-library(dplyr)
-library(zeallot)
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(zeallot)  
+})
+
 
 working_vals <- read.csv('./imported_heatmap_plotval_dat.csv') 
 # working_vals <- working_vals[complete.cases(working_vals),]
