@@ -180,14 +180,6 @@ generate_non_be_target_sequence <- function(barcode_length, nuc_fracs, target_fr
   return(non_target_sequence)
 }
 
-# bc_length <- 500
-# nuc_fracs <- c(0.2, 0.22, 0.28, 0.3)
-# be_target_from <- 'C'
-# num_be_targets <- 35
-# non_target_seq <- generate_non_be_target_sequence(bc_length, nuc_fracs, be_target_from, num_be_targets)
-# 
-# final_seq <- add_intervening_be_targets(target_pos_config = 'R', be_target_from = 'Q', num_be_targets = 35, 
-#                                         non_target_sequence = non_target_seq, first_targ_pos = 2, bases_btwn_targets = 2)
 
 # create helper function that is used to find indices of either nuc or BE targets in a sequence
 # according to their specified configs
@@ -203,12 +195,7 @@ generate_target_indices <- function(config, num_targets, target_pos_1, bc_length
   } else if(config == 'R'){ # if config is Random, we want random target indices
     all_inds <- sample(seq(1, bc_length_with_targets), size = num_targets, replace = FALSE)
     
-    # ################################################ 2/6
-    # cat('\ntarget_inds:\n', file = 'no_strings.txt', append = TRUE)
-    # for(ind in all_inds){
-    #   cat(paste0(ind, '\n'), file = 'no_strings.txt', append = TRUE)
-    # }
-    # ################################################ 2/6
+   
   } else if(config == 'S'){
     # if config is Spaced, we have a position of the first BE target as well as an increment
     # such that each subsequent target is increment bases after the first BE target
@@ -249,32 +236,6 @@ add_intervening_be_targets <- function(target_pos_config, target_from, be_target
                                       num_bases_btwn = bases_btwn_targets,
                                       bc_length_with_targets = bc_length)
   
-  # # if config is Uniform, we want uniformly-spaced target indices
-  # if(target_pos_config == 'U'){
-  # 
-  #   # maximize the space between successive BE targets, beginning at the first base of the barcode
-  #   all_inds <- unique(sapply(seq(from = 1, to = bc_length, length.out = be_target_count), round))
-  # 
-  # } else if(target_pos_config == 'R'){ # if config is Random, we want random target indices
-  #   all_inds <- sample(seq(1, bc_length), size = be_target_count, replace = FALSE)
-  # } else if(target_pos_config == 'S'){
-  # # if config is Spaced, we have a position of the first BE target as well as an increment
-  # # such that each subsequent target is increment bases after the first BE target
-  #   # shifted_first_pos <- first_targ_pos - 1
-  #   final_target_pos <- first_targ_pos + (bases_btwn_targets + 1)*(be_target_count - 1)
-  #   if(final_target_pos > bc_length){
-  #     print('Incompatible barcode target configuration. Check details of S configuration.')
-  #   }
-  #   # if((shifted_first_pos + (be_target_count-1)*bases_btwn_targets) > bc_length){
-  #   #   shifted_first_pos <- bc_length - ((be_target_count-1)*bases_btwn_targets)
-  #   #   if(shifted_first_pos < 0){
-  #   #     print('first target position out of bounds')
-  #   #   }
-  #   # }
-  # 
-  #   all_inds <- unique(sapply(seq(from = first_targ_pos, to = final_target_pos,
-  #                                 by = (bases_btwn_targets+1)), round))
-  # }
   
   # initialize empty character vector that will store barcode sequence WITH targets
   seq_with_targets <- character(length = length(non_target_sequence) + length(all_inds))
@@ -282,29 +243,12 @@ add_intervening_be_targets <- function(target_pos_config, target_from, be_target
   # force target_from at each index in all_inds
   seq_with_targets[all_inds] <- target_from
   
-  # ################################################ 2/6
-  # cat(paste0('\nseq_with_targets == ', seq_with_targets, '\n'), file = 'no_strings.txt', append = TRUE)
-  # ################################################ 2/6
-  
+
   
   # fill in the remaining non-target positions with the existing sequence
   non_target_inds <- setdiff(seq(1, length(seq_with_targets)), all_inds)
   seq_with_targets[non_target_inds] <- non_target_sequence
   
-  # ################################################ 2/6
-  # 
-  # cat(paste0('\n###############################################\nAFTER ADDING IN NONTARGET SEQ\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\nseq_with_targets == ', seq_with_targets, '\n'), file = 'no_strings.txt', append = TRUE)
-  # 
-  # cat(paste0('\n###############################################\nNUC COUNTS AT TARGET INDS\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\ntable(seq_with_targets[all_inds]) == ', table(seq_with_targets[all_inds]), '\n'), file = 'no_strings.txt', append = TRUE)
-  # 
-  # 
-  # cat(paste0('\nlength(non_target_sequence) == ', length(non_target_sequence), '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\nlength(non_target_inds) == ', length(non_target_inds), '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\nlength(seq_with_targets) == ', length(seq_with_targets), '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\nlength(all_inds) == ', length(all_inds), '\n'), file = 'no_strings.txt', append = TRUE)
-  # ################################################ 2/6
   
   # we want to return the indices of the targets, as well as the sequence with the targets
   return_list <- list()
@@ -316,174 +260,8 @@ add_intervening_be_targets <- function(target_pos_config, target_from, be_target
   frac_c <- length(which(seq_with_targets == 'C'))/length(seq_with_targets)
   frac_t <- length(which(seq_with_targets == 'T'))/length(seq_with_targets)
   
-  
-  # ################################################ 2/6
-  # cat(paste0('\nfrac a == ', frac_a, '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\nfrac g == ', frac_g, '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\nfrac c == ', frac_c, '\n'), file = 'no_strings.txt', append = TRUE)
-  # cat(paste0('\nfrac t == ', frac_t, '\n'), file = 'no_strings.txt', append = TRUE)
-  # 
-  # print('####################################')
-  # print('inside add_intervening_be_targets(), return_list[["seq_with_targets"]] == ')
-  # print(return_list[['seq_with_targets']])
-  # ################################################ 2/6
-  
-  
   return(return_list)
   
   
 }
 
-
-
-
-
-
-
-#' add_intervening_targets <- function(target_pos_config, num_targets, non_target_sequence = NULL, target_type = 'be',
-#'                                     be_target_from = NULL, first_targ_pos = 1, bases_btwn_targets = 1){
-#'   #' @title Add in base editing targets post-hoc to previously generated non-target sequence
-#'   #' @description BE targets are added according to configuration specified by target_pos_config
-#'   #' @return Character vector of length equal to number of non-BE-targets + num_targets (i.e. final length of barcode)
-#'   #' @param target_pos_config character. See CLAs for details. BE targets can be uniformly (U) or randomly (R) 
-#'   #' distributed throughout the barcode, or spaced (S) with a fixed number of intervening non-bases throughout the barcode
-#'   #' @param be_target_from character. The nucleotide that is targeted by the base editor ('A', 'G', 'C', or 'T')
-#'   #' @param num_be_targets integer. The number of base editing targets in the barcode
-#'   #' @param non_target_sequence character. Character vector generated from generate_non_be_target_sequence() of length 
-#'   #' num_non_be_targets (specified above)
-#'   #' @param first_targ_pos integer. If target_pos_config == 'S', the position (on [1:length(sequence)]) of the first BE target
-#'   #' @param bases_btwn_targets integer. If target_pos_config == 'S', the number of bases between each BE target (e.g. XyyX for bases_btwn_targets = y)
-#'   
-#'   if(target_type == 'be'){
-#'     # find number of non-BE-target bases using provided non-target sequence generated above
-#'     num_non_be_targets <- length(non_target_sequence)
-#'   }
-#' 
-#'   
-#'   # if config is Uniform, we want uniformly-spaced target indices
-#'   if(target_pos_config == 'U'){
-#'     
-#'     # maximize the space between successive BE targets, beginning at the first base of the barcode
-#'     all_inds <- unique(sapply(seq(from = 1, to = num_non_be_targets, length.out = num_targets), round))  
-#'     
-#'   } else if(target_pos_config == 'R'){ # if config is Random, we want random target indices
-#'     all_inds <- sample(seq(1, num_non_be_targets), size = num_targets, replace = FALSE)
-#'   } else if(target_pos_config == 'S'){
-#'     # if config is Spaced, we have a position of the first BE target as well as an increment
-#'     # such that each subsequent target is increment bases after the first BE target
-#'     # shifted_first_pos <- first_targ_pos - 1
-#'     final_target_pos <- first_targ_pos + (bases_btwn_targets + 1)*(num_targets - 1)
-#'     if(final_target_pos > bc_length){
-#'       print('Incompatible barcode target configuration. Check details of S configuration.')
-#'     }
-#'     # if((shifted_first_pos + (num_be_targets-1)*bases_btwn_targets) > bc_length){
-#'     #   shifted_first_pos <- bc_length - ((num_be_targets-1)*bases_btwn_targets)
-#'     #   if(shifted_first_pos < 0){
-#'     #     print('first target position out of bounds')
-#'     #   }
-#'     # }
-#'     
-#'     all_inds <- unique(sapply(seq(from = first_targ_pos, to = final_target_pos, 
-#'                                   by = (bases_btwn_targets+1)), round))
-#'   }
-#'   
-#'   # initialize empty character vector that will store barcode sequence WITH targets
-#'   seq_with_targets <- character(length = length(non_target_sequence) + length(all_inds))
-#'   
-#'   # force be_target_from at each index in all_inds
-#'   seq_with_targets[all_inds] <- be_target_from
-#'   
-#'   # fill in the remaining non-target positions with the existing sequence
-#'   non_target_inds <- setdiff(seq(1, length(seq_with_targets)), all_inds)
-#'   seq_with_targets[non_target_inds] <- non_target_sequence
-#'   
-#'   return(seq_with_targets)
-#'   
-#'   
-#' }
-
-
-
-
-
-# big_empty_vec <- character(length = 100)
-# existing_seq <- sample(c('A', 'C', 'T', 'G'), size = 90, replace = TRUE)
-# forced_pos <- sample(seq(1, 100), size = 10, replace = FALSE)
-# non_forced_pos <- setdiff(seq(1, 100), forced_pos)
-# 
-# big_empty_vec[forced_pos] <- 'X'
-# big_empty_vec[non_forced_pos] <- existing_seq
-
-
-
-
-
-
-
-
-# #################### GOOD UNIFORM APPROACH
-# if(target_pos_config == 'U'){
-#   # actually a more versatile way to do this is as follows:
-#   all_inds <- unique(sapply(seq(from = 0, to = num_non_be_targets, length.out = num_be_targets), round))  
-# }
-# else if(target_pos_config == 'R'){
-#   all_inds <- sample(seq(0, num_non_be_targets), size = num_be_targets, replace = FALSE)  
-# }
-# else if(target_pos_config == 'S'){
-#   # check this one
-#   # if the targets "would not fit" under the current scheme, find the position the first 
-#   # base would need to be in to fit
-#   
-#   # this is because we later add 1 to any base with index 0
-#   shifted_first_pos <- first_targ_pos - 1
-#   if((shifted_first_pos + (num_bases-1)*bases_btwn_targets) > bc_length){
-#     shifted_first_pos <- bc_length - ((num_bases-1)*bases_btwn_targets)
-#     if(shifted_first_pos < 0){
-#       print('first target position out of bounds')
-#     }
-#   }
-#   
-#   all_inds <- unique(sapply(seq(from = shifted_first_pos-1, 
-#                                 by = bases_btwn_targets, length.out = num_bases), round))
-# }
-# 
-# first_targ_pos <- 10
-# bases_btwn_targets <- 5
-# bc_length <- 98
-# num_hml <- 10+5+4
-# num_bases <- num_hml
-# 
-# shifted_first_pos <- first_targ_pos - 1
-# if((shifted_first_pos + (num_bases-1)*bases_btwn_targets) > bc_length){
-#   shifted_first_pos <- bc_length - ((num_bases-1)*bases_btwn_targets)
-#   if(shifted_first_pos < 0){
-#     print('first target position out of bounds')
-#   }
-# }
-# 
-# all_inds <- unique(sapply(seq(from = shifted_first_pos-1, 
-#                               by = bases_btwn_targets, length.out = num_bases), round))
-# 
-# 
-# add_targets_by_inds <- function(raw_target_inds){
-#   seq_with_targets <- character(length = (num_non_be_targets + num_be_targets))
-#   
-#   # have to adjust all_inds to account for the growing length as target bases are added
-#   # these will be the positions corresponding to where the targets are
-#   full_seq_target_positions <- integer()
-#   for(i in seq_len(length(all_inds))){
-#     full_seq_target_positions[i] <- all_inds[i] + i
-#   }
-#   # also want to determine the positions where the targets ARE NOT
-#   # can do this by finding the set difference of integers from 1:length_full_seq and adjusted target positions
-#   full_seq_nontarget_positions <- setdiff(seq(1, length(seq_with_targets)), full_seq_target_positions)
-#   
-#   for(ind in full_seq_target_positions){
-#     seq_with_targets[ind] <- 'X'
-#   }
-#   for(i in seq_len(length(full_seq_nontarget_positions))){
-#     seq_with_targets[full_seq_nontarget_positions[i]] <- non_be_target_seq[i]
-#   }  
-#   
-#   return(seq_with_targets)
-# }

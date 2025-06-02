@@ -1,3 +1,50 @@
+get_profiles_ints_and_umis <- function(cell_pop,
+                                       num_ints,
+                                       int_rec_prob,
+                                       bc_or_mt,
+                                       umis = NULL){
+  
+  profiles_ints_and_umis <- lapply(cell_pop, function(cell){
+    
+    num_ints_recovered <- max(c(rbinom(n = 1, size = num_ints, prob = int_rec_prob), 1)) # RECOVER AT LEAST ONE
+    which_ints_recovered <- sort(sample(seq(1, num_ints), size = num_ints_recovered,
+                                        replace = FALSE))
+    
+    
+    
+    if(bc_or_mt == 'bc'){
+      mut_mat <- cell$incoming_bc_profiles[which_ints_recovered, ]  
+    } else if(bc_or_mt == 'mt'){
+      mut_mat <- cell$incoming_mt_profiles[which_ints_recovered, ]  
+    }
+    
+    
+    # by default, slicing one row from a matrix converts to numeric in R
+    if(num_ints_recovered == 1){
+      mut_mat <- matrix(mut_mat, nrow = 1)
+    }
+    
+    return_list <- list()
+    return_list[['mut_mat']] <- mut_mat
+    return_list[['which_ints_recovered']] <- which_ints_recovered
+    
+    if(!is.null(umis)){
+      # subset the bc integration umis to only include those corresponding to selected-for integrations
+      these_bc_int_umis <- umis[which_ints_recovered]  
+      return_list[['recovered_umis']] <- these_bc_int_umis
+    }
+    
+    
+    return(return_list)
+  })
+  
+  return(profiles_ints_and_umis)
+  
+  
+}
+
+
+
 # might just get rid of fix_length
 
 ins_to_charvec <- function(ins, pos_num, ref_seq, fixed_length){
@@ -21,7 +68,6 @@ ins_to_charvec <- function(ins, pos_num, ref_seq, fixed_length){
     ins_bases <- sapply(seq(1, num_bases), function(ins_basenum){
       base_int <- abs(round(ins * 10**(ins_basenum-1))) %% 10
       
-      # print(paste0('base_int == ', base_int))
       if(base_int == 0){ # if we have -0.xx, the base corresponding to "-0" is ''
         if(fixed_length){
           
@@ -31,7 +77,6 @@ ins_to_charvec <- function(ins, pos_num, ref_seq, fixed_length){
         }
       }
       
-      # new 2/27
       else{
         return(nuc_bases[base_int])
       }
@@ -89,14 +134,8 @@ get_one_cell_sequence <- function(cell_int_mat, ref_seq, these_bc_int_umis = NUL
 
 write_all_cell_sequences <- function(cell_mutmats, reference, output_fasta_name, fasta_type, bc_integration_umis = NULL){
   
-  # print('beginning of write all sequences')
   if(!is.null(bc_integration_umis)){
-    # print('not null')
-    # print(paste0('class(bc_integration_umis) == ', class(bc_integration_umis)))
-    # print(bc_integration_umis)
-    
-    # print(paste0('class(cell_mutmats) == ', class(cell_mutmats)))
-    # print(cell_mutmats)
+
     
     all_cell_seqs <- parLapply(cl = one_cluster, seq(1, length(cell_mutmats)), function(cellnum){
       get_one_cell_sequence(cell_int_mat = cell_mutmats[[cellnum]],
@@ -104,17 +143,14 @@ write_all_cell_sequences <- function(cell_mutmats, reference, output_fasta_name,
                             ref_seq = reference)
     })  
   } else{
-    # print('null')
     all_cell_seqs <- parLapply(cl = one_cluster, seq(1, length(cell_mutmats)), function(cellnum){
       get_one_cell_sequence(cell_int_mat = cell_mutmats[[cellnum]],
                             ref_seq = reference)
     })
   }
   
-  # print('end of write all sequences')
   # adjust fasta name to account for terminal cells only (deprecated reason)
   updated_output_fasta_path <- gsub(pattern = '(.*)(\\.fasta)$', replacement = paste0('\\1_', fasta_type, '\\2'), x = output_fasta_name)
   write.fasta(all_cell_seqs, names = names(cell_mutmats), file.out = updated_output_fasta_path)
 }
 
-# write_all_cell_sequences(has_nas, bc_ref_seq, output_fasta_name = 'improved_translation_by_int_prev_list.fasta')
