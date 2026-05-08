@@ -1,28 +1,36 @@
 get_profiles_ints_and_umis <- function(cell_pop,
-                                       num_ints,
-                                       int_rec_prob,
                                        bc_or_mt,
+                                       int_rec_prob = NULL,
+                                       num_ints = NULL,
                                        umis = NULL){
   
   profiles_ints_and_umis <- lapply(cell_pop, function(cell){
+    
+    # for mt, num_ints will be null. so we assign to the total number of rows in this matrix
+    if(is.null(num_ints)){
+      num_ints <- dim(cell$incoming_mt_profiles)[1]
+      # print(paste0('num_ints was null, now its ', num_ints))
+    }
     
     num_ints_recovered <- max(c(rbinom(n = 1, size = num_ints, prob = int_rec_prob), 1)) # RECOVER AT LEAST ONE
     which_ints_recovered <- sort(sample(seq(1, num_ints), size = num_ints_recovered,
                                         replace = FALSE))
     
-    
-    
     if(bc_or_mt == 'bc'){
-      mut_mat <- cell$incoming_bc_profiles[which_ints_recovered, ]  
+      
+      mut_mat <- cell$incoming_bc_profiles[which_ints_recovered, ]
     } else if(bc_or_mt == 'mt'){
-      mut_mat <- cell$incoming_mt_profiles[which_ints_recovered, ]  
+      mut_mat <- cell$incoming_mt_profiles[which_ints_recovered, ]    
     }
-    
     
     # by default, slicing one row from a matrix converts to numeric in R
     if(num_ints_recovered == 1){
       mut_mat <- matrix(mut_mat, nrow = 1)
     }
+    
+    
+    
+    
     
     return_list <- list()
     return_list[['mut_mat']] <- mut_mat

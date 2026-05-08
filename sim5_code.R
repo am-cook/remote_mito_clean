@@ -1,4 +1,6 @@
 print(strrep('#', 60))
+options(warn = 1) # print each warning as soon as it is generated
+options(error = traceback)  
 
 # generate unique run name: 
 # set.seed(42)
@@ -48,170 +50,9 @@ suppressPackageStartupMessages({
   library(msa)
   library(Biostrings)
   library(Matrix)
+  library(profvis)
 })
 
-
-
-### used to be able to pass in sim args as CLAs. as the number of args increased, it became easier to provide json with all params
-# this json is passed in with the -P flag (leading to reduced option_list)
-
-
-# accept simulation parameters from command line
-# option_list <- list(
-#   make_option(c('-P', '--params_json_path'), type = 'character', default = NULL,
-#               help = 'alternative parameter input method: path to simulation parameters json (overwrites any CLAs)'),
-#   make_option(c('-n', '--num_init_cells'), type = 'integer', default = 1,
-#               help = 'number of initial cells in population'),
-#   make_option(c('-T', '--sim_length'), type = 'character', default = '4',
-#               help = 'length of simulation (if multiple lengths, specify using "length1; length2; etc." OR "start:stop:increment". Note sim lengths must be accessible by time_inc.'),
-#   make_option(c('-C', '--num_cores'), type = 'integer', default = 1,
-#               help = 'number of cores to use'),
-#   make_option(c('-c', '--cell_cycle_length'), type = 'numeric', default = 1,
-#               help = 'cell cylce length'),
-#   make_option(c('-t', '--time_inc'), type = 'numeric', default = 0.5,
-#               help = 'simulation time increment'),
-#   make_option('--max_mito_genomes_per_cell', type = 'integer', default = 500,
-#               help = 'mito genomes per cell (if multiple: "num_genomes1; num_genomes2; etc.")'),
-#   make_option(c('-b', '--bc_length'), type = 'integer', default = 300,
-#               help = 'barcode length'),
-#   make_option(c('-I', '--max_bc_ints_per_cell'), type = 'integer', default = 10,
-#               help = 'barcode integrations per cell (if multiple: "num_ints1; num_ints2; etc.")'),
-#   make_option(c('-M', '--mito_genome_length'), type = 'integer', default = 16569,
-#               help = 'mitochondrial genome length'),
-#   make_option(c('-U', '--be_target_config'), type = 'character', default = NULL,
-#               help = 'if target positions not specified: 
-#               U == targets uniformly spaced throughout entire barcode with maximal bases_btwn_targets ["U"]; 
-#               R == random dispersion of targets throughout barcode ["R"];
-#               S == targets spaced with fixed number of bases between targets [i.e. "S:first_target_pos:bases_btwn_targets"]'),
-#   make_option(c('-u', '--nuc_target_config'), type = 'character', default = NULL,
-#               help = 'if target positions not specified: U == targets uniformly spaced throughout entire barcode with maximal bases_btwn_targets; 
-#               R == random dispersion of targets throughout barcode;
-#               S == targets spaced with fixed number of bases between targets [first_target_pos: bases_btwn_targets]'),
-#   make_option(c('-f', '--force_transversions'), type = 'logical', default = TRUE,
-#               help = 'force transversions in base editor targets to single base'),
-#   make_option(c('-B', '--be_targets'), type = 'character', default = NULL,
-#               help = 'base editing targets ("pos1:rate1; pos2:rate2; ..."), rates in {H, M, L} OR ("number_of_targets:lowfrac;medfrac;highfrac")'),
-#   make_option(c('-E', '--be_editing_window'), type = 'integer', default = 0,
-#               help = 'base editing window (for each specified BE target, if an equivalent base exists within this window in either direction, the base will be added to BE targets'),
-#   make_option(c('-A', '--be_decaying_window'), type = 'logical', default = FALSE,
-#               help = 'if TRUE, if be_editing_window > 0, equivalent bases adjacent to nuclease target in window have progressively lower mutation rates'),
-#   make_option(c('-N', '--nuclease_targets'), type = 'character', default = NULL,
-#               help = 'nuclease editing targets ("pos1:rate1; pos2:rate2; ..."), rates in {H, M, L} OR ("number_of_targets:lowfrac;medfrac;highfrac")'),
-#   make_option(c('-e', '--nuclease_editing_window'), type = 'integer', default = 0,
-#               help = 'nuclease editing window (for each specified nuclease target, increase indel rates of bases within editing-window range in either direction'),
-#   make_option(c('-a', '--nuclease_decaying_window'), type = 'logical', default = TRUE,
-#               help = 'if TRUE, if nuclease_editing_window > 0, bases adjacent to nuclease target in window have progressively lower indel rates'),
-#   make_option('--bc_bg_indel_probs', type = 'character', default = '0.000000003; 0.000000003',
-#               help = 'barcode insertion and deletion probabilities ("insertion; deletion")'),
-#   make_option('--mt_bg_indel_probs', type = 'character', default = '0.00000003; 0.00000003',
-#               help = 'mito insertion and deletion probabilities ("insertion; deletion")'),
-#   make_option('--be_mutations_per_target_per_division', type = 'numeric', default = 0.005,
-#               help = 'number of BE mutations per target site per cell division'),
-#   make_option('--nuc_insertions_per_target_per_division', type = 'numeric', default = 0.0003,
-#               help = 'number of nuclease insertions per target site per cell division'),
-#   make_option('--nuc_deletions_per_target_per_division', type = 'numeric', default = 0.001,
-#               help = 'number of nuclease deletions per site per cell division'),
-#   # planning to automatically assign this later if not null
-#   make_option(c('-s', '--savename'), type = 'character', default = NULL,
-#               help = 'savename prefix for generated data'),
-#   make_option('--reconstruction_method', type = 'character', default = 'score',
-#               help = "'score' = use score matrix approach to reconstruct lineage;
-#               'fasta_only' = only write out simulated sequences (useful for tree development with other tools)"),
-#   make_option(c('-S', '--score_approach'), type = 'character', default = NULL,
-#               help = 'relevant if reconstruction_method == "score": mutation score approach {"af", "bin"} (if both: "both" or "af; bin"'),
-#   make_option('--fasta_type', type = 'character', default = 'terminal',
-#               help = 'relevant if reconstruction_method == "fasta_only": any (combination) of "[terminal, all_cells]; if all_cells included, will write fasta for every intermediate cell"'),
-#   make_option('--include_var_pos_fasta', type = 'logical', default = FALSE,
-#               help = 'relevant if reconstruction_method == "fasta_only": boolen, whether to also write out fasta(s) that only include variable positions across seqs'),
-#   make_option('--chosen_gamma', type = 'character', default = 'mt_gamma_site_model',
-#               help = 'specify which gamma heterogeneity function (bc or mt) is used in reconstruction [mt_gamma_site_model or bc_gamma_site_model]'),
-#   make_option(c('-F', '--sampling_fractions'), type = 'character', default = '1',
-#               help = 'cell sampling fraction (if multiple: "frac1; frac2; etc.")'),
-#   make_option(c('-l', '--mt_allelic_fractions'), type = 'character', default = '0',
-#               help = 'mt allelic fraction threshold, filter out mutations occurring at fraction below this thresh (if multiple: "frac1; frac2; etc.")'),
-#   make_option(c('-L', '--bc_allelic_fractions'), type = 'character', default = '0',
-#               help = 'bc allelic fraction threshold, filter out mutations occurring at fraction below this thresh (if multiple: "frac1; frac2; etc.")'),
-#   make_option(c('-R', '--filter_binary_with_af'), type = 'logical', default = TRUE,
-#               help = 'if true, will only consider mutations with allelic fractions greater than provided thresholds prior to generating binary score matrices'),
-#   make_option('--mt_genome_recovery_prob', type = 'numeric', default = 1,
-#               help = 'independent probability of recovering a given copy of the mito genome at the end of the experiment (prior to allelic fraction generation)\n
-#               If multiple: "prob1; prob2; etc."'),
-#   make_option('--bc_integration_recovery_prob', type = 'numeric', default = 1,
-#               help = 'independent probability of recovering a given integration fo the barcode at the end of the experiment (prior to allelic fraction generation)\n
-#               If multiple: "prob1; prob2; etc."'),
-#   
-#   make_option(c('-o', '--recon_modality'), type = 'character', default = 'integrated',
-#               help = 'score modalities used for tree construction {mt, bc, integrated} (if multiple: "modality1; modality2; etc.")'),
-#   make_option('--barcode_sequence', type = 'character', default = NULL,
-#               help = 'path to barcode sequence (assuming path can be read in as text file'),
-#   make_option(c('-h', '--plot_heatmaps'), type = 'logical', default = FALSE,
-#               help = 'plot heatmaps of score matrices with inferred dendrograms'),
-#   make_option(c('-w', '--be_conversion_pattern'), type = 'character', default = NULL,
-#               help = 'specification of base editing patterns (e.g. G --> C)'),
-#   make_option(c('-x', '--bc_nuc_composition'), type = 'character', default = '0.25; 0.25; 0.25; 0.25',
-#               help = 'fraction of barcode composed of A;G;C;T (e.g. 0.25; 0.25; 0.3; 0.2)'),
-#   make_option('--mt_substitution_model', type = 'character', default = NULL,
-#               help = 'options: JC; K80; K81; F81; HKY; GTR'),
-#   make_option('--mt_sub_model_params', type = 'character', default = NULL,
-#               help = "Each nucleotide substitution model requires different input parameters. Parameters are passed in as character strings and will automatically be parsed. \n
-#               If JC: 'overall_subtitution_rate' \n
-#               If K80: 'transition_to_transversion_ratio; transition_rate; transversion_rate'\n
-#               If K81: 'transition_rate; transversion_rate_weakstrong_conserved; transversion_rate_aminoketo_conserved'\n
-#               If F81: 'baseline_overall_subrate' \n
-#               If HKY: 'transition_to_transversion_ratio; baseline_transition_rate; baseline_transversion_rate'\n
-#               If GTR: 'AG_rate; AC_rate; AT_rate; GC_rate; GT_rate; CT_rate'"),
-#   make_option('--mt_invariant_sites', type = 'numeric', default = 0,
-#               help = "Fraction of non-target mt sites that are immutable (i.e. cannot undergo mutational processes)"),
-#   make_option('--mt_nontarget_heterogeneity_gamma', type = 'character', default = NULL,
-#               help = "Add gamma distribution-based heterogeneity to nucleotide pair-specific substitution rates at non-target positions\n
-#   Draws from the gamma distribution are used as scaling factors
-#   Inputted shape parameter determines the shape of the gamma distribution, while num_discrete_bins and bin_agg_metric
-#   enable discretization and summary of the distribution with fewer options from which to draw scale factors. Scale param of
-#   the gamma distribution is set to 1/shape_param such that the mean value of the distribution is 1.
-#   Form: 'gamma_shape_param; num_discrete_bins; bin_agg_metric'
-#   gamma_shape_param is a numeric. num_discrete_bins is an int. bin_agg_metric is mean or median.
-#   If num_discrete_bins == 0, gamma distribution is not discretized.
-#   Example (if heterogeneity desired): '0.5; 5; mean'"),
-# 
-#   # can specify a different nucleotide substitution for barcode vs mt
-#   make_option('--bc_substitution_model', type = 'character', default = NULL,
-#               help = 'options: JC; K80; K81; F81; HKY; GTR'),
-#   make_option('--bc_sub_model_params', type = 'character', default = NULL,
-#               help = "Each nucleotide substitution model requires different input parameters. Parameters are passed in as character strings and will automatically be parsed. \n
-#               If JC: 'overall_subtitution_rate' \n
-#               If K80: 'transition_to_transversion_ratio; transition_rate; transversion_rate'\n
-#               If K81: 'transition_rate; transversion_rate_weakstrong_conserved; transversion_rate_aminoketo_conserved'\n
-#               If F81: 'baseline_overall_subrate' \n
-#               If HKY: 'transition_to_transversion_ratio; baseline_transition_rate; baseline_transversion_rate'\n
-#               If GTR: 'AG_rate; AC_rate; AT_rate; GC_rate; GT_rate; CT_rate'"),
-#   make_option('--bc_invariant_sites', type = 'numeric', default = 0,
-#               help = "Fraction of non-target bc sites that are immutable (i.e. cannot undergo mutational processes)"),
-#   make_option('--bc_nontarget_heterogeneity_gamma', type = 'character', default = NULL,
-#               help = "Add gamma distribution-based heterogeneity to nucleotide pair-specific substitution rates at non-target positions\n
-#   Draws from the gamma distribution are used as scaling factors
-#   Inputted shape parameter determines the shape of the gamma distribution, while num_discrete_bins and bin_agg_metric
-#   enable discretization and summary of the distribution with fewer options from which to draw scale factors. Scale param of
-#   the gamma distribution is set to 1/shape_param such that the mean value of the distribution is 1.
-#   Form: 'gamma_shape_param; num_discrete_bins; bin_agg_metric'
-#   gamma_shape_param is a numeric. num_discrete_bins is an int. bin_agg_metric is mean or median.
-#   If num_discrete_bins == 0, gamma distribution is not discretized.
-#   Example (if heterogeneity desired): '0.5; 5; mean'"),
-#   make_option('--bc_target_heterogeneity_gamma', type = 'character', default = NULL,
-#               help = "Simultaneously assign mutation rates and add heterogeneity to target positions by estimating a gamma distribution,\n
-#   discretizing it into classes for HML edit rate classes, and sampling mutation rates from bootstrapped edit-rate-class distributions.\n
-#   Form: 'shape_param; scale_param"), 
-#   
-#   make_option('--jitter_fraction', type = 'numeric', default = 0.05,
-#               help = 'Mitochondiral profile jitter probability (ie independent probability a given mito genome is lost at division timepoint'),
-#   
-#   make_option('--beast_birth_rate_dist_params', type = 'character', default = '1; 1; 1',
-#               help = 'Parameterize the birth and death rates for tree reconstruction'),
-#   make_option('--cell_type_substitution_models', type = 'character', default = NULL,
-#               help = 'nested json for specifying cell-specific mutation, division, and death rates')
-#        
-#   
-#   #######################################
-# )
 
 option_list <- list(
     make_option(c('-P', '--params_json_path'), type = 'character', default = NULL,
@@ -222,20 +63,21 @@ opt_parser <- OptionParser(option_list = option_list, add_help_option = FALSE)
 input_args <- parse_args(opt_parser)
 
 
-
 # set to your wd
 setwd('/dartfs/rc/lab/M/McKennaLab/projects/Aidan/simulations/r_sim_clean')
 
 print('Sourcing files ... ')
-source('./fit_plot_parameters.R') # this should go in an if statement or event (don't always need to do it)
+source('./fit_plot_parameters.R')
 source('./nonuniform_muts_heterogeneous.R')
 source('./substitution_models.r')
 source('./add_intervening_be_targets_to_seq.r')
-source('./make_babette_tree.r')
+# source('./make_babette_tree.r')
 source('./mut_to_fasta_difflen_ints.r')
 source('./parse_cell_type_specific_args.r')
 source('./mut_to_scoremat.r')
 print('Files sourced ... ')
+
+
 
 # create runlog file
 if(!dir.exists(file.path('output', 'run_logs', unique_run_id))){
@@ -244,7 +86,7 @@ if(!dir.exists(file.path('output', 'run_logs', unique_run_id))){
 runlog_filename <- paste0('runlog_', unique_run_id, '.txt')
 runlog_path <<- file.path('output', 'run_logs', unique_run_id, runlog_filename)
 close(file(runlog_path, open = 'w'))
-close(file('no_strings.txt', open = 'w'))
+close(file(paste0('./output/run_logs/', unique_run_id, '/no_strings_', unique_run_id, '.txt'), open = 'w'))
 
 # generate letters grid for subrun id generation:
 diletters_grid <- expand.grid(LETTERS, LETTERS)
@@ -287,8 +129,13 @@ if(!is.null(input_args$params_json_path)){
               quote = FALSE, row.names = FALSE, col.names = FALSE, append = TRUE, sep = '\t')
 }
 
+# extract random seed info
+set.seed(input_args$random_seed)
 
 
+bases <- c(1,2,3,4)
+transition_matches <- c(2,1,4,3)
+transversion_matches <- list(c(3,4), c(3,4), c(1,2), c(1,2))
 
 
 
@@ -418,15 +265,33 @@ split_inds_into_hml <- function(inds, num_h, num_m, num_l){
   inds <- sample(inds, size = length(inds), replace = FALSE)
   
   # assign HML inds sequentially since target inds are now shuffled 
-  high_inds <- inds[1:num_h]
-  med_inds <- inds[(num_h+1):(num_h+num_m)]
-  low_inds <- inds[(num_h+num_m+1):length(inds)]
+  ends <- cumsum(c(num_h, num_m, num_l))
+  starts <- c(1, head(ends, -1) + 1)
+  
+  if(num_h > 0){
+    high_inds <- inds[starts[1]:ends[1]]  
+  } else{
+    high_inds <- c()
+  }
+  
+  if(num_m > 0){
+    med_inds <- inds[starts[2]:ends[2]]  
+  } else{
+    med_inds <- c()
+  }
+  
+  if(num_l > 0){
+    low_inds <- inds[starts[3]:ends[3]]  
+  } else{
+    low_inds <- c()
+  }
   
   # create a named list
   hml_pos_list <- as.list(c(rep('High', num_h), 
                             rep('Medium', num_m), 
                             rep('Low', num_l)))
   hml_inds <- c(high_inds, med_inds, low_inds)
+  
   names(hml_pos_list) <- hml_inds
   
   return(hml_pos_list)
@@ -472,24 +337,45 @@ gcd_multiple_vals <- function(...){
 }
 
 
-
+  
 # generate the time_inc of the simulation
 if(input_args$time_inc == 'auto'){
   cell_cycle_lengths <- sapply(input_args$cell_type_dict$cell_type_params, function(celltype){
     celltype$cell_cycle_length})
   time_inc <- gcd_multiple_vals(cell_cycle_lengths)
-} else if(is.numeric(input_args$time_inc)){
-  time_inc <- input_args$time_inc
+} else{
+  time_inc <- as.numeric(input_args$time_inc)
 }
 
 
 
+close_nuc_window_after_edit <- input_args$nuclease_targets$editing_window$close_after_edit
+close_be_window_after_edit <- input_args$nuclease_targets$editing_window$close_after_edit
+
+# initialize these to FALSE. if close_be_window_after_edit is TRUE, will rewrite the appropriate one to TRUE
+close_transition_window_after_edit <- FALSE
+close_transversion_window_after_edit <- FALSE
+
+
 # convert base fractions from a character string to a numeric vector
-# bc_base_fracs <- process_cla_string(input_args$bc_nuc_composition, outputted_type = 'numeric')
 barcode_base_fracs <- c(input_args$bc_nuc_composition$frac_a,
                    input_args$bc_nuc_composition$frac_g,
                    input_args$bc_nuc_composition$frac_c,
                    input_args$bc_nuc_composition$frac_t)
+
+
+# first, create barcode and mt sequences
+# create mito and bc sequences in chars and ints
+int_to_nuc_list <- list('1' = 'A', '2' = 'G', '3' = 'C', '4' = 'T')
+nuc_to_int_list <- setNames(names(int_to_nuc_list), int_to_nuc_list)
+convert_int_to_nuc <- function(int_val){
+  return(int_to_nuc_list[[as.character(int_val)]])
+}
+convert_nuc_to_int <- function(nuc_val){
+  return(nuc_to_int_list[[nuc_val]])
+}
+
+
 
 
 # updated way to construct a barcode sequence with targets at the correct positions
@@ -543,8 +429,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
     # now parse the inputted target configurations
     parsed_be_target_config <- parse_target_config(be_targets_configs)
     be_target_config_pattern <- parsed_be_target_config[['config']]
-    be_first_target_pos <- parsed_be_target_config[['first_targ_pos']]
-    be_target_num_bases_btwn <- parsed_be_target_config[['bases_btwn']]  
+    be_first_target_pos <- as.integer(parsed_be_target_config[['first_targ_pos']])
+    be_target_num_bases_btwn <- as.integer(parsed_be_target_config[['bases_btwn']])
     
   }
   
@@ -552,8 +438,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
   if(!is.null(nuc_targets_configs)){
     parsed_nuc_target_config <- parse_target_config(nuc_targets_configs)
     nuc_target_config_pattern <- parsed_nuc_target_config[['config']]
-    nuc_first_target_pos <- parsed_nuc_target_config[['first_targ_pos']]
-    nuc_target_num_bases_btwn <- parsed_nuc_target_config[['bases_btwn']]
+    nuc_first_target_pos <- as.integer(parsed_nuc_target_config[['first_targ_pos']])
+    nuc_target_num_bases_btwn <- as.integer(parsed_nuc_target_config[['bases_btwn']])
   }
   
   # if a barcode sequence file is provided, we don't need to create a sequence
@@ -566,18 +452,25 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
     
     if(!is.null(be_targets_counts)){
       if('num_h' %in% names(be_target_setup)){
+        # print('in num h be target setup == ')
+        # print(be_target_setup)
         num_be_targets <- sum(as.numeric(be_target_setup))
         bc_be_target_inds <- generate_target_indices(config = be_target_config_pattern, 
                                                      num_targets = num_be_targets, 
                                                      target_pos_1 = be_first_target_pos, 
                                                      bc_length_with_targets = bc_length, 
                                                      num_bases_btwn = be_target_num_bases_btwn)
+        # print('past bc be target inds')
+        # print(bc_be_target_inds)
+        
+        
         return_list[['be_basepos_editrate_classes']] <- split_inds_into_hml(inds = bc_be_target_inds, 
                                                                             num_h = be_target_setup[['num_h']], 
                                                                             num_m = be_target_setup[['num_m']], 
                                                                             num_l = be_target_setup[['num_l']])
       } else{
-
+        
+        
         return_list[['be_basepos_editrate_classes']] <- be_target_setup
       }  
     }
@@ -585,6 +478,9 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
     if(!is.null(nuc_targets_counts)){
       if('num_h' %in% names(nuc_target_setup)){
         num_nuc_targets <- sum(as.numeric(nuc_target_setup))
+        
+        
+        
         bc_nuc_target_inds <- generate_target_indices(config = nuc_target_config_pattern, 
                                                       num_targets = num_nuc_targets, 
                                                       target_pos_1 = nuc_first_target_pos, 
@@ -597,9 +493,11 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
       } else{
 
         return_list[['nuc_basepos_editrate_classes']] <- nuc_target_setup
-      }  
+      } 
+      
+      
     }
-    
+     
 
     return(return_list)
     
@@ -607,15 +505,16 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
   
   # (if a barcode path is not provided)
   # if 'num_h' is in the names in the returned list, it means the user
-  # did not input position-specific HML edit rates and instead inputted a HML ratio.
+  # did not input position-specific HML edit rates and instead inputted a HML ratio. 
   # this means we still need to manually specify where the targets are located
   # which under the current approach is done by first generating a sequence with no targets
   # then going back in and adding the targets
   if(!is.null(be_targets_counts)){
-    if('num_h' %in% names(be_target_setup)){
+    if('num_h' %in% names(be_target_setup)){ 
       
-
-      num_be_targets <- sum(as.numeric(be_target_setup))
+      
+      
+      num_be_targets <- sum(as.numeric(be_target_setup)) 
       
       # the total number of targets is computed by summing the number of HML targets in be_target_setup
 
@@ -632,6 +531,7 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
       bc_sequence_with_targets <- full_seq_return_list[['seq_with_targets']]
       
       bc_be_target_inds <- full_seq_return_list[['target_inds']]
+      
       
       return_list[['be_basepos_editrate_classes']] <- split_inds_into_hml(inds = bc_be_target_inds, 
                                                                           num_h = be_target_setup[['num_h']], 
@@ -651,6 +551,8 @@ create_bc_sequence <- function(be_target_origin = be_target_from,
         target_from = be_target_origin,
         be_target_count = 0
       )
+      
+      
 
       
       return_list[['bc_seq']] <- bc_sequence_with_targets
@@ -705,28 +607,67 @@ bc_generation_return_list <- create_bc_sequence()
 baseline_seq_nucs_bc <<- bc_generation_return_list[['bc_seq']]
 # ERC == edit rate class
 
-# not a crazy assumption that basepos_erc_be_list and basepos_erc_nuc_list would be the same across cell types
+# not a crazy assumption that basepos_erc_be_list and basepos_erc_nuc_list would each be the same across cell types
 # for example, a target that is high edit rate in one cell type would be high edit rate in another, regardless of whether the underlying numerical rates themselves are different
 # thus only have one basepos_erc list for be and for nuc across all cell types
-basepos_erc_be_list <- bc_generation_return_list[['be_basepos_editrate_classes']]
-basepos_erc_nuc_list <- bc_generation_return_list[['nuc_basepos_editrate_classes']]
-
-# first, create barcode and mt sequences
-# create mito and bc sequences in chars and ints
-int_to_nuc_list <- list('1' = 'A', '2' = 'G', '3' = 'C', '4' = 'T')
-nuc_to_int_list <- setNames(names(int_to_nuc_list), int_to_nuc_list)
-convert_int_to_nuc <- function(int_val){
-  return(int_to_nuc_list[[as.character(int_val)]])
-}
-convert_nuc_to_int <- function(nuc_val){
-  return(nuc_to_int_list[[nuc_val]])
-}
+# that said, heterogeneity is introduced within each erc
 
 baseline_seq_ints_bc <<- sapply(baseline_seq_nucs_bc, convert_nuc_to_int) 
+
+
+# helper func for generating target-specific prime editing sequences
+create_prime_editing_basepos_seqs <- function(target_inds, guide_length, num_unique_guides){
+  
+  # generate an insertion sequence library where each seq has length guide_length
+  prime_guide_library <- lapply(seq(num_unique_guides), function(guide_num){
+    sample(seq(1, 4), size = guide_length, replace = TRUE)
+  })  
+  
+  # if there are more target indices than unique guides, we sample from the guides with replacement
+  # otherwise, we do not sample with replacement
+  sample_guides_with_replacement <- length(target_inds) > num_unique_guides
+  
+  # generate integer representations of insertion seqs for each target
+  ind_to_prime_seq_int_map <- sample(prime_guide_library, size = length(target_inds), 
+                                     replace = sample_guides_with_replacement)
+  names(ind_to_prime_seq_int_map) <- target_inds
+  
+  # translate integer representations to nucleotide string representations
+  ind_to_prime_seq_nuc_map <- lapply(ind_to_prime_seq_int_map, 
+                                     function(ints){
+                                       nuc_vec <- as.character(sapply(ints, function(int){return(int_to_nuc_list)}))
+                                       return(paste(nuc_vec, collapse = ''))
+                                     })
+  
+  return_list <- list('ind_to_prime_seq_int_map' = ind_to_prime_seq_int_map,
+                      'ind_to_prime_seq_nuc_map' = ind_to_prime_seq_nuc_map)
+  
+  return(return_list)
+}
+
+prime_editing_system <- input_args$nuclease_targets$prime_editing_system
+
+# if our nuclease system is part of a prime editing framework:
+if(prime_editing_system){
+  
+  # assign each nuc_target to an insertion sequence with specified length based on the nubmer of unique prime sequences
+  prime_editing_list_res <- create_prime_editing_basepos_seqs(target_inds = as.integer(names(basepos_erc_nuc_list)), 
+                                                              guide_length = input_args$nuclease_targets$prime_editing_guide_length, 
+                                                              num_unique_guides = input_args$nuclease_targets$num_unique_prime_editing_guides)
+  ind_to_prime_seq_int_map <- prime_editing_list_res[['ind_to_prime_seq_int_map']]
+  ind_to_prime_seq_nuc_map <- prime_editing_list_res[['ind_to_prime_seq_nuc_map']]
+  
+} else{ # if no prime editing, set these lists to NULL
+  ind_to_prime_seq_int_map <- NULL
+  ind_to_prime_seq_nuc_map <- NULL
+}
 
 # always going to randomly generate the mt sequence
 baseline_seq_ints_mt <<- sample(seq(1,4), size = input_args$mito_genome_length, replace = TRUE)
 baseline_seq_nucs_mt <<- sapply(baseline_seq_ints_mt, convert_int_to_nuc)
+
+
+
 
 ##### cell type-specific work ... 
 # generate cell type transition matrix lists for induced and uninduced conditions:
@@ -768,10 +709,10 @@ parse_sub_model_params <- function(raw_cla_submodel, selected_sub_model, sequenc
   }
   
   if(raw_cla_submodel == 'K81'){
-    # If K81: 'transition_rate; transversion_rate_weakstrong_conserved; transversion_rate_aminoketo_conserved'\n
-    # If F81: 'baseline_overall_subrate' \n
-    # If HKY: 'transition_to_transversion_ratio; baseline_transition_rate; baseline_transversion_rate'\n
-    # If GTR: 'AG_rate; AC_rate; AT_rate; GC_rate; GT_rate; CT_rate'"),
+    # If K81: 'transition_rate; transversion_rate_weakstrong_conserved; transversion_rate_aminoketo_conserved'
+    # If F81: 'baseline_overall_subrate'
+    # If HKY: 'transition_to_transversion_ratio; baseline_transition_rate; baseline_transversion_rate'
+    # If GTR: 'AG_rate; AC_rate; AT_rate; GC_rate; GT_rate; CT_rate'")
     sub_model_params_list[['transition_rate']] <- split_mod_params[1]
     sub_model_params_list[['transverison_rate_weakstrong_conserved']] <- split_mod_params[2]
     sub_model_params_list[['transversion_rate_aminoketo_conserved']] <- split_mod_params[3]
@@ -808,7 +749,6 @@ parse_sub_model_params <- function(raw_cla_submodel, selected_sub_model, sequenc
     sub_model_params_list[['baseline_transition_rate']] <- split_mod_params[2]
     sub_model_params_list[['baseline_transversion_rate']] <- split_mod_params[3]
     
-    # print(paste0('length(sequence_with_targets'))
     nuc_counts <- table(sequence_with_targets)
     frac_a <- nuc_counts[['A']]
     frac_g <- nuc_counts[['G']]
@@ -944,6 +884,9 @@ drop_editrate <- function(rate, num_degrees){
 get_new_be_targets <- function(be_editing_window, basepos_erc_be_list, 
                                decaying_editing, baseline_seq_ints_bc){
   
+  be_window_to_target_ind_list <- list()
+  window_num <- 0
+  
   # if we have an editing window
   if(be_editing_window > 0){
     
@@ -951,6 +894,11 @@ get_new_be_targets <- function(be_editing_window, basepos_erc_be_list,
     
     # iterate through the positions (format is position:rate)
     for(target_basepos in names(basepos_erc_be_list)){
+      
+      window_num <- window_num + 1
+      
+      # be_window_to_target_ind_list[[as.character(target_basepos)]] <- c(target_basepos)
+      be_window_to_target_ind_list[[paste0('be_window_', window_num)]] <- c(target_basepos)
       
       # get the edit rate associated with this target itself
       target_editrate <- unname(unlist(basepos_erc_be_list[as.character(target_basepos)]))
@@ -1010,6 +958,7 @@ get_new_be_targets <- function(be_editing_window, basepos_erc_be_list,
               # only add position and rate if the rate wasn't driven down to background
               edit_window_rates <- append(edit_window_rates, adjusted_editrate)
               edit_window_pos <- append(edit_window_pos, pos)
+              be_window_to_target_ind_list[[as.character(target_basepos)]] <- append(be_window_to_target_ind_list[[as.character(target_basepos)]], pos)
               
               
             }
@@ -1023,6 +972,7 @@ get_new_be_targets <- function(be_editing_window, basepos_erc_be_list,
         else if(!decaying_editing){
           edit_window_rates <- rep(target_editrate, length(other_same_base_inds))
           edit_window_pos <- other_same_base_inds
+          be_window_to_target_ind_list[[as.character(target_basepos)]] <- other_same_base_inds
         }
         
       }
@@ -1036,12 +986,20 @@ get_new_be_targets <- function(be_editing_window, basepos_erc_be_list,
     }
   }
   
-  return(growing_window_editrates)
+  return_list <- list('growing_window_editrates' = growing_window_editrates,
+                      'be_window_to_target_ind_list' = be_window_to_target_ind_list)
+  return(return_list)
   
 }
 
 get_new_nuc_targets <- function(nuc_editing_window, basepos_erc_nuc_list, 
                                 decaying_editing, baseline_seq_ints_bc){
+  
+  # map og targets to new window pos 
+  nuc_window_to_target_ind_list <- list()
+  
+  window_num <- 0
+  
   # if we have an editing window
   if(nuc_editing_window > 0){
     
@@ -1049,6 +1007,11 @@ get_new_nuc_targets <- function(nuc_editing_window, basepos_erc_nuc_list,
     
     # iterate through the positions (format is position:rate)
     for(target_basepos in names(basepos_erc_nuc_list)){
+      
+      window_num <- window_num + 1
+      # include the target itself when keeping track of which inds are in which window
+      # nuc_window_to_target_ind_list[[as.character(target_basepos)]] <- c(target_basepos)
+      nuc_window_to_target_ind_list[[paste0('nuc_window_', window_num)]] <- c(target_basepos)
       
       # get the edit rate associated with this target itself
       target_editrate <- unname(unlist(basepos_erc_nuc_list[as.character(target_basepos)]))
@@ -1096,6 +1059,7 @@ get_new_nuc_targets <- function(nuc_editing_window, basepos_erc_nuc_list,
             # only add position and rate if the rate wasn't driven down to background
             edit_window_rates <- append(edit_window_rates, adjusted_editrate)
             edit_window_pos <- append(edit_window_pos, pos)
+            nuc_window_to_target_ind_list[[as.character(target_basepos)]] <- append(nuc_window_to_target_ind_list[[as.character(target_basepos)]], pos)
           }
           
         }
@@ -1107,6 +1071,7 @@ get_new_nuc_targets <- function(nuc_editing_window, basepos_erc_nuc_list,
       else if(!decaying_editing){
         edit_window_rates <- rep(target_editrate, length(other_window_inds))
         edit_window_pos <- other_window_inds
+        nuc_window_to_target_ind_list[[as.character(target_basepos)]] <- other_window_inds
       }
       
       if(length(edit_window_rates) > 0){
@@ -1118,7 +1083,10 @@ get_new_nuc_targets <- function(nuc_editing_window, basepos_erc_nuc_list,
       }
     }
   }
-  return(growing_window_editrates)
+  
+  return_list <- list('growing_window_editrates' = growing_window_editrates,
+                      'nuc_window_to_target_ind_list' = nuc_window_to_target_ind_list)
+  return(return_list)
 }
 
 ###################################################
@@ -1145,14 +1113,6 @@ estimate_prob_per_timept <- function(prob_event_per_cell_cycle, timepoints_per_c
   return(1 - prob_no_event_at_timepoint)
 }
 
-# recall that there will be a nontarget edit rate list that INCLUDES target positions because 
-# even targets are subject to background mutational processes
-
-# so here we generate the transition and transversion basepos:edit rate lists for NON-TARGET-PROCESSES
-# basepos_bc_nontarget_subprob_lists <- generate_substitution_basepos_list(sequence_with_targets = baseline_seq_nucs_bc,
-#                                                                          sub_prob_mat = bc_sub_prob_mat)
-# basepos_bc_nontarget_transition_probs <- basepos_bc_nontarget_subprob_lists[['basepos_transition_list']]
-# basepos_bc_nontarget_transversion_probs <- basepos_bc_nontarget_subprob_lists[['basepos_transversion_list']]
 
 
 # cell type-specific substitution probability matrices
@@ -1186,14 +1146,65 @@ cell_type_poss_sampling_fracs <- list()
 # cell type-specific cell cycle lengths
 cell_type_cell_cycle_length <- list()
 
-# cell type-specific mt jitter
-cell_type_jitter_frac <- list()
 
+# assign basepos_erc_be_list and basepos_erc_nuc_list once for all cell types
+
+basepos_erc_be_list <- bc_generation_return_list[['be_basepos_editrate_classes']]
+basepos_erc_nuc_list <- bc_generation_return_list[['nuc_basepos_editrate_classes']]
+
+# if we have an editing window, add the relevant bases' positions to the editable bases
+if(input_args$be_targets$editing_window$size > 0){
+  new_be_targets_res <- get_new_be_targets(be_editing_window = input_args$be_targets$editing_window$size, 
+                                           basepos_erc_be_list = basepos_erc_be_list,
+                                           decaying_editing = input_args$be_targets$editing_window$decaying,
+                                           baseline_seq_ints_bc = baseline_seq_ints_bc)
+  new_be_targets <- new_be_targets_res[['growing_window_editrates']]
+  be_window_to_target_ind_list <- new_be_targets_res[['be_window_to_target_ind_list']]
+  
+  # also flip the mapping, now from target to window name:
+  be_target_to_window_ind_list <- split(
+    rep(names(be_window_to_target_ind_list), vapply(be_window_to_target_ind_list, length, integer(1))),  
+    unlist(be_window_to_target_ind_list)
+  )
+  
+  basepos_erc_be_list <- append(basepos_erc_be_list, new_be_targets)
+} else{
+  be_window_to_target_ind_list <- NULL
+  be_target_to_window_ind_list <- NULL
+}
+
+
+if(input_args$nuclease_targets$editing_window$size > 0){
+  new_nuc_targets_res <- get_new_nuc_targets(nuc_editing_window = input_args$nuclease_targets$editing_window$size, 
+                                             basepos_erc_nuc_list = basepos_erc_nuc_list,
+                                             decaying_editing = input_args$nuclease_targets$editing_window$decaying,
+                                             baseline_seq_ints_bc = baseline_seq_ints_bc)
+  new_nuc_targets <- new_nuc_targets_res[['growing_window_editrates']]
+  nuc_window_to_target_ind_list <- new_nuc_targets_res[['nuc_window_to_target_ind_list']]
+  
+  # also flip the mapping, now from target to window name:
+  nuc_target_to_window_ind_list <- split(
+    rep(names(nuc_window_to_target_ind_list), vapply(nuc_window_to_target_ind_list, length, integer(1))),  
+    unlist(nuc_window_to_target_ind_list)
+  )
+  
+  
+  basepos_erc_nuc_list <- append(basepos_erc_nuc_list, new_nuc_targets)
+} else{
+  nuc_window_to_target_ind_list <- NULL
+  nuc_target_to_window_ind_list <- NULL
+}
 
 for(celltype in cell_type_names){
   
+  print(paste0('Assigning ', celltype, ' params'))
+  
   # assign cell type-specific params that depend on editing induction
   for(induction in c('induced_editing_params', 'uninduced_editing_params')){
+    
+    
+    
+    
     temp_mt_sub_model_list <- parse_sub_model_params(raw_cla_submodel = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_substitution_model,
                                                      selected_sub_model = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_sub_model_params,
                                                      sequence_with_targets = baseline_seq_nucs_mt)
@@ -1213,8 +1224,6 @@ for(celltype in cell_type_names){
     basepos_mt_nontarget_transversion_probs <- generate_transversion_basepos_list(sequence_with_targets = baseline_seq_nucs_mt,
                                                                                   sub_prob_mat = temp_mt_sub_model_list[['sub_prob_mat']])
     
-    
-    
     # parse the input background indel rates for mt and bc WHILE CONVERTING TO PROB PER TIMEPT RATHER THAN PROB PER CELL CYCLE
     this_celltype_timepts_per_cc <- input_args$cell_type_dict$cell_type_params[[celltype]]$cell_cycle_length / time_inc
     bc_bg_insertion_prob <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$bc_bg_insertion_prob_per_division,
@@ -1226,10 +1235,13 @@ for(celltype in cell_type_names){
     mt_bg_deletion_prob <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$mt_bg_deletion_prob_per_division,
                                                     timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
     
+
     basepos_bc_nontarget_insertion_probs <- as.list(rep(bc_bg_insertion_prob, input_args$bc_length))
     basepos_bc_nontarget_deletion_probs <- as.list(rep(bc_bg_deletion_prob, input_args$bc_length))
     basepos_mt_nontarget_insertion_probs <- as.list(rep(mt_bg_insertion_prob, input_args$mito_genome_length))
     basepos_mt_nontarget_deletion_probs <- as.list(rep(mt_bg_deletion_prob, input_args$mito_genome_length))
+    
+    
     
     
     # add gamma distribution heterogeneity to mt and bc mutation probs:
@@ -1263,23 +1275,6 @@ for(celltype in cell_type_names){
       }
     }
     
-    # if we have an editing window, add the relevant bases' positions to the editable bases
-    if(input_args$be_targets$editing_window$size > 0){
-      
-      new_be_targets <- get_new_be_targets(be_editing_window = input_args$be_targets$editing_window$size, 
-                                           basepos_erc_be_list = basepos_erc_be_list,
-                                           decaying_editing = input_args$be_targets$editing_window$decaying,
-                                           baseline_seq_ints_bc = baseline_seq_ints_bc)
-      basepos_erc_be_list <- append(basepos_erc_be_list, new_be_targets)
-    }
-    
-    if(input_args$nuclease_targets$editing_window$size > 0){
-      new_nuc_targets <- get_new_nuc_targets(nuc_editing_window = input_args$nuclease_targets$editing_window$size, 
-                                             basepos_erc_nuc_list = basepos_erc_nuc_list,
-                                             decaying_editing = input_args$nuclease_targets$editing_window$decaying,
-                                             baseline_seq_ints_bc = baseline_seq_ints_bc)
-      basepos_erc_nuc_list <- append(basepos_erc_nuc_list, new_nuc_targets)
-    }
     
     target_insertion_prob_mean_estimate <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$nuc_insertions_per_target_per_division, 
                                                                     timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
@@ -1287,6 +1282,8 @@ for(celltype in cell_type_names){
                                                                    timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
     target_be_prob_mean_estimate <- estimate_prob_per_timept(prob_event_per_cell_cycle = input_args$cell_type_dict$cell_type_params[[celltype]][[induction]]$be_mutations_per_target_per_division,
                                                              timepoints_per_cell_cycle = this_celltype_timepts_per_cc)
+    
+    
     
     
     if(!is.null(basepos_erc_be_list)){
@@ -1302,6 +1299,11 @@ for(celltype in cell_type_names){
                                                                                          num_bootstrap_draws = 1000)
         basepos_bc_target_transversion_probs <- list()
         
+        
+        if(close_be_window_after_edit){
+          close_transition_window_after_edit <- TRUE
+        }
+
       } else if(be_mutation_type == 'transversion'){
         # if the BE causes transversions, the transition basepos edit rate list will be NULL
         basepos_bc_target_transversion_probs <- SIMPLIFY_target_site_gamma_based_sub_rates(sequence_length = input_args$bc_length, 
@@ -1311,16 +1313,19 @@ for(celltype in cell_type_names){
                                                                                            shape_param = 0.5,
                                                                                            scale_param = target_be_prob_mean_estimate/0.5,
                                                                                            num_bootstrap_draws = 1000)
+        
+        
         basepos_bc_target_transition_probs <- list()
+        
+        if(close_be_window_after_edit){
+          close_transversion_window_after_edit <- TRUE
+        }
         
       }  
     } else{
       basepos_bc_target_transversion_probs <- list()
       basepos_bc_target_transition_probs <- list()
     }
-    
-    
-    
     
     # insertion_HML_gamma_scale
     if(!is.null(basepos_erc_nuc_list)){
@@ -1346,6 +1351,7 @@ for(celltype in cell_type_names){
       basepos_bc_target_deletion_probs <- list()
     }
     
+
     # lastly, once target editing windows are finalized, 
     # force sites to be invariant as appropriate for the non-targets
     # note that this will simply be ALL of the mt inds since there are no mt targets
@@ -1396,6 +1402,23 @@ for(celltype in cell_type_names){
     cell_type_basepos_bc_target_transversion_probs[[celltype]][[induction]] <- basepos_bc_target_transversion_probs
     cell_type_basepos_bc_target_insertion_probs[[celltype]][[induction]] <- basepos_bc_target_insertion_probs
     cell_type_basepos_bc_target_deletion_probs[[celltype]][[induction]] <- basepos_bc_target_deletion_probs
+    
+
+  #   if(!dir.exists(file.path('./celltype_prob_concordance', unique_run_id))){
+  #     dir.create(file.path('./celltype_prob_concordance', unique_run_id), recursive = TRUE)
+  #   }
+  #   print('celltype_prob_concordance created')
+  #   saveRDS(basepos_bc_target_transition_probs,
+  #           file.path('./celltype_prob_concordance', unique_run_id, paste0('bc_target_transition_params_', celltype, '_', induction, '.rds')))
+  #   saveRDS(basepos_bc_target_transversion_probs,
+  #           file.path('./celltype_prob_concordance', unique_run_id, paste0('bc_target_transversion_params_', celltype, '_', induction, '.rds')))
+  #   saveRDS(basepos_bc_target_insertion_probs,
+  #           file.path('./celltype_prob_concordance', unique_run_id, paste0('bc_target_insertion_params_', celltype, '_', induction, '.rds')))
+  #   saveRDS(basepos_bc_target_deletion_probs,
+  #           file.path('./celltype_prob_concordance', unique_run_id, paste0('bc_target_deletion_params_', celltype, '_', induction, '.rds')))
+  #   saveRDS(basepos_erc_be_list,
+  #           file.path('./celltype_prob_concordance', unique_run_id, paste0('basepos_erc_be_list', celltype, '_', induction, '.rds')))
+  #   
   }
   
   # now for cell type-specific params that don't depend on editing induction
@@ -1412,53 +1435,10 @@ for(celltype in cell_type_names){
 
   # cell type-specific cell cycle lengths
   cell_type_cell_cycle_length[[celltype]] <- as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$cell_cycle_length)
-  
-  # cell type-specific mt jitter
-  cell_type_jitter_frac[[celltype]] <- as.numeric(input_args$cell_type_dict$cell_type_params[[celltype]]$mt_jitter_fraction)
-  
-  
+
   
 }
 
-
-##### uncomment for more detailed troubleshooting for multi-celltype pos er
-
-# troubleshooting this stuff ... 
-# if(!dir.exists('troubleshooting_pos_er')){
-#   dir.create('troubleshooting_pos_er')
-# }
-# 
-
-# saveRDS(cell_type_basepos_bc_nontarget_transition_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_transition_probs.rds'))
-# saveRDS(cell_type_basepos_bc_nontarget_transversion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_transversion_probs.rds'))
-# saveRDS(cell_type_basepos_bc_nontarget_insertion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_insertion_probs.rds'))
-# saveRDS(cell_type_basepos_bc_nontarget_deletion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_nontarget_deletion_probs.rds'))
-# 
-# saveRDS(cell_type_basepos_mt_nontarget_transition_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_transition_probs.rds'))
-# saveRDS(cell_type_basepos_mt_nontarget_transversion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_transversion_probs.rds'))
-# saveRDS(cell_type_basepos_mt_nontarget_insertion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_insertion_probs.rds'))
-# saveRDS(cell_type_basepos_mt_nontarget_deletion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_mt_nontarget_deletion_probs.rds'))
-# 
-# saveRDS(cell_type_basepos_bc_target_transition_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_transition_probs.rds'))
-# saveRDS(cell_type_basepos_bc_target_transversion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_transversion_probs.rds'))
-# saveRDS(cell_type_basepos_bc_target_insertion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_insertion_probs.rds'))
-# saveRDS(cell_type_basepos_bc_target_deletion_probs,
-#         file.path('troubleshooting_pos_er', 'cell_type_basepos_bc_target_deletion_probs.rds'))
-
-
-poss_mt_afs <- as.numeric(input_args$mt_allelic_fractions)
-poss_bc_afs <- as.numeric(input_args$bc_allelic_fractions)
 poss_num_bc_integrations <- as.integer(input_args$max_bc_ints_per_cell)
 
 if(input_args$include_bc_umis){
@@ -1484,7 +1464,392 @@ if(input_args$include_bc_umis){
 
 
 
-poss_num_mito_genomes <- as.integer(input_args$max_mito_genomes_per_cell)
+
+# reconstruction modalities: 
+# poss_recon_modals <- process_cla_string(input_args$recon_modality, outputted_type = 'character')
+poss_recon_modals <- as.character(input_args$recon_modality)
+
+
+average_genomes_per_mito <- as.integer(floor(input_args$average_genomes_per_mito)) # must be a fixed integer, number of genomes per mito
+starting_mito_per_cell <- as.integer(input_args$starting_mito_per_cell) # must be a fixed integer, number of mito in founding cell
+max_mito_per_cell <- as.integer(input_args$max_mito_per_cell) # must be a fixed integer, saturation point for MITO (not genomes) in a cell
+mito_inheritance_pattern <- tolower(as.character(input_args$mito_inheritance_pattern)) # must be one of ["random", "directed", "stabilizing"], dictates how mito are passed on to daughters
+baseline_heteroplasmy_sites_frac <- as.numeric(input_args$baseline_heteroplasmy_sites_frac)
+baseline_heteroplasmy_variant_frac_dist <- as.numeric(input_args$baseline_heteroplasmy_variant_frac_dist) # beta distribution params for drawing initial heteroplasmy fractions
+post_mitotic_mt_deletion_frac <- as.numeric(input_args$post_mitotic_mt_deletion_frac) # what fraction of mitochondria are randomly lost after each cell division
+heteroplasmy_variant_transition_prob <- as.numeric(input_args$heteroplasmy_variant_transition_prob) # given a position has a heteroplasmy variant, what fraction of the variants are of the transition base?
+fusion_events_per_mito_per_division <- as.numeric(input_args$fusion_events_per_mito_per_division) # probability that a given mitochondrion undergoes a fusion event during a cell cycle
+split_events_per_mito_per_division <- as.numeric(input_args$split_events_per_mito_per_division) # probability that a given mitochondrion undergoes a splitting event during a cell cycle
+heteroplasmy_rel_with_fitness <- tolower(as.character(input_args$heteroplasmy_rel_with_fitness)) # is increased heteroplasmy positively, negatively, or neutrally associated with cellular fitness?
+init_heteroplasmy_survive_prob <- as.numeric(input_args$init_heteroplasmy_survive_prob) # probability of cell survival for the founder cell, given its initialized heteroplasmy
+consider_cell_heteroplasmy_scores <- as.logical(input_args$consider_cell_heteroplasmy_scores) # boolean for whether heteroplasmy scores should be calculated and involved in processes
+hetero_sd <- as.numeric(input_args$heteroplasmy_standard_deviation)
+
+
+# assign each mito genome to its corresponding mt genome sequences:
+init_num_mito_genomes <- starting_mito_per_cell*average_genomes_per_mito
+
+# map each mitochondrion to its corresponding genome inds by first generating the number of genomes per mitochondrion (poisson dist with EV average genomes per mito)
+sizes_of_mito <- rpois(n = starting_mito_per_cell, lambda = average_genomes_per_mito)
+
+# all mito have at least one genome:
+sizes_of_mito <- pmax(sizes_of_mito, 1)
+
+# use cumulative sum to map to starting inds
+mito_size_cumsum <- cumsum(sizes_of_mito)
+# prepend 0 for simplicity:
+mito_size_cumsum <- c(0, mito_size_cumsum)
+mito_to_genome_map = list() # will serve as a cell-specific list that maps mito number to genome row inds 
+for(cumsum_ind in seq(1, length(mito_size_cumsum)-1)){
+  mito_to_genome_map[[cumsum_ind]] <- seq(mito_size_cumsum[cumsum_ind] + 1, mito_size_cumsum[cumsum_ind + 1])
+}
+
+
+# create initial mt genome matrix according to heteroplasmy params and initial wildtype sequence:
+
+# generate inds at which heteroplasmy will be present:
+heteroplasmy_inds <- sample(seq(input_args$mito_genome_length),
+                            size = baseline_heteroplasmy_sites_frac*input_args$mito_genome_length,
+                            replace = FALSE)
+# map each heteroplasmy ind to a fraction present across all mt genomes in a cell:
+# for each position of heteroplasmy, allow for some combination of point mutations
+# generate per-site heteroplasmy penetrance fraction distribution from provided beta params
+penetrance_dist_vals <- rbeta(n = 10000, shape1 = baseline_heteroplasmy_variant_frac_dist[1],
+                              shape2 = baseline_heteroplasmy_variant_frac_dist[2])
+
+
+init_i_vals <- c()
+init_j_vals <- c()
+init_x_vals <- c()
+
+# each variant will be assigned a severity score that will contribute to cellular survival
+# assumes independent effects of mt heteroplasmy variants on cell survival
+# init weights can associated heteroplasmy with positive, negative, or balanced fitness
+# severity fractions will be generated from a bimodal mixed Gaussian distribution
+# without loss of generality, variants associated with increased cellular fitness are assigned positive scores
+# and variants associated with decreased cellular fitness are assigned negative scores
+# user-provided weight of the fraction of deleterious heteroplasmy variants controls the severity score assignment process
+
+# random draws based on the positive score weight: if runif draw value is above positive score weight, draw from positive dist, else draw from negative
+draw_severity_scores <- function(num_draws, mean1, mean2, sigma, mean2_weight){
+  
+  # determine if each draw will come from mean1 dist or mean2 dist:
+  mean2_dist <- runif(num_draws) <= mean2_weight
+  
+  output_scores <- numeric(length = num_draws)
+  
+  # assign output scores to mean2 dists based on which were uniformly drawn to be coming from dist 2
+  output_scores[mean2_dist] <- rnorm(n = sum(mean2_dist), mean = mean2, sd = sigma)
+  
+  # and vice versa
+  output_scores[!mean2_dist] <- rnorm(n = sum(!mean2_dist), mean = mean1, sd = sigma)
+  
+  return(output_scores)
+  
+}
+
+positive_score_weight <- 1
+
+if(consider_cell_heteroplasmy_scores){
+  positive_score_weight = 1 - as.numeric(input_args$fraction_deleterious_heteroplasmy_variants)
+ 
+}
+
+# structure of heteroplasmy_severity_score_list will be key = 'mt_{position_num}_{mutated_base_int}', value = severity score
+heteroplasmy_severity_score_list <- list()
+
+# store the variant fractions associated with each heteroplasmy variant 
+heteroplasmy_variant_fractions <- list()
+
+heteroplasmy_allelic_fractions <- c()
+heteroplasmy_counts <- c()
+
+
+heteroplasmy_one_site <- function(ind_num,
+                                  draw_severity_scores,
+                                  heteroplasmy_inds = heteroplasmy_inds,
+                                  penetrance_dist_vals = penetrance_dist_vals, 
+                                  init_num_mito_genomes = init_num_mito_genomes,
+                                  transition_matches = transition_matches,
+                                  transversion_matches = transversion_matches,
+                                  heteroplasmy_variant_transition_prob = heteroplasmy_variant_transition_prob,
+                                  consider_cell_heteroplasmy_scores = consider_cell_heteroplasmy_scores,
+                                  positive_score_weight = positive_score_weight,
+                                  hetero_sd = hetero_sd,
+                                  baseline_seq_ints_mt = baseline_seq_ints_mt
+                                  ){
+  
+  
+  penetrant_frac <- sample(penetrance_dist_vals, size = 1)
+  num_genomes_with_var <- rbinom(n = 1, size = init_num_mito_genomes, prob = penetrant_frac)
+  
+  if(num_genomes_with_var == 0){
+    return(list(rows = tibble(i = integer(),
+                              j = iteger(),
+                              x = integer()),
+                variant_frac = numeric(),
+                severity_scores = numeric(),
+                counts = integer()
+    ))
+  }
+  
+  mt_genomes_with_variant <- sample(seq(init_num_mito_genomes), size = num_genomes_with_var, replace = FALSE)
+  wt_base <- baseline_seq_ints_mt[heteroplasmy_inds[ind_num]]
+  transition_base <- transition_matches[wt_base]
+  transversion_bases <- transversion_matches[[wt_base]]
+  
+  num_mt_genomes_with_transition <- rbinom(n = 1, size = length(mt_genomes_with_variant), 
+                                           prob = heteroplasmy_variant_transition_prob)
+  mt_genomes_with_transition <- sample(mt_genomes_with_variant, size = num_mt_genomes_with_transition, replace = FALSE)
+  
+  
+  mt_genomes_with_transversion <- setdiff(mt_genomes_with_variant, mt_genomes_with_transition)
+  
+  # prob = 0.5 because now only dividing between two transversion options
+  num_mt_genomes_with_transversion1 <- rbinom(n = 1, size = length(mt_genomes_with_transversion), 
+                                              prob = 0.5)
+  mt_genomes_with_transversion1 <- sample(mt_genomes_with_transversion, size = num_mt_genomes_with_transversion1, 
+                                          replace = FALSE)
+  
+  mt_genomes_with_transversion2 <- setdiff(mt_genomes_with_transversion, mt_genomes_with_transversion1)
+  num_mt_genomes_with_transversion2 <- length(mt_genomes_with_transversion2)
+  
+  # generate variant fractions for each of transition and transversion variants:
+  transition_var_frac <- length(mt_genomes_with_transition)/length(mt_genomes_with_variant)
+  transversion1_var_frac <- length(mt_genomes_with_transversion1)/length(mt_genomes_with_variant)
+  transversion2_var_frac <- length(mt_genomes_with_transversion2)/length(mt_genomes_with_variant)
+  
+  
+  
+  rows_transition <- tibble(i = mt_genomes_with_transition,
+                            j = heteroplasmy_inds[ind_num],
+                            x = transition_base)
+  
+  rows_tv1 <- tibble(i = mt_genomes_with_transversion1,
+                     j = heteroplasmy_inds[ind_num],
+                     x = transversion_bases[1])
+  
+  rows_tv2 <- tibble(i = mt_genomes_with_transversion2,
+                     j = heteroplasmy_inds[ind_num],
+                     x = transversion_bases[2])
+  
+  rows_all <- bind_rows(rows_transition, rows_tv1, rows_tv2)
+  
+  variant_frac <- c('transition' = length(mt_genomes_with_transition)/length(mt_genomes_with_variant),
+                    'transversion_1' = length(mt_genomes_with_transversion1)/length(mt_genomes_with_variant),
+                    'transversion_2' = length(mt_genomes_with_transversion2)/length(mt_genomes_with_variant))
+  
+  severity_scores <- numeric()
+  if(consider_cell_heteroplasmy_scores){
+    severity_scores <- c('transition' = transition_severity <- draw_severity_scores(num_draws = 1, 
+                                                                                    mean2_weight = positive_score_weight, 
+                                                                                    mean1 = -1, 
+                                                                                    mean2 = 1, 
+                                                                                    sigma = hetero_sd),
+                         'transversion_1' = transition_severity <- draw_severity_scores(num_draws = 1, 
+                                                                                    mean2_weight = positive_score_weight, 
+                                                                                    mean1 = -1, 
+                                                                                    mean2 = 1, 
+                                                                                    sigma = hetero_sd),
+                         'transversion_2' = transition_severity <- draw_severity_scores(num_draws = 1, 
+                                                                                    mean2_weight = positive_score_weight, 
+                                                                                    mean1 = -1, 
+                                                                                    mean2 = 1, 
+                                                                                    sigma = hetero_sd))
+  }
+  
+  counts <- c('transition' = length(mt_genomes_with_transition),
+              'transversion_1' = length(mt_genomes_with_transversion1),
+              'transversion_2' = length(mt_genomes_with_transversion2))
+  return(list(rows = rows_all,
+              variant_frac = variant_frac,
+              severity_scores = severity_scores,
+              counts = counts
+  ))
+  
+}
+
+
+
+################################################### new way
+new_hetero_indexing_time_start <- Sys.time()
+print('starting heteroplasmy indexing')
+
+rows_list <- vector('list', length(heteroplasmy_inds))
+
+
+variant_frac_vec <- numeric() # will store fraction transition vs tv1 vs tv2 for each variant
+variant_count_vec <- integer() # will store counts of genomes for each variant
+severity_score_vec <- numeric() # will map variants to severity scores
+
+if(consider_cell_heteroplasmy_scores){
+  heteroplasmy_allelic_fractions <- numeric()
+  heteroplasmy_counts <- integer()
+}
+
+for(ind_num in seq_along(heteroplasmy_inds)){
+  
+  if(ind_num %% 50 == 0){
+    print(paste0(ind_num, '/', length(heteroplasmy_inds)))
+  }
+  
+  # what fraction of mito genomes at this ind should have a heteroplasmy variant?
+  penetrant_frac <- sample(penetrance_dist_vals, size = 1)
+  
+  num_genomes_with_var <- rbinom(n = 1, size = init_num_mito_genomes, prob = penetrant_frac)
+  
+  # if no genomes have the variant, continue to the next:
+  if(num_genomes_with_var == 0){
+    next
+  }
+  
+  # based on this fraction, which mito genomes have ANY variant? sample from the initial number of mito genomes in the cell, not the max
+  # later will distribute these genomes into specific variants
+  # mt_genomes_with_variant <- sample(seq(init_num_mito_genomes), prob = penetrant_frac)
+  mt_genomes_with_variant <- sample(seq_len(init_num_mito_genomes), size = num_genomes_with_var, replace = FALSE)
+  
+  # assign each variant a point mutation based on the original nucleotide at that position
+  wt_base <- baseline_seq_ints_mt[heteroplasmy_inds[ind_num]]
+  
+  # for now, split variants between transition and transversion according to user-provided heteroplasmy_variant_transition_prob
+  # transversions will be equiprobable among the remaining variant but not transition bases
+  transition_base <- transition_matches[wt_base]
+  transversion_bases <- transversion_matches[[wt_base]]
+  
+  num_mt_genomes_with_transition <- rbinom(n = 1, size = length(mt_genomes_with_variant), 
+                                           prob = heteroplasmy_variant_transition_prob)
+  mt_genomes_with_transition <- sample(mt_genomes_with_variant, size = num_mt_genomes_with_transition, replace = FALSE)
+  
+  
+  mt_genomes_with_transversion <- setdiff(mt_genomes_with_variant, mt_genomes_with_transition)
+  
+  # prob = 0.5 because now only dividing between two transversion options
+  num_mt_genomes_with_transversion1 <- rbinom(n = 1, size = length(mt_genomes_with_transversion), 
+                                              prob = 0.5)
+  mt_genomes_with_transversion1 <- sample(mt_genomes_with_transversion, size = num_mt_genomes_with_transversion1, 
+                                          replace = FALSE)
+  
+  mt_genomes_with_transversion2 <- setdiff(mt_genomes_with_transversion, mt_genomes_with_transversion1)
+  num_mt_genomes_with_transversion2 <- length(mt_genomes_with_transversion2)
+  
+  make_dt <- function(genomes, base){
+    if(length(genomes) == 0){
+      return(NULL)
+    }
+    return(data.table(i = genomes,
+                      j = heteroplasmy_inds[ind_num],
+                      x = base))
+  }
+  
+  dt_transition <- make_dt(genomes = mt_genomes_with_transition, base = transition_base)
+  dt_transversion1 <- make_dt(genomes = mt_genomes_with_transversion1, base = transversion_bases[1])
+  dt_transversion2 <- make_dt(genomes = mt_genomes_with_transversion2, base = transversion_bases[2])
+
+  
+  
+  # only bind non-empty tables:
+  tables_to_bind <- list(dt_transition, dt_transversion1, dt_transversion2)
+  # only retain the tables with at least one row (relevant if some types of muts don't have any genomes)
+  tables_to_bind <- Filter(Negate(is.null), tables_to_bind)
+  tables_to_bind <- tables_to_bind[vapply(tables_to_bind, nrow, integer(1)) > 0]
+  rows_list[[ind_num]] <- rbindlist(tables_to_bind)
+  
+  frac_transition <- length(mt_genomes_with_transition)/length(mt_genomes_with_variant)
+  frac_transversion1 <- length(mt_genomes_with_transversion1)/length(mt_genomes_with_variant)
+  frac_transversion2 <- length(mt_genomes_with_transversion2)/length(mt_genomes_with_variant)
+  
+  transition_mut_name <- paste0('mt_', ind_num, '_', transition_base)
+  transversion1_mut_name <- paste0('mt_', ind_num, '_', transversion_bases[1])
+  transversion2_mut_name <- paste0('mt_', ind_num, '_', transversion_bases[2])
+  
+  variant_count_vec[transition_mut_name] <- length(mt_genomes_with_transition)
+  variant_count_vec[transversion1_mut_name] <- length(mt_genomes_with_transversion1)
+  variant_count_vec[transversion2_mut_name] <- length(mt_genomes_with_transversion2)
+  
+  variant_frac_vec[transition_mut_name] <- frac_transition
+  variant_frac_vec[transversion1_mut_name] <- frac_transversion1
+  variant_frac_vec[transversion2_mut_name] <- frac_transversion2
+  
+  if(consider_cell_heteroplasmy_scores){
+    
+    transition_severity <- draw_severity_scores(num_draws = 1, 
+                                                mean2_weight = positive_score_weight, 
+                                                mean1 = -1, 
+                                                mean2 = 1, 
+                                                sigma = hetero_sd)
+    transversion1_severity <- draw_severity_scores(num_draws = 1, 
+                                                   mean2_weight = positive_score_weight, 
+                                                   mean1 = -1, 
+                                                   mean2 = 1, 
+                                                   sigma = hetero_sd)
+    transversion2_severity <- draw_severity_scores(num_draws = 1, 
+                                                   mean2_weight = positive_score_weight, 
+                                                   mean1 = -1, 
+                                                   mean2 = 1, 
+                                                   sigma = hetero_sd)
+    
+    severity_score_vec[transition_mut_name] <- transition_severity
+    severity_score_vec[transversion1_mut_name] <- transversion1_severity
+    severity_score_vec[transversion2_mut_name] <- transversion2_severity
+    
+  }
+}
+
+full_init_hetero_dt <- rbindlist(rows_list)
+
+init_i_vals <- full_init_hetero_dt$i
+init_j_vals <- full_init_hetero_dt$j
+init_x_vals <- full_init_hetero_dt$x
+
+# if no heteroplasmy, have to manually define i, j, and x to avoid error
+if(length(init_i_vals) == 0){
+  init_i_vals <- c(1)
+  init_j_vals <- c(1)
+  init_x_vals <- c(0L)
+}
+
+
+
+
+# initialize a heteroplasmy-filled sparse matrix with number of genomes == max mito per cell * average genomes per mito and mt genome length given by input
+init_incoming_mt_profile <- sparseMatrix(i = init_i_vals, j = init_j_vals, x = init_x_vals,
+                                         dims = c(max_mito_per_cell*average_genomes_per_mito, input_args$mito_genome_length))
+
+
+print('finished heteroplasmy indexing')
+
+new_hetero_indexing_time_end <- Sys.time()
+
+
+initial_heteroplasmy_score <- 0
+
+logistic_prob_survive_given_score <- function(this_score, 
+                                              init_score,
+                                              init_heteroplasmy_survive_prob, 
+                                              beta = 1){
+  # when beta > 0, higher score --> higher survival prob
+  # when beta < 0, higher score --> lower survival prob
+  
+  # let p = probability of survival
+  # anchor at: logit(init_heteroplasmy_survive_prob) = alpha + beta(this_score - init_score)
+  # when this_score == init_score: logit(init_heteroplasmy_survive_prob) = alpha
+  # logit(init_heteroplasmy_survive_prob) = log((init_heteroplasmy_survive_prob)/(1-init_heteroplasmy_survive_prob))
+  # p = 1 / (1+exp(-(alpha + beta * (this_score - init_score))))
+  
+  alpha = log(init_heteroplasmy_survive_prob/(1-init_heteroplasmy_survive_prob))
+  prob_survive <- 1 / (1+exp(-(alpha + beta*(this_score - init_score))))
+  return(prob_survive)
+}
+
+if(consider_cell_heteroplasmy_scores){
+ 
+  initial_heteroplasmy_score <- variant_frac_vec %*% severity_score_vec
+  
+}
+
+
+
+# poss_num_mito_genomes <- as.integer(input_args$max_mito_genomes_per_cell)
 
 poss_mt_genome_recovery_probs <- as.numeric(input_args$mt_genome_recovery_prob)
 poss_bc_integration_recovery_probs <- as.numeric(input_args$bc_integration_recovery_prob)
@@ -1494,24 +1859,21 @@ founder_cell_type <- as.character(input_args$cell_type_dict$founder_cell_type)
 
 
 
-# if sim lengths are specified using start:stop:inc, define sim lengths accordingly
-if(grepl(pattern = ':', x = input_args$sim_length)){
-  splits <- as.numeric(str_split(string = input_args$sim_length, pattern = ':')[[1]])
-  sim_length_stopping_points <- seq(splits[1], splits[2], by = splits[3])
-} else{ # else if specified using semicolons or a single time point
-  sim_length_stopping_points <- process_cla_string(input_args$sim_length, outputted_type = 'numeric')
-}
 
-# reconstruction modalities: 
-poss_recon_modals <- process_cla_string(input_args$recon_modality, outputted_type = 'character')
 
-# score_types:
-# only have to rewrite if both was chosen
-if(input_args$score_approach == 'both'){
-  poss_score_types <- c('af', 'bin')
-} else{
-  poss_score_types <- process_cla_string(input_args$score_approach, outputted_type = 'character')
-}
+
+# # if sim lengths are specified using start:stop:inc, define sim lengths accordingly
+# if(grepl(pattern = ':', x = input_args$sim_length)){
+#   splits <- as.numeric(str_split(string = input_args$sim_length, pattern = ':')[[1]])
+#   sim_length_stopping_points <- seq(splits[1], splits[2], by = splits[3])
+# } else{ # else if specified using semicolons or a single time point
+#   sim_length_stopping_points <- process_cla_string(input_args$sim_length, outputted_type = 'numeric')
+#   # sim_length_stopping_points <- as.numeric(input_args$sim_length)
+# }
+
+sim_length_stopping_points <- as.numeric(input_args$sim_length)
+
+
 
 scoremat_collapse_deletions <- as.logical(input_args$scoremat_collapse_deletions)
 combine_mt_bc <- as.logical(input_args$combine_mt_bc)
@@ -1522,7 +1884,7 @@ mt_allelic_fraction_thresholds <- as.numeric(input_args$mt_allelic_fraction_thre
 # rewrite savename if it was passed in as NULL
 if(is.null(input_args$savename)){
   custom_savename <- paste('res_', input_args$num_init_cells, '_cells_', 
-                           input_args$sim_length, '_maxsimlength', sep = '')
+                           as.character(input_args$sim_length), '_maxsimlength', sep = '')
 } else{
   custom_savename <- input_args$savename
 }
@@ -1545,32 +1907,218 @@ old_cells_at_timept <- function(timept, cc_length){
   return(lb)
 }
 
-add_mito_jitter <- function(mt_mutation_mat, frac_copies_lost){
-  
-  if(frac_copies_lost > 0){
-    # binomial draw to determine how many rows of the mt_mutation_mat will be lost
-    # the remainder will be amplified at random
-    num_copies_lost <- rbinom(size = nrow(mt_mutation_mat), n = 1, prob = frac_copies_lost)
-    
-    # don't allow the dropout of all mt genome copies 
-    if(num_copies_lost == nrow(mt_mutation_mat)){
-      return(mt_mutation_mat)
-    }
-    
-    rows_lost <- sample(x = seq(1, nrow(mt_mutation_mat)), size = num_copies_lost, replace = FALSE)
-    
-    # here we allow some rows to be duplicated more than once
-    eligible_rows_to_duplicate <- setdiff(seq(1, nrow(mt_mutation_mat)), rows_lost)
-    replacement_row_inds <- sample(eligible_rows_to_duplicate, size = num_copies_lost, replace = TRUE)
-    
-    mt_mutation_mat[rows_lost] <- mt_mutation_mat[replacement_row_inds]
-  }
-  
-  
-  return(mt_mutation_mat)
+
+# helper function for renumbering mito genomes after division
+reassign_genome_inds <- function(mito_to_genome_list){
+  flat <- unlist(mito_to_genome_list, use.names = FALSE)
+  numbered <- seq_along(flat)
+  return(split(numbered, rep(seq_along(mito_to_genome_list), lengths(mito_to_genome_list))))
   
 }
 
+mito_dynamics <- function(mito_to_genome_map, incoming_mito_mat, fusion_events_per_mito_per_division,
+                          split_events_per_mito_per_division,
+                          inheritance_pattern = 'random', post_mitotic_mt_deletion_frac = 0){
+  
+  # first allow for fusion and splitting processes
+  # then allocate mito according to pois to daughter cells
+  
+  ################ this function accomplishes the two above steps ... 
+  # then allow for the random deletion of entire mito
+  # then, outside this function, allow for cells to die according to heteroplasmy fractions
+  
+  # return list that will store the output of the func
+  return_list <- list()
+  
+  all_events <- c()
+  
+  # how many fusion events occur? get expected count by taking product of number of mito in this cell and fusion prob per mito
+  num_fusion_events <- rpois(n = 1, lambda = length(mito_to_genome_map)*fusion_events_per_mito_per_division)
+  all_events <- c(all_events, rep('fusion', num_fusion_events))
+  
+  # how many splitting events occur? 
+  num_split_events <- rpois(n = 1, lambda = length(mito_to_genome_map)*split_events_per_mito_per_division)
+  all_events <- c(all_events, rep('split', num_split_events))
+  
+  if(length(all_events) > 0){
+    # generate random order of fusion and split events
+    all_events <- sample(all_events)
+
+    sapply(all_events, function(event){
+      if(event == 'fusion'){
+        if(length(mito_to_genome_map) > 1){
+          # sample two mitochondrial numbers to fuse:
+          fuse_mito_nums <- sample(seq(1, length(mito_to_genome_map)), size = 2, replace = FALSE)
+          # will assume total fusions
+          fused_genome_inds <- c(mito_to_genome_map[[fuse_mito_nums[1]]], mito_to_genome_map[[fuse_mito_nums[2]]])
+          # update gained mito and remove lost mito from the map
+          mito_to_genome_map[[fuse_mito_nums[1]]] <<- fused_genome_inds
+          mito_to_genome_map[[fuse_mito_nums[2]]] <<- NULL
+        }
+        
+      }
+      else if(event == 'split'){
+        # sample a mito number to split
+        split_mito_num <- sample(seq(1, length(mito_to_genome_map)), size = 1)
+        current_genomes <- mito_to_genome_map[[split_mito_num]]
+        # split according to pois dist whose expected val is half the number of genomes in this mito
+        # for now, assuming that all splits are binary!
+        if(length(current_genomes) != 1){ # no splitting process occurs if there's only one genome in this mito to begin with 
+          genomes_in_split1 <- rbinom(n = 1, size = length(current_genomes), prob = 0.5)
+          genomes_in_split2 <- length(current_genomes) - genomes_in_split1
+          split1_genomes <- sample(current_genomes, size = genomes_in_split1, replace = FALSE)
+          split2_genomes <- setdiff(current_genomes, split1_genomes)
+          mito_to_genome_map[[split_mito_num]] <<- split1_genomes
+          
+          # name the next mito one more than the current max mito number
+          mito_to_genome_map[[length(mito_to_genome_map)+1]] <<- split2_genomes
+        }
+      }
+      
+    })
+  }
+  
+  # replicate all mitochondria to temporarily double the size of the mt mutation matrix
+  rep_mito_mat <- rbind(incoming_mito_mat, incoming_mito_mat)
+  
+  # # also update the mito to genome map after creating new mito
+  # # starting numbering at one higher than the previous number of mito
+  old_num_mito <- length(mito_to_genome_map)
+  copied_mito_nums <- seq(old_num_mito + 1, old_num_mito + length(mito_to_genome_map))
+
+  # new mito genome inds are found by taking old ones and adding the numrows of the existing mito mat
+  
+  sapply(seq(length(copied_mito_nums)), function(rel_num){
+    mito_to_genome_map[[copied_mito_nums[rel_num]]] <<- mito_to_genome_map[[rel_num]] + dim(incoming_mito_mat)[1]
+  })
+
+  # that concludes the parent mito to genome work. now need to format daughter lists and matrices:
+  
+  # for now only random dispersion of initial mito counts between daughter cells
+  # make copies of all mitochondria, then assign MITO THEMSELVES, NOT MTGENOMES, to daughters
+  if(inheritance_pattern == 'random'){ 
+    
+    # number of mtio passed to the first daughter will follow random poisson dist. with expected value == half total mito (which was just doubled, so it should ~ reach original number of mito)
+    num_mito_daughter1 <- rbinom(n = 1, size = length(mito_to_genome_map), prob = 0.5)
+    # get the mito numbers associated with this first daughter cell
+    daughter1_mito <- sample(seq(length(mito_to_genome_map)), size = num_mito_daughter1, replace = FALSE)
+
+    
+    # create a new daughter mt matrix based on the mt genomes that these mito map to
+    # first get the mt genome nums associated with the selected-for mito by defining new mito_to_genome_map
+   
+    daughter1_mito_to_genome_map <- sapply(daughter1_mito, function(mito_num){return(mito_to_genome_map[mito_num])})
+    daughter1_genome_inds <- unname(unlist(daughter1_mito_to_genome_map))
+    
+   
+    daughter1_mt_profile <- rep_mito_mat[daughter1_genome_inds, ]
+    
+    # when subsetting a sparse matrix using one row index, a numeric vector is returned 
+    # further processing is required to reconstruct the sparse matrix form
+    if(length(daughter1_genome_inds) == 1){
+      
+      # only retain non-zero elements to preserve sparsity
+      nonzero_j <- which(daughter1_mt_profile != 0)
+      nonzero_x <- daughter1_mt_profile[nonzero_j] 
+      
+      # assign all to mito genome 1
+      nonzero_i <- rep(1, length(nonzero_x))
+      
+      daughter1_mt_profile <- sparseMatrix(i = nonzero_i,
+                               j = nonzero_j,
+                               x = nonzero_x,
+                               dims = c(1, dim(rep_mito_mat)[2]))
+
+    }
+    
+    # since we change genome numbers by subsetting the parent matrix, we have to re-index each daughter mito_to_genome list
+    # to ensure genome inds are found in the daughter matrix
+    reindexed_daughter1_mito_to_genome_map <- reassign_genome_inds(mito_to_genome_list = daughter1_mito_to_genome_map)
+    
+    # get mito genome inds that belong to daughter cell 2 by taking setdifference of all genome inds and those belonging to daughter 1
+    all_mito_genome_inds <- unname(unlist(mito_to_genome_map))
+    daughter2_mito <- setdiff(seq(length(mito_to_genome_map)), daughter1_mito)
+    daughter2_mito_to_genome_map <- sapply(daughter2_mito, function(mito_num){return(mito_to_genome_map[mito_num])})
+    daughter2_genome_inds <- unname(unlist(daughter2_mito_to_genome_map))
+    
+    daughter2_mt_profile <- rep_mito_mat[daughter2_genome_inds, ]
+    
+    # perform further processing if daughter2_genome_inds has length 1
+    if(length(daughter2_genome_inds) == 1){
+      
+      # only retain non-zero elements to preserve sparsity
+      nonzero_j <- which(daughter2_mt_profile != 0)
+      nonzero_x <- daughter2_mt_profile[nonzero_j] 
+      
+      # assign all to mito genome 1
+      nonzero_i <- rep(1, length(nonzero_x))
+      
+      daughter2_mt_profile <- sparseMatrix(i = nonzero_i,
+                                           j = nonzero_j,
+                                           x = nonzero_x,
+                                           dims = c(1, dim(rep_mito_mat)[2]))
+      
+    }
+    
+    
+    reindexed_daughter2_mito_to_genome_map <- reassign_genome_inds(mito_to_genome_list = daughter2_mito_to_genome_map)
+    
+    
+    
+    
+  }
+  
+  # if random mito dropout is desired, probabilistically draw here from binomial
+  if(post_mitotic_mt_deletion_frac > 0){
+    
+    num_mito_dropout_daughter1 <- rbinom(n = 1, 
+                                         size = length(reindexed_daughter1_mito_to_genome_map),
+                                         prob = post_mitotic_mt_deletion_frac)
+    
+    if(num_mito_dropout_daughter1 > 0){
+      
+      # sample the mito names to determine which ones to delete (here uniform sampling)
+      delete_mito_nums <- sample(names(reindexed_daughter1_mito_to_genome_map), size = num_mito_dropout_daughter1, replace = FALSE)
+
+      # remove mt genomes that correspond to these mt numbers from the sparse matrix
+      # first find row nums by mapping removed mitos to genome numbers:
+      remove_genome_nums <- unname(unlist(sapply(delete_mito_nums, function(mito_num){return(reindexed_daughter1_mito_to_genome_map[mito_num])})))
+      
+      daughter1_mt_profile <- daughter1_mt_profile[-remove_genome_nums, ]
+      
+      # setting mito to genome vals to NULL removes from mito to genome map  
+      sapply(delete_mito_nums, function(mito_num){
+        reindexed_daughter1_mito_to_genome_map$mito_num <<- NULL
+      })
+    }
+    
+    
+    
+    # repeat for daughter cell 2:
+    num_mito_dropout_daughter2 <- rbinom(n = 1, 
+                                         size = length(reindexed_daughter2_mito_to_genome_map),
+                                         prob = post_mitotic_mt_deletion_frac)
+    
+    if(num_mito_dropout_daughter2 > 0){
+      delete_mito_nums <- sample(names(reindexed_daughter2_mito_to_genome_map), size = num_mito_dropout_daughter2, replace = FALSE)
+      remove_genome_nums <- unname(unlist(sapply(delete_mito_nums, function(mito_num){return(reindexed_daughter2_mito_to_genome_map[mito_num])})))
+      
+      daughter2_mt_profile <- daughter2_mt_profile[-remove_genome_nums, ]
+      
+      # setting mito to genome vals to NULL removes from mito to genome map  
+      sapply(delete_mito_nums, function(mito_num){
+        reindexed_daughter2_mito_to_genome_map$mito_num <<- NULL
+      })
+    }
+  }
+  
+  return_list <- list('daughter1_mt_profile' = daughter1_mt_profile,
+                      'daughter2_mt_profile' = daughter2_mt_profile,
+                      'daughter1_mito_to_genome_map' = reindexed_daughter1_mito_to_genome_map,
+                      'daughter2_mito_to_genome_map' = reindexed_daughter2_mito_to_genome_map)
+  
+  return(return_list)
+}
 
 # generate the indices of the cells that will be recovered at each timepoint according to fraction of total cells captured up front. 
 # this will only work correctly on terminal cell fastas. 
@@ -1648,10 +2196,6 @@ generate_downsample_integrations <- function(max_ints_per_cell_vec, recovery_rat
   
 }
 
-bases <- c(1,2,3,4)
-transition_matches <- c(2,1,4,3)
-transversion_matches <- c(c(3,4), c(3,4), c(1,2), c(1,2))
-
 # replace pos_er_list in here ........
 setup_sim <- function(num_clusters, 
                       init_pop_size, 
@@ -1662,6 +2206,7 @@ setup_sim <- function(num_clusters,
                       num_rows_bc, 
                       num_cols_bc, 
                       time_inc,
+                      init_incoming_mt_profile,
                       cell_type_basepos_bc_nontarget_transition_probs,
                       cell_type_basepos_bc_nontarget_transversion_probs,
                       cell_type_basepos_bc_nontarget_insertion_probs,
@@ -1681,44 +2226,135 @@ setup_sim <- function(num_clusters,
                       induced_tm_list,
                       differentiation_induction_timepoint,
                       editing_induction_timepoint,
+                      differentiation_induction_num_cells,
+                      editing_induction_num_cells,
+                      differentiation_induction_frac_cells,
+                      editing_induction_frac_cells,
                       custom_savename, 
                       forced_transversions, sim_length_stopping_points, cold_startup,
                       founder_cell_type,
                       cell_population,
-                      cell_type_jitter_frac,
                       poss_fasta_types,
                       include_var_pos_fasta,
                       interdeletion_dropout_radius,
-                      interdeletion_dropout_prob){
+                      interdeletion_dropout_prob,
+                      poss_recon_modals,
+                      mito_to_genome_map,
+                      fusion_events_per_mito_per_division,
+                      split_events_per_mito_per_division,
+                      post_mitotic_mt_deletion_frac,
+                      positive_score_weight,
+                      hetero_sd,
+                      heteroplasmy_severity_score_list,
+                      init_heteroplasmy_survive_prob,
+                      mito_inheritance_pattern,
+                      heteroplasmy_variant_fractions,
+                      initial_heteroplasmy_score,
+                      init_num_mito_genomes,
+                      ind_to_prime_seq_int_map,
+                      ind_to_prime_seq_nuc_map,
+                      prime_editing_system,
+                      close_nuc_window_after_edit,
+                      close_transition_window_after_edit,
+                      close_transversion_window_after_edit,
+                      be_target_to_window_ind_list,
+                      nuc_target_to_window_ind_list,
+                      be_window_to_target_ind_list,
+                      nuc_window_to_target_ind_list,
+                      consider_cell_heteroplasmy_scores){
 
   poss_times <<- seq(0, sim_length, time_inc)
   
-  init_incoming_mt_profile <- sparseMatrix(i = c(1), j = c(1), x = c(0L),
-                                           dims = c(num_rows_mt, num_cols_mt))
+  init_incoming_mt_profile <- init_incoming_mt_profile
   init_incoming_bc_profile <- sparseMatrix(i = c(1), j = c(1), x = c(0L),
                                            dims = c(num_rows_bc, num_cols_bc))
+  
+  
+  # generate initial elig_div_points by drawing from an exponential distribution:
+  get_future_div_points <- function(sim_length, cc_length, current_timepoint){
+    
+    # empty vector to which future div points will be appended
+    elig_div_points <- numeric()
+    
+    while(current_timepoint < sim_length){
+      next_cc_length <- rexp(n = 1, rate = 1/cc_length)
+      next_timept <- current_timepoint + next_cc_length
+      elig_div_points <- c(elig_div_points, next_timept)
+      current_timepoint <- next_timept
+    }
+    
+    # ensure all timepoints above sim_length are removed:
+    elig_div_points <- elig_div_points[elig_div_points <= sim_length]
+    
+    return(elig_div_points)
+    
+  }
+  
+  elig_div_points <- get_future_div_points(sim_length = sim_length,
+                                           cc_length = cell_type_cell_cycle_length[[founder_cell_type]],
+                                           current_timepoint = 0)
+  
+  
+  get_initial_induction <- function(induction_list){
+    
+    init_induced <- FALSE
+    
+    # if we want to begin the experiment in an induced state:
+    # note that it doesn't make all that much sense to probabilistically encode a founder cell
+    if(induction_list$timepoint == 0){
+      if(!is.null(induction_list$num_cells)){
+        if(induction_list$num_cells > 0){
+          init_induced <- TRUE
+        }
+      }
+      if(!is.null(induction_list$frac_cells)){
+        if(induction_list$frac_cells > 0){
+          editing_induced <- rbinom(n = 1, size = 1, prob = induction_list$frac_cells)
+          if(editing_induced == 1){
+            init_induced <- TRUE
+          }
+        }
+      }
+    }
+    
+    return(init_induced)
+    
+  }
+  
+  # global assignments so muti_core_func() can capture values later
+  already_assigned_editing_induction <<- get_initial_induction(input_args$editing_induction)
+  init_induced_editing <- ifelse(already_assigned_editing_induction,
+                                 'induced_editing_params',
+                                 'uninduced_editing_params')
+  
+  already_assigned_diff_induction <<- get_initial_induction(input_args$differentiation_induction)
   
   cell_population <- list('1' = list('linstring' = '1',
                                      'celltype' = founder_cell_type,
                                      'birth_time' = 0,
-                                     'death_time' = NULL,
+                                     'death_time' = NA,
                                      'parent' = NULL,
                                      'descendants' = c(),
                                      'alive' = TRUE,
                                      'terminal' = TRUE,
-                                     'elig_div_points' = seq(0, sim_length, cell_type_cell_cycle_length[[founder_cell_type]]),
+                                     'elig_div_points' = elig_div_points,
                                      'incoming_mt_profiles' = init_incoming_mt_profile,
-                                     'incoming_bc_profiles' = init_incoming_bc_profile))
-    
+                                     'incoming_bc_profiles' = init_incoming_bc_profile,
+                                     'mito_to_genome_map' = mito_to_genome_map, 
+                                     'heteroplasmy_score' = initial_heteroplasmy_score,
+                                     'heteroplasmy_survive_prob' = init_heteroplasmy_survive_prob,
+                                     'induced_editing' = init_induced_editing,
+                                     'induced_differentiation' = already_assigned_diff_induction))
+
    
   cluster_startup_start <- Sys.time()
   one_cluster <<- makeCluster(num_clusters)
-  clusterEvalQ(cl = one_cluster, c(suppressPackageStartupMessages(library('Matrix'))))
+
+  clusterEvalQ(cl = one_cluster, c(suppressPackageStartupMessages(library('Matrix', 'data.table'))))
   clusterExport(cl = one_cluster, c('perform_all_mt_mutations', 'perform_all_bc_mutations', 'transition_func', 'transversion_func',
                                     'insertion_func', 'deletion_func', 'bases', 'transition_matches',
                                     'transversion_matches', 'baseline_seq_ints_mt', 'baseline_seq_ints_bc',
                                     'baseline_seq_nucs_mt', 'baseline_seq_nucs_bc',
-                                    # 'incoming_mt_profiles', 'incoming_bc_profiles', 
                                     'num_deletable_bases', 'perform_deletion', 'all_deletions_one_mat',
                                     'num_rows_bc', 'num_cols_bc', 'num_rows_mt', 'num_cols_mt',
                                     'init_pop_size', 
@@ -1743,12 +2379,17 @@ setup_sim <- function(num_clusters,
                                     'induced_tm_list',
                                     'differentiation_induction_timepoint',
                                     'editing_induction_timepoint',
+                                    'differentiation_induction_num_cells',
+                                    'editing_induction_num_cells',
+                                    'differentiation_induction_frac_cells',
+                                    'editing_induction_frac_cells',
+                                    'already_assigned_editing_induction',
+                                    'already_assigned_diff_induction',
                                     'old_cells_at_timept', 
                                     'forced_transversions', 'get_background_edit_inds', 
                                     'non_uniform_editing',
                                     'sim_length_stopping_points', 
-                                    'cell_type_jitter_frac',
-                                    'add_mito_jitter',
+                                    'mito_dynamics',
                                     'unique_run_id',
                                     'poss_fasta_types', 'include_var_pos_fasta',
                                     'founder_cell_type',
@@ -1759,7 +2400,39 @@ setup_sim <- function(num_clusters,
                                     'scoremat_collapse_deletions',
                                     'combine_mt_bc',
                                     'binarize_mutation_scores',
-                                    'mt_allelic_fraction_thresholds'
+                                    'mt_allelic_fraction_thresholds',
+                                    'poss_recon_modals',
+                                    'fusion_events_per_mito_per_division',
+                                    'split_events_per_mito_per_division',
+                                    'get_future_div_points',
+                                    'post_mitotic_mt_deletion_frac',
+                                    'heteroplasmy_severity_score_list',
+                                    'heteroplasmy_variant_fractions',
+                                    'positive_score_weight',
+                                    'hetero_sd',
+                                    'logistic_prob_survive_given_score',
+                                    'init_heteroplasmy_survive_prob',
+                                    'mito_inheritance_pattern',
+                                    'initial_heteroplasmy_score',
+                                    'draw_severity_scores',
+                                    'reassign_genome_inds',
+                                    'init_num_mito_genomes',
+                                    'ind_to_prime_seq_int_map',
+                                    'ind_to_prime_seq_nuc_map',
+                                    'prime_editing_system',
+                                    'close_nuc_window_after_edit',
+                                    'close_transition_window_after_edit',
+                                    'close_transversion_window_after_edit',
+                                    'be_target_to_window_ind_list',
+                                    'nuc_target_to_window_ind_list',
+                                    'be_window_to_target_ind_list',
+                                    'nuc_window_to_target_ind_list',
+                                    'filter_elig_ints_by_edit_window',
+                                    'consider_cell_heteroplasmy_scores',
+                                    'all_processes_at_stopping_point',
+                                    'custom_savename',
+                                    'poss_times',
+                                    'sim_length_stopping_points'
                                     ),
                 envir = environment())
   cluster_startup_end <- Sys.time()
@@ -1784,68 +2457,173 @@ multi_core_func <- function(timepoint,
                             cell_type_basepos_bc_target_deletion_probs,
                             cell_type_mt_sub_prob_mat, 
                             cell_type_bc_sub_prob_mat, 
-                            cell_type_jitter_frac, 
                             cell_type_death_probs,
                             uninduced_tm_list,
                             induced_tm_list,
                             differentiation_induction_timepoint,
                             editing_induction_timepoint,
+                            differentiation_induction_num_cells,
+                            editing_induction_num_cells,
+                            differentiation_induction_frac_cells,
+                            editing_induction_frac_cells,
+                            already_assigned_editing_induction,
+                            already_assigned_diff_induction,
                             unique_run_id,
                             interdeletion_dropout_radius,
                             interdeletion_dropout_prob,
                             scoremat_collapse_deletions,
                             combine_mt_bc,
                             binarize_mutation_scores,
-                            mt_allelic_fraction_thresholds){
+                            mt_allelic_fraction_thresholds,
+                            poss_recon_modals,
+                            fusion_events_per_mito_per_division,
+                            split_events_per_mito_per_division,
+                            post_mitotic_mt_deletion_frac,
+                            heteroplasmy_variant_fractions,
+                            heteroplasmy_severity_score_list,
+                            positive_score_weight,
+                            hetero_sd,
+                            mito_inheritance_pattern,
+                            init_num_mito_genomes,
+                            ind_to_prime_seq_int_map,
+                            ind_to_prime_seq_nuc_map,
+                            prime_editing_system,
+                            close_nuc_window_after_edit,
+                            close_transition_window_after_edit,
+                            close_transversion_window_after_edit,
+                            be_target_to_window_ind_list,
+                            nuc_target_to_window_ind_list,
+                            be_window_to_target_ind_list,
+                            nuc_window_to_target_ind_list,
+                            consider_cell_heteroplasmy_scores,
+                            poss_times,
+                            custom_savename,
+                            sim_length_stopping_points,
+                            t){
   
   
   ######## DIVIDE, THEN DIE, THEN MUTATE
+
+  # adding another check for alive and terminal cells that can become induced
+  # at the beginning of this timepoint:
+  cells_alive_here_bool_list <- sapply(cell_population,
+                                       function(cell) cell$terminal & cell$alive,
+                                       USE.NAMES = TRUE)
   
+  print(paste0('Pop size == ', sum(cells_alive_here_bool_list)))
   
-  # determine if this is an induced or uninduced timepoint:
+  cell_names_alive_here <- names(cells_alive_here_bool_list)[cells_alive_here_bool_list]
+  
+  # assign differentiation induction cells if necessary
   if(timepoint >= differentiation_induction_timepoint){
-    differentiation_induced <- TRUE
-  } else{
-    differentiation_induced <- FALSE
+    
+    # only have to assign induction statuses in the first timepoint after we cross the induction timepoint:
+    if(already_assigned_diff_induction == FALSE){
+      print('Inducing differentiation')
+      if(is.null(differentiation_induction_num_cells)){
+        
+        # if we're inducing using a fraction of alive/terminal cells at this timepoint
+        num_induced_cells <- rbinom(1, size = length(cell_names_alive_here), prob = differentiation_induction_frac_cells)
+        now_induced_cells <- sample(x = cell_names_alive_here, replace = FALSE, size = num_induced_cells)
+      } else{
+        # if we're inducing using a raw number of cells at this timepoint
+        # when working with fixed num cells, cap at num cells alive if fixed number > size of current pop
+        now_induced_cells <- sample(x = cell_names_alive_here, replace = FALSE,
+                                      size = min(differentiation_induction_num_cells, length(cell_names_alive_here)))
+      }
+      
+      for(linstring in now_induced_cells){
+        cell_population[[linstring]]$induced_differentiation <- TRUE
+      }
+      already_assigned_diff_induction <<- TRUE
+      
+      # write which cells were selected to be induced (and when) to csv:
+      differentiation_induction_df <- data.frame(cbind(now_induced_cells, 
+                                                       rep(timepoint, length(now_induced_cells))))
+      
+      colnames(differentiation_induction_df) <- c('linstring', 'differentiation_induced_timepoint')
+      if(!dir.exists(file.path('output', 'induction_details', unique_run_id))){
+        dir.create(file.path('output', 'induction_details', unique_run_id), recursive = TRUE)
+      }
+      write.csv(differentiation_induction_df, 
+                file.path('output', 'induction_details', unique_run_id, 'differentiation_induction_df.csv'))
+    }
   }
   
-  # determine if this is an induced or uninduced timepoint:
+  # assign editing induction cells if necessary
   if(timepoint >= editing_induction_timepoint){
-    editing_induced <- 'induced_editing_params'
-  } else{
-    editing_induced <- 'uninduced_editing_params'
+    
+    # only have to assign induction statuses in the first timepoint after we cross the induction timepoint:
+    if(already_assigned_editing_induction == FALSE){
+      print('Inducing differentiation')
+      if(is.null(editing_induction_num_cells)){
+        
+        # if we're inducing using a fraction of alive/terminal cells at this timepoint
+        num_induced_cells <- rbinom(length(cell_names_alive_here), size = 1, prob = editing_induction_frac_cells)
+        now_induced_cells <- sample(x = cell_names_alive_here, replace = FALSE, size = num_induced_cells)
+      } else{
+        # if we're inducing using a raw number of cells at this timepoint
+        # when working with fixed num cells, cap at num cells alive if fixed number > size of current pop
+        now_induced_cells <- sample(x = cell_names_alive_here, replace = FALSE,
+                                    size = min(editing_induction_num_cells, length(cell_names_alive_here)))
+      }
+      
+      for(linstring in now_induced_cells){
+        cell_population[[linstring]]$induced_editing <- 'induced_editing_params'
+      }
+      
+      already_assigned_editing_induction <<- TRUE
+      
+      # write which cells were selected to be induced (and when) to csv:
+      editing_induction_df <- data.frame(cbind(now_induced_cells, 
+                                                       rep(timepoint, length(now_induced_cells))))
+      
+      colnames(editing_induction_df) <- c('linstring', 'editing_induced_timepoint')
+      if(!dir.exists(file.path('output', 'induction_details', unique_run_id))){
+        dir.create(file.path('output', 'induction_details', unique_run_id), recursive = TRUE)
+      }
+      write.csv(editing_induction_df, 
+                file.path('output', 'induction_details', unique_run_id, 'editing_induction_df.csv'))
+    }
   }
   
-  
-  ##################################### DIVIDE
-  # only certain cells will divide at this timepoint
-  cells_dividing_here_bool_list <- lapply(cell_population, function(cell){
-    return((timepoint %in% cell$elig_div_points) & (cell$terminal) & (cell$alive))
-  })
+  cells_dividing_here_bool_list <- sapply(cell_population, 
+                          function(cell){
+                            return(length(cell$elig_div_points) > 0 & timepoint >= cell$elig_div_points[1] & cell$terminal & cell$alive)
+                          },
+                          USE.NAMES = TRUE)
+  cell_names_dividing_here <- names(cells_dividing_here_bool_list)[cells_dividing_here_bool_list]
   
   # get lineage strings corresponding to the cells dividing here
   
-  cell_names_dividing_here <- names(cell_population)[which(as.logical(cells_dividing_here_bool_list) == TRUE)]
-  num_cells_dividing_here <- length(cell_names_dividing_here)
   
-  # if cells divide, they are no longer terminal
+  num_cells_dividing_here <- length(cell_names_dividing_here)
   
   new_cell_list <- parLapply(cl = one_cluster, X = cell_names_dividing_here, 
                              fun = function(cell_name){
                                
                                this_cell_type <- cell_population[[cell_name]]$celltype
-                               this_cell_jitter_frac <- cell_type_jitter_frac[[this_cell_type]]
                                
-                               new_mitoprofiles_1 <- add_mito_jitter(mt_mutation_mat = cell_population[[cell_name]]$incoming_mt_profiles, 
-                                                                     frac_copies_lost = this_cell_jitter_frac)
-                               new_mitoprofiles_2 <- add_mito_jitter(mt_mutation_mat = cell_population[[cell_name]]$incoming_mt_profiles, 
-                                                                     frac_copies_lost = this_cell_jitter_frac)
+                               mt_dynamics_res <- mito_dynamics(mito_to_genome_map = cell_population[[cell_name]]$mito_to_genome_map, 
+                                                                incoming_mito_mat = cell_population[[cell_name]]$incoming_mt_profiles, 
+                                                                fusion_events_per_mito_per_division = fusion_events_per_mito_per_division,
+                                                                split_events_per_mito_per_division = split_events_per_mito_per_division,
+                                                                inheritance_pattern = mito_inheritance_pattern,
+                                                                post_mitotic_mt_deletion_frac = post_mitotic_mt_deletion_frac)
+                               
+                               
+                               new_mitoprofiles_1 <- mt_dynamics_res[['daughter1_mt_profile']]
+                               new_mitoprofiles_2 <- mt_dynamics_res[['daughter2_mt_profile']]
+                               daughter1_mito_to_genome_map <- mt_dynamics_res[['daughter1_mito_to_genome_map']]
+                               daughter2_mito_to_genome_map <- mt_dynamics_res[['daughter2_mito_to_genome_map']]
                                
                                # generate daughter cell lineage strings
                                daughter_cell_linstrings <- paste(cell_name, seq(1,2), sep = '_')
                                
+                               differentiation_induced <- cell_population[[cell_name]]$induced_differentiation
+                               editing_induced <- cell_population[[cell_name]]$induced_editing
                                
-                               # generate new daughter cell types according to whether popn has been induced
+                               # generate new daughter cell types according to whether parent has been induced
                                if(differentiation_induced){
                                  daughter_cell_types <- sample(names(induced_tm_list[[this_cell_type]]), 
                                                                size = 2, replace = TRUE, 
@@ -1857,42 +2635,83 @@ multi_core_func <- function(timepoint,
                                }
                                
                                # update parent cell with descendant info and to reflect changed terminal status
-                               # in order for these changes to be made, have to return this modified copy from the parallel workers, then subsequently overwite existing vals
+                               # in order for these changes to be made, have to return this modified copy from the parallel workers, then subsequently overwrite existing vals
                                cell_population[[cell_name]]$descendants <- daughter_cell_linstrings
                                cell_population[[cell_name]]$terminal <- FALSE
                                cell_population[[cell_name]]$alive <- FALSE
+                               cell_population[[cell_name]]$dwell_time <- timepoint - cell_population[[cell_name]]$birth_time
+                               cell_population[[cell_name]]$divide_time <- timepoint
+                               
+                               # update the elig div points by removing the first timepoint so that we can continue to access first timepoint for comparisons later on
+                               cell_population[[cell_name]]$elig_div_points <- cell_population[[cell_name]]$elig_div_points[2:length(cell_population[[cell_name]]$elig_div_points)]
+                               
+                               # new line ... 
+                               cell_population[[cell_name]]$death_time <- timepoint
+                               
+                               
+                               
+                               # probabilistically draw new elig div points for each daughter based on cell type-specific cell cycle lenghts
+                               daughter1_elig_div_points <- get_future_div_points(sim_length = sim_length, 
+                                                                                  cc_length = cell_type_cell_cycle_length[[daughter_cell_types[1]]], 
+                                                                                  current_timepoint = timepoint)
+                               
+                               daughter2_elig_div_points <- get_future_div_points(sim_length = sim_length, 
+                                                                                  cc_length = cell_type_cell_cycle_length[[daughter_cell_types[2]]], 
+                                                                                  current_timepoint = timepoint)
                                
                                daughter_cells <- list()
                                
+                               # if a daughter cell is assigned zero mito, label it as dead upon creation. 
+                               if(length(daughter1_mito_to_genome_map) > 0){
+                                 daughter1_alive <- TRUE
+                               } else{
+                                 daughter1_alive <- FALSE
+                     
+                               }
+                               if(length(daughter2_mito_to_genome_map) > 0){
+                                 daughter2_alive <- TRUE
+                               } else{
+                                 daughter2_alive <- FALSE
+               
+                               }
                                daughter_cells[[daughter_cell_linstrings[1]]] <- list('linstring' = daughter_cell_linstrings[1],
                                                                                     'celltype' = daughter_cell_types[1],
                                                                                     'birth_time' = timepoint,
-                                                                                    'death_time' = NULL,
+                                                                                    'death_time' = NA,
                                                                                     'parent' = cell_name,
                                                                                     'descendants' = c(),
-                                                                                    'alive' = TRUE,
+                                                                                    'alive' = daughter1_alive,
                                                                                     'terminal' = TRUE,
-                                                                                    'elig_div_points' = seq(timepoint, sim_length, cell_type_cell_cycle_length[[daughter_cell_types[1]]]),
+                                                                                    'elig_div_points' = daughter1_elig_div_points,
                                                                                     'incoming_mt_profiles' = new_mitoprofiles_1,
-                                                                                    'incoming_bc_profiles' = cell_population[[cell_name]]$incoming_bc_profiles)
+                                                                                    'incoming_bc_profiles' = cell_population[[cell_name]]$incoming_bc_profiles,
+                                                                                    'mito_to_genome_map'= daughter1_mito_to_genome_map,
+                                                                                    'induced_editing' = editing_induced,
+                                                                                    'induced_differentiation' = differentiation_induced)
                                daughter_cells[[daughter_cell_linstrings[2]]] <- list('linstring' = daughter_cell_linstrings[2],
                                                                                  'celltype' = daughter_cell_types[2],
                                                                                  'birth_time' = timepoint,
-                                                                                 'death_time' = NULL,
+                                                                                 'death_time' = NA,
                                                                                  'parent' = cell_name,
                                                                                  'descendants' = c(),
-                                                                                 'alive' = TRUE,
+                                                                                 'alive' = daughter2_alive,
                                                                                  'terminal' = TRUE,
-                                                                                 'elig_div_points' = seq(timepoint, sim_length, cell_type_cell_cycle_length[[daughter_cell_types[2]]]),
+                                                                                 'elig_div_points' = daughter2_elig_div_points,
                                                                                  'incoming_mt_profiles' = new_mitoprofiles_2,
-                                                                                 'incoming_bc_profiles' = cell_population[[cell_name]]$incoming_bc_profiles)
+                                                                                 'incoming_bc_profiles' = cell_population[[cell_name]]$incoming_bc_profiles,
+                                                                                 'mito_to_genome_map'= daughter2_mito_to_genome_map,
+                                                                                 'induced_editing' = editing_induced,
+                                                                                 'induced_differentiation' = differentiation_induced)
                                
                                 return_list <- list()
                                 return_list[['updated_parent']] <- cell_population[[cell_name]] # modified copy of the parent that will be used to overwrite the cell in the pop
+                                
                                 return_list[['new_cells']] <- daughter_cells
                                return(return_list)
                                
                              })
+  
+
   
   # split the results of this apply into updated parents and new cells:
   daughter_cells <- lapply(new_cell_list, function(cellname){
@@ -1905,164 +2724,224 @@ multi_core_func <- function(timepoint,
   # give the updated parents names so that they can overwrite existing vals at these cell names
   names(updated_parents) <- cell_names_dividing_here
   
+  
+  
   # overwrite now-parents
   cell_population[cell_names_dividing_here] <- updated_parents[cell_names_dividing_here]
   
-  
-  
+
   # flatten the list of lists that was generated for daughter cells 
   daughter_cells <- unlist(daughter_cells, recursive = FALSE)
   
   # append the new daughter cells to the end of the growing cell pop
-  cell_population <- append(cell_population, daughter_cells)
+  for(daughter_name in names(daughter_cells)){
+    cell_population[[daughter_name]] <- daughter_cells[[daughter_name]]
+  }
   
   ##################################### DIE
   
-  cells_alive_here_bool_list <- lapply(cell_population, function(cell){
-    return((cell$terminal) & (cell$alive))
-  })
   
-  # get lineage strings corresponding to the cells dividing here
-  cell_names_alive_here <- names(cell_population)[which(as.logical(cells_alive_here_bool_list) == TRUE)]
+  cells_alive_here_bool_list <- sapply(cell_population,
+                                       function(cell) cell$terminal & cell$alive,
+                                       USE.NAMES = TRUE)
+  
+  cell_names_alive_here <- names(cells_alive_here_bool_list)[cells_alive_here_bool_list]
 
   num_cells_alive_here <- length(cell_names_alive_here)
   # only certain cells will die at this timepoint, according to their respective cell type's death prob
   
   # only terminal (& alive) cells can die here...
   
-  # get updated living statuses of each terminal (& alive) cell
-  updated_living_statuses <- lapply(cell_names_alive_here, function(cell_name){
+  # death process via heteroplasmy scores:
+  
+  # generate a list with names == cellnames, values == named mutations and their frequency in that cell
+  # we make use of the same func that is used to score allelic fractions in downstream tree reconstruction but exit early
+  # recovered ints here is a map of cell name: all unique genome nums in mito to genome map
+  # we do not condense to save time
+  # profiles is a list of living cells for which we want heteroplasmy scores
+  
+  
+  
+  # generate heteroplasmy counts for all alive cells
+  alive_mt_profiles <- lapply(cell_population[cell_names_alive_here], function(cell){
+    cell$incoming_mt_profiles
+  })
+  
+  # print('past alive_mt_profiles')
+  recovered_ints_list <- lapply(cell_population[cell_names_alive_here], function(cell){
     
-    this_cell_type <- cell_population[[cell_name]]$celltype
-    death_prob <- cell_type_death_probs[[this_cell_type]]
-    death_occurs <- rbinom(n = 1, size = 1, prob = death_prob)
-    
-    # since we are using updated_living_statuses to replace all 
-    if(death_occurs){
-      return(FALSE)
-    } else if(!(death_occurs)){
-      return(TRUE)
+    prof <- cell$incoming_mt_profiles
+    if(!is.null(prof) && length(dim(prof)) == 2 && nrow(prof) > 0){
+      return(seq_len(nrow(prof)))
+    } else{
+      return(integer(0))
     }
+   
   })
   
-  # rewrite the existing alive indicators for these cells with updated_living_statuses:
-  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_statuses, death_time) {
-    cell_list[['alive']] <- new_statuses
-    cell_list[['death_time']] <- death_time
-    return(cell_list)
-  }, cell_population[cell_names_alive_here], updated_living_statuses, rep(timepoint, length(updated_living_statuses)))
-  
-  
-  ##################################### MUTATE
-  # all TERMINAL and ALIVE cells will mutate at each timepoint ...
-  # have to regenerate this list in case some cells died in the previous step
-  cells_alive_here_bool_list <- lapply(cell_population, function(cell){
-    return((cell$terminal) & (cell$alive))
+  # print('past recovered_ints_list')
+  cell_to_num_mito_genomes_list <- lapply(recovered_ints_list, function(cell){
+    return(length(cell))
   })
-  # get lineage strings corresponding to the cells dividing here
-  cell_names_alive_here <- names(cell_population)[which(as.logical(cells_alive_here_bool_list) == TRUE)]
-
-  mutated_bc_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
-                                   fun = function(cell_name){
-                                     
-                                     this_cell_type <- cell_population[[cell_name]]$celltype
-                                     
-                                     # now have to change the logic of perform_all_bc_mutations
-                                     # to allow for nuc and be uniform editing flags
-                                     return(perform_all_bc_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_bc_profiles, 
-                                                                     bg_transition_list = cell_type_basepos_bc_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_transversion_list = cell_type_basepos_bc_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_insertion_list = cell_type_basepos_bc_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_deletion_list = cell_type_basepos_bc_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_transition_list = cell_type_basepos_bc_target_transition_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_transversion_list = cell_type_basepos_bc_target_transversion_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_insertion_list = cell_type_basepos_bc_target_insertion_probs[[this_cell_type]][[editing_induced]],
-                                                                     target_deletion_list = cell_type_basepos_bc_target_deletion_probs[[this_cell_type]][[editing_induced]],
-                                                                     prob_sub_mat = cell_type_bc_sub_prob_mat[[this_cell_type]][[editing_induced]],
-                                                                     timepoint_for_label = timepoint,
-                                                                     urid = unique_run_id,
-                                                                     interdel_dropout_radius = interdeletion_dropout_radius,
-                                                                     interdel_dropout_prob = interdeletion_dropout_prob))
-                                   })
   
-  # rewrite the existing mut_mats for these cells with the updated profiles:
-  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
-    cell_list[['incoming_bc_profiles']] <- new_profiles
-    return(cell_list)
-  }, cell_population[cell_names_alive_here], mutated_bc_profiles)
+  if(consider_cell_heteroplasmy_scores){
+    
+    cell_to_heteroplasmy_counts <- new_create_one_score_mat(profiles = alive_mt_profiles,
+                                                        recovered_ints = recovered_ints_list,
+                                                        condense = FALSE, urid = unique_run_id, savename_prefix = 'not_used',
+                                                        mt_or_bc = 'mt', binarize_score = FALSE, allelic_fraction_thresh = 0,
+                                                        return_af_fracs = TRUE)
+    
+    if(!is.list(cell_to_heteroplasmy_counts)){
+      hetero_death_draws <- rep(0, length(cell_names_alive_here))
 
+    } else{
+      norm_cell_heteroplasmy_scores <- get_norm_cell_heteroplasmy_scores(cell_mut_counts = cell_to_heteroplasmy_counts,
+                                                                         cell_to_num_mito_genomes_list = cell_to_num_mito_genomes_list,
+                                                                         heteroplasmy_severity_score_list = heteroplasmy_severity_score_list,
+                                                                         positive_score_weight = positive_score_weight,
+                                                                         hetero_sd = hetero_sd,
+                                                                         cell_population = cell_population, 
+                                                                         normalize_cell_mut_counts = FALSE)
+      
+      
+     
+      sapply(names(norm_cell_heteroplasmy_scores), function(name){
+        cell_population[[name]]$heteroplasmy_score <<- norm_cell_heteroplasmy_scores[[name]]
+      })
+      
+      hetero_death_probs <- vapply(norm_cell_heteroplasmy_scores[cell_names_alive_here], function(score){
+        return(as.numeric(1- logistic_prob_survive_given_score(this_score = score, 
+                                                               init_score = initial_heteroplasmy_score,
+                                                               init_heteroplasmy_survive_prob = init_heteroplasmy_survive_prob,
+                                                               beta = 1)))
+      }, FUN.VALUE = numeric(1))
+      
+      hetero_death_draws <- rbinom(length(hetero_death_probs), 1, hetero_death_probs)
+    }
+    
+  }
   
-  mutated_mt_profiles <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
-                                   fun = function(cell_name){
-                                     
-                                     this_cell_type <- cell_population[[cell_name]]$celltype
-                                     
-                                     return(perform_all_mt_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_mt_profiles,
-                                                                     bg_transition_list = cell_type_basepos_mt_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_transversion_list = cell_type_basepos_mt_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_insertion_list = cell_type_basepos_mt_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
-                                                                     bg_deletion_list = cell_type_basepos_mt_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
-                                                                     prob_sub_mat = cell_type_mt_sub_prob_mat[[this_cell_type]][[editing_induced]]))
-                                     
-                                   })
+  # all cells undergo pruning by random selection and by zero mito
+  
+  cell_types_alive <- sapply(cell_population[cell_names_alive_here], `[[`, 'celltype')
+  
+  random_death_probs <- unname(unlist(cell_type_death_probs[cell_types_alive]))
+  
+  random_death_draws <- rbinom(length(cell_types_alive), 1, random_death_probs)
+  
+  zero_mito_draws <- sapply(cell_population[cell_names_alive_here], function(cell){
+    return(length(cell$mito_to_genome_map) == 0)
+  })
+  
+  # cell death considers heteroplasmy only if consider_cell_heteroplasmy_scores
+  if(consider_cell_heteroplasmy_scores){
+    death_occurs <- (hetero_death_draws == 1) | (random_death_draws == 1) | zero_mito_draws
+  } else{
+    death_occurs <- (random_death_draws == 1) | zero_mito_draws
+  }
+  
+  dead_cells <- cell_names_alive_here[death_occurs]
 
-  # rewrite the existing mut_mats for these cells with the updated profiles:
-  cell_population[cell_names_alive_here] <- Map(function(cell_list, new_profiles) {
-    cell_list[['incoming_mt_profiles']] <- new_profiles
-    return(cell_list)
-  }, cell_population[cell_names_alive_here], mutated_mt_profiles)
+  for(dead_cellname in dead_cells){
+    cell_population[[dead_cellname]]$alive <- FALSE
+    cell_population[[dead_cellname]]$death_time <- timepoint
+  }
+
+  cells_alive_here_bool_list <- sapply(cell_population,
+                       function(cell) cell$terminal & cell$alive,
+                       USE.NAMES = TRUE)
+  cell_names_alive_here <- names(cells_alive_here_bool_list)[cells_alive_here_bool_list]
   
-  return(cell_population)
+
+  # if all cells are dead at this timepoint, exit the entire simulation
+  if(length(cell_names_alive_here) == 0){
+    print(paste0('All cells have died at timepoint ', timepoint, '\nQuitting run without tree reconstruction'))
+    quit(save = 'no')
+  }
+  
+  # combining bc and mt processes into a single parlapply call:
+  mutation_results <- parLapply(cl = one_cluster, X = cell_names_alive_here, 
+                                fun = function(cell_name){
+                                  
+                                  this_cell <- cell_population[[cell_name]]
+                                  this_cell_type <- cell_population[[cell_name]]$celltype
+                                  editing_induced <- cell_population[[cell_name]]$induced_editing
+                                  
+                                  bc_result <- NULL
+                                  
+                                  if('bc' %in% poss_recon_modals){
+                                    bc_result <- perform_all_bc_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_bc_profiles,
+                                                                    bg_transition_list = cell_type_basepos_bc_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                    bg_transversion_list = cell_type_basepos_bc_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                    bg_insertion_list = cell_type_basepos_bc_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                    bg_deletion_list = cell_type_basepos_bc_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                    target_transition_list = cell_type_basepos_bc_target_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                    target_transversion_list = cell_type_basepos_bc_target_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                    target_insertion_list = cell_type_basepos_bc_target_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                    target_deletion_list = cell_type_basepos_bc_target_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                    prob_sub_mat = cell_type_bc_sub_prob_mat[[this_cell_type]][[editing_induced]],
+                                                                    timepoint_for_label = timepoint,
+                                                                    urid = unique_run_id,
+                                                                    interdel_dropout_radius = interdeletion_dropout_radius,
+                                                                    interdel_dropout_prob = interdeletion_dropout_prob,
+                                                                    prime_editing_system = prime_editing_system,
+                                                                    ind_to_prime_seq_int_map = ind_to_prime_seq_int_map,
+                                                                    close_nuc_window_after_edit = close_nuc_window_after_edit,
+                                                                    close_transition_window_after_edit = close_transition_window_after_edit,
+                                                                    close_transversion_window_after_edit = close_transversion_window_after_edit,
+                                                                    be_target_to_window_ind_list = be_target_to_window_ind_list,
+                                                                    nuc_target_to_window_ind_list = nuc_target_to_window_ind_list,
+                                                                    be_window_to_target_ind_list = be_window_to_target_ind_list,
+                                                                    nuc_window_to_target_ind_list = nuc_window_to_target_ind_list)
+                                  }
+                                  
+                                  
+                                  
+                                  mt_result <- NULL
+
+                                  if('mt' %in% poss_recon_modals){
+                                    mt_result <- perform_all_mt_mutations(incoming_mut_mat = cell_population[[cell_name]]$incoming_mt_profiles,
+                                                                          bg_transition_list = cell_type_basepos_mt_nontarget_transition_probs[[this_cell_type]][[editing_induced]],
+                                                                          bg_transversion_list = cell_type_basepos_mt_nontarget_transversion_probs[[this_cell_type]][[editing_induced]],
+                                                                          bg_insertion_list = cell_type_basepos_mt_nontarget_insertion_probs[[this_cell_type]][[editing_induced]],
+                                                                          bg_deletion_list = cell_type_basepos_mt_nontarget_deletion_probs[[this_cell_type]][[editing_induced]],
+                                                                          prob_sub_mat = cell_type_mt_sub_prob_mat[[this_cell_type]][[editing_induced]])
+                                  }
+                                  
+                                  return(list(cell_name = cell_name,
+                                              bc_result = bc_result,
+                                              mt_result = mt_result))
+                                  
+                                  
+                                })
+  
+  for(res in mutation_results){
+    cell_name <- res$cell_name
+    
+    if(!is.null(res$bc_result)){
+      cell_population[[cell_name]]$incoming_bc_profiles <- res$bc_result
+    }
+    
+    if(!is.null(res$mt_result)){
+      cell_population[[cell_name]]$incoming_mt_profiles <- res$mt_result
+    }
+  }
+  
+  if(timepoint %in% sim_length_stopping_points){
+    all_processes_at_stopping_point(timept_savename = paste0(custom_savename, '_time_', timepoint), 
+                                    relative_timepoint = t, this_endpoint = timepoint)
+    
+    
+  }
+  
+  return(cell_population)  
+  
 }
-
-sim_arglist <- list(num_clusters = input_args$num_cores, 
-                    init_pop_size = input_args$num_init_cells,
-                    sim_length = max(sim_length_stopping_points),
-                    cell_type_cell_cycle_length = cell_type_cell_cycle_length,
-                    num_rows_mt = max(poss_num_mito_genomes),
-                    num_cols_mt = input_args$mito_genome_length,
-                    num_rows_bc = max(poss_num_bc_integrations),
-                    num_cols_bc = input_args$bc_length,
-                    time_inc = time_inc,
-                    cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs,
-                    cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs,
-                    cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs,
-                    cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
-                    cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs,
-                    cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs,
-                    cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs,
-                    cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs,
-                    cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs,
-                    cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs,
-                    cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs,
-                    cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
-                    cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat,
-                    cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat,
-                    cell_type_death_probs = cell_type_death_probs,
-                    uninduced_tm_list = uninduced_tm_list,
-                    induced_tm_list = induced_tm_list,
-                    differentiation_induction_timepoint = input_args$differentiation_induction_timepoint,
-                    editing_induction_timepoint = input_args$editing_induction_timepoint,
-                    forced_transversions = force_transversions,
-                    custom_savename = custom_savename, 
-                    sim_length_stopping_points = sim_length_stopping_points,
-                    cell_type_jitter_frac = cell_type_jitter_frac,
-                    poss_fasta_types = poss_fasta_types,
-                    include_var_pos_fasta = include_var_pos_fasta,
-                    founder_cell_type = founder_cell_type,
-                    interdeletion_dropout_radius = input_args$nuclease_targets$interdeletion_dropout_radius,
-                    interdeletion_dropout_prob = input_args$nuclease_targets$interdeletion_dropout_prob)
-
-cell_population <- do.call(setup_sim, sim_arglist)
-
-for(i in 1:length(sim_arglist)){
-  assign(names(sim_arglist)[i], sim_arglist[[i]], envir = .GlobalEnv)
-}
-
 
 all_processes_at_stopping_point <- function(timept_savename, relative_timepoint, this_endpoint, 
                                             all_recon_methods = as.character(input_args$reconstruction_method)
-                                            ){
+){
   
   describe_mutation_process_timing <- function(poss_times, sim_time_vec_mt, sim_time_vec_bc, time_ind = relative_timepoint){
     timing_df <- data.frame(cbind(poss_times[1:time_ind], sim_time_vec_mt, sim_time_vec_bc))
@@ -2102,26 +2981,27 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
   }
   
-  # for now, don't need mutation timing ... 
-  # describe_mutation_process_timing(poss_times = poss_times, 
-  #                                  sim_time_vec_mt = sim_time_vec_mt, 
-  #                                  sim_time_vec_bc = sim_time_vec_bc)
   
-
   save_mutation_profiles <- function(mt_profiles, bc_profiles){
     # create mut_profiles subdirectory if it doesn't exist
     if(!dir.exists(file.path('output', 'mut_profiles', unique_run_id))){
       dir.create(file.path('output', 'mut_profiles', unique_run_id), recursive = TRUE)
     }
     
-    saveRDS(mt_profiles, file.path('output', 'mut_profiles', unique_run_id, 
-                                   paste0('simresults_mt_profiles_',
-                                          timept_savename,
-                                          '_', unique_run_id, '.rds')))
-    saveRDS(bc_profiles, file.path('output', 'mut_profiles', unique_run_id,
-                                   paste0('simresults_bc_profiles_',
-                                          timept_savename,
-                                          '_', unique_run_id, '.rds')))
+    if('mt' %in% poss_recon_modals){
+      saveRDS(mt_profiles, file.path('output', 'mut_profiles', unique_run_id, 
+                                     paste0('simresults_mt_profiles_',
+                                            timept_savename,
+                                            '_', unique_run_id, '.rds')))  
+    }
+    
+    if('bc' %in% poss_recon_modals){
+      saveRDS(bc_profiles, file.path('output', 'mut_profiles', unique_run_id,
+                                     paste0('simresults_bc_profiles_',
+                                            timept_savename,
+                                            '_', unique_run_id, '.rds')))  
+    }
+    
     
   }
   
@@ -2160,7 +3040,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     } 
     return(lineage_strings)
   }
-
+  
   linstring_dir_path <- file.path('output', 'linstrings', unique_run_id)
   if(!dir.exists(linstring_dir_path)){
     dir.create(linstring_dir_path, recursive = TRUE)
@@ -2221,9 +3101,6 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
     class(tree) <- 'phylo'
     
-    # old saving nomenclature 
-    # subset_cells_savename <- gsub(pattern = '(.*)(\\.newick)$', replacement = paste0('\\1_cell_rec_rate_', this_recovery_rate, '\\2'), x = save_path)
-    
     write.tree(tree, file = file.path('output', 'processed_newicks', urid, paste0(save_path_stem, '.newick')))
     
     return(tree)
@@ -2263,6 +3140,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                             poss_fasta_types,
                                             bc_umis,
                                             writeout_type,
+                                            poss_recon_modals,
                                             this_timept_savename = timept_savename){
     
     
@@ -2274,68 +3152,76 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
     
     if('all_cells' %in% poss_fasta_types){
       
-      # write all bc profiles to fasta (and save mutational profiles to list)
-      all_bc_profiles <- lapply(cell_population, function(cell){
-        cell$incoming_bc_profiles
-      })
-      
-      bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('bc_all_cells_', this_timept_savename, '.rds'))
-      saveRDS(all_bc_profiles, bc_list_assign_name)
-      
-      if(writeout_type == 'fasta_only'){
-        fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
-        if(!dir.exists(fasta_dir_path)){
-          dir.create(fasta_dir_path, recursive = TRUE)
+      if('bc' %in% poss_recon_modals){
+        # write all bc profiles to fasta (and save mutational profiles to list)
+        all_bc_profiles <- lapply(cell_population, function(cell){
+          cell$incoming_bc_profiles
+        })
+        
+        bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('bc_all_cells_', this_timept_savename, '.rds'))
+        saveRDS(all_bc_profiles, bc_list_assign_name)
+        
+        if(writeout_type == 'fasta_only'){
+          fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+          if(!dir.exists(fasta_dir_path)){
+            dir.create(fasta_dir_path, recursive = TRUE)
+          }
+          
+          fasta_savename <- file.path(fasta_dir_path, paste0('bc_all_cells_', this_timept_savename, '.fasta'))
+          
+          write_all_cell_sequences(cell_mutmats = all_bc_profiles, 
+                                   reference = baseline_seq_nucs_bc, 
+                                   bc_integration_umis = rep(list(bc_umis), length(all_bc_profiles)), # need list of all ints for each cell
+                                   output_fasta_name = fasta_savename,
+                                   fasta_type = 'ALL_CELLS')
+        } else if(writeout_type == 'score'){
+          
+          print('scores for all cells not yet implemented; trees generally not built from all cells (incl internal)')
+          
         }
-        
-        fasta_savename <- file.path(fasta_dir_path, paste0('bc_all_cells_', this_timept_savename, '.fasta'))
-        
-        write_all_cell_sequences(cell_mutmats = all_bc_profiles, 
-                                 reference = baseline_seq_nucs_bc, 
-                                 bc_integration_umis = rep(list(bc_umis), length(all_bc_profiles)), # need list of all ints for each cell
-                                 output_fasta_name = fasta_savename,
-                                 fasta_type = 'ALL_CELLS')
-      } else if(writeout_type == 'score'){
-        
-        print('scores for all cells not yet implemented')
         
       }
       
       
       
-      
-      # write all mt profiles to fasta (and save mutational profiles to list)
-      all_mt_profiles <- lapply(cell_population, function(cell){
-        cell$incoming_mt_profiles
-      })
-      
-      mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('mt_all_cells_', this_timept_savename, '.rds'))
-      saveRDS(all_mt_profiles, mt_list_assign_name)
-      
-      
-      if(writeout_type == 'fasta_only'){
-        fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
-        if(!dir.exists(fasta_dir_path)){
-          dir.create(fasta_dir_path, recursive = TRUE)
+      if('mt' %in% poss_recon_modals){
+        # write all mt profiles to fasta (and save mutational profiles to list)
+        all_mt_profiles <- lapply(cell_population, function(cell){
+          cell$incoming_mt_profiles
+        })
+         
+        mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0('mt_all_cells_', this_timept_savename, '.rds'))
+        saveRDS(all_mt_profiles, mt_list_assign_name)
+        
+        
+        if(writeout_type == 'fasta_only'){
+          fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+          if(!dir.exists(fasta_dir_path)){
+            dir.create(fasta_dir_path, recursive = TRUE)
+          }
+          
+          fasta_savename <- file.path(fasta_dir_path, paste0('mt_all_cells_', this_timept_savename, '.fasta'))
+          
+          write_all_cell_sequences(cell_mutmats = all_mt_profiles, 
+                                   reference = baseline_seq_nucs_mt,  
+                                   output_fasta_name = fasta_savename,
+                                   fasta_type = 'ALL_CELLS')
+          
+          
+          
+          
+        } else if(writeout_type == 'score'){
+          
+          print('scores for all cells not yet implemented; trees generally not built from all cells (incl internal)')
+          
         }
         
-        fasta_savename <- file.path(fasta_dir_path, paste0('mt_all_cells_', this_timept_savename, '.fasta'))
-        
-        write_all_cell_sequences(cell_mutmats = all_mt_profiles, 
-                                 reference = baseline_seq_nucs_mt, 
-                                 output_fasta_name = fasta_savename,
-                                 fasta_type = 'ALL_CELLS')
-        
-      } else if(writeout_type == 'score'){
-        
-        print('scores for all cells not yet implemented')
-        
       }
-     
     }
     
     
     if('terminal' %in% poss_fasta_types){
+      
       
       print('Creating downsampled profile lists ... ')
       
@@ -2349,7 +3235,8 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         # generate a name that includes the sampling rate for each cell type  
         # cell type will be separated from its sampling frac by -
         # cell types will be separated from one another by _
-        this_sampling_name <- paste(paste(colnames(all_sampling_fracs), as.numeric(unlist(all_sampling_fracs[i, ])), sep = '-'), collapse = '_')
+        this_sampling_name <- paste(paste(colnames(all_sampling_fracs), 
+                                          as.numeric(unlist(all_sampling_fracs[i, ])), sep = '-'), collapse = '_')
         
         # make the downsampled terminal cell population, according to terminal, alive, and 
         # cell type-specific sampling frac for this iteration
@@ -2359,7 +3246,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
           }
           this_cell_type <- cell$celltype
           
-          # use htis particular iteration's combo of cell type recovery probs
+          # use this particular iteration's combo of cell type recovery probs
           this_cell_recovery_prob <- as.numeric(all_sampling_fracs[[this_cell_type]][i])
           this_cell_recovered <- rbinom(n = 1, size = 1, prob = this_cell_recovery_prob)
           
@@ -2373,88 +3260,100 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         terminal_cell_population_names <- names(cell_population)[which(terminal_cell_population_inds == TRUE)]
         terminal_cell_population <- cell_population[terminal_cell_population_names]
         
-        for(num_bc_ints in bc_integrations){
+        if('bc' %in% poss_recon_modals){
           
-          for(bc_int_recovery_prob in bc_recovery_probs){
+          print('Starting bc recon modal workflow ... ')
+          for(num_bc_ints in bc_integrations){
             
-            bc_profiles_ints_and_umis <- get_profiles_ints_and_umis(cell_pop = terminal_cell_population,
-                                                                    num_ints = num_bc_ints,
-                                                                    int_rec_prob = bc_int_recovery_prob,
-                                                                    bc_or_mt = 'bc',
-                                                                    umis = bc_umis)
-
-            bc_subsetted_profiles <- lapply(bc_profiles_ints_and_umis, function(cell){
-              cell[['mut_mat']]
-            })
-            names(bc_subsetted_profiles) <- terminal_cell_population_names
-            
-            bc_recovered_ints <- lapply(bc_profiles_ints_and_umis, function(cell){
-              cell[['which_ints_recovered']]
-            })
-            
-            bc_recovered_umis <- lapply(bc_profiles_ints_and_umis, function(cell){
-              cell[['recovered_umis']]
-            }) 
-            
-            bc_combo_name <- paste0('proc_bc_list_', num_bc_ints, 
+            for(bc_int_recovery_prob in bc_recovery_probs){
+              
+              bc_profiles_ints_and_umis <- get_profiles_ints_and_umis(cell_pop = terminal_cell_population,
+                                                                      num_ints = num_bc_ints,
+                                                                      int_rec_prob = bc_int_recovery_prob,
+                                                                      bc_or_mt = 'bc',
+                                                                      umis = bc_umis)
+              
+              bc_subsetted_profiles <- lapply(bc_profiles_ints_and_umis, function(cell){
+                cell[['mut_mat']]
+              })
+              names(bc_subsetted_profiles) <- terminal_cell_population_names
+              
+              bc_recovered_ints <- lapply(bc_profiles_ints_and_umis, function(cell){
+                cell[['which_ints_recovered']]
+              })
+              
+              bc_recovered_umis <- lapply(bc_profiles_ints_and_umis, function(cell){
+                cell[['recovered_umis']]
+              }) 
+              
+              bc_combo_name <- paste0('proc_bc_list_', num_bc_ints, 
                                       '_ints_RP_', bc_int_recovery_prob, 
                                       '_samp_', this_sampling_name, '_',
                                       this_timept_savename)
-            bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(bc_combo_name, '.rds'))
-            
-            saveRDS(bc_subsetted_profiles, bc_list_assign_name)
-            
-            if(writeout_type == 'fasta_only'){
-            
-              # immediately write the fasta (IN THE FOR LOOP)
-              fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
-              if(!dir.exists(fasta_dir_path)){
-                dir.create(fasta_dir_path, recursive = TRUE)
+              bc_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(bc_combo_name, '.rds'))
+              
+              saveRDS(bc_subsetted_profiles, bc_list_assign_name)
+              
+              if(writeout_type == 'fasta_only'){
+                
+                # immediately write the fasta (IN THE FOR LOOP)
+                fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
+                if(!dir.exists(fasta_dir_path)){
+                  dir.create(fasta_dir_path, recursive = TRUE)
+                }
+                bc_fasta_savename <- file.path(fasta_dir_path, paste0(bc_combo_name, '.fasta'))
+                
+                write_all_cell_sequences(cell_mutmats = bc_subsetted_profiles, 
+                                         reference = baseline_seq_nucs_bc, 
+                                         bc_integration_umis = bc_recovered_umis,
+                                         output_fasta_name = bc_fasta_savename,
+                                         fasta_type = 'TERM')
+              } else if(writeout_type == 'score'){
+                
+                
+                for(collapse in scoremat_collapse_deletions){
+                  
+                  new_create_one_score_mat(profiles = bc_subsetted_profiles, 
+                                       recovered_ints = bc_recovered_ints, 
+                                       condense = collapse, 
+                                       urid = unique_run_id, 
+                                       savename_prefix = paste0(bc_combo_name, '_CD_', substr(collapse, 1, 1)),
+                                       mt_or_bc = 'bc')
+                  
+                  
+                  
+                } 
               }
-              bc_fasta_savename <- file.path(fasta_dir_path, paste0(bc_combo_name, '.fasta'))
-
-              write_all_cell_sequences(cell_mutmats = bc_subsetted_profiles, 
-                                       reference = baseline_seq_nucs_bc, 
-                                       bc_integration_umis = bc_recovered_umis,
-                                       output_fasta_name = bc_fasta_savename,
-                                       fasta_type = 'TERM')
-            } else if(writeout_type == 'score'){
               
-              
-              for(collapse in scoremat_collapse_deletions){
-                
-                
-                create_one_score_mat(profiles = bc_subsetted_profiles, 
-                                     recovered_ints = bc_recovered_ints, 
-                                     condense = collapse, 
-                                     urid = unique_run_id, 
-                                     savename_prefix = paste0(bc_combo_name, '_CD_', substr(collapse, 1, 1)),
-                                     mt_or_bc = 'bc')
-                
-              } 
             }
-            
           }
         }
         
-        
-       
-        for(num_mito_genomes in mito_genomes){
+        if('mt' %in% poss_recon_modals){
+          
+          print('Starting mt recon modal workflow ... ')
           
           for(mito_recovery_prob in mito_recovery_probs){
             
-            mt_combo_name <- paste0('proc_mt_list_', num_mito_genomes, 
-                                      '_ints_RP_', mito_recovery_prob, 
-                                      '_samp_', this_sampling_name, '_',
-                                      this_timept_savename)
+            mt_combo_name <- paste0('proc_mt_list_', init_num_mito_genomes, 
+                                    '_ints_RP_', mito_recovery_prob, 
+                                    '_samp_', this_sampling_name, '_',
+                                    this_timept_savename)
             
             mt_list_assign_name <- file.path('output', 'processed_lists', unique_run_id, paste0(mt_combo_name, '.rds'))
             
-            mt_profiles_ints <- get_profiles_ints_and_umis(cell_pop = terminal_cell_population,
-                                                                    num_ints = num_mito_genomes,
-                                                                    int_rec_prob = mito_recovery_prob,
-                                                                    bc_or_mt = 'mt',
-                                                                    umis = NULL)
+            gpiu_start <- Sys.time()
+            
+            gpiu_time <- system.time(
+              mt_profiles_ints <- get_profiles_ints_and_umis(cell_pop = terminal_cell_population,
+                                                             num_ints = NULL,
+                                                             int_rec_prob = mito_recovery_prob,
+                                                             bc_or_mt = 'mt',
+                                                             umis = NULL)
+            )
+            
+            
+            gpiu_end <- Sys.time()
             
             mt_subsetted_profiles <- lapply(mt_profiles_ints, function(cell){
               cell[['mut_mat']]
@@ -2465,12 +3364,10 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
               cell[['which_ints_recovered']]
             })
             
-            # saveRDS(mt_recovered_ints, './mt_recovered_ints.rds')
-          
             saveRDS(mt_subsetted_profiles, mt_list_assign_name)
             
             if(writeout_type == 'fasta_only'){
-            
+              
               fasta_dir_path <- file.path('output', 'processed_fastas', unique_run_id)
               if(!dir.exists(fasta_dir_path)){
                 dir.create(fasta_dir_path, recursive = TRUE)
@@ -2483,19 +3380,24 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
                                        output_fasta_name = mt_fasta_savename,
                                        fasta_type = 'TERM')
             } else if(writeout_type == 'score'){
-    
+              
               for(collapse in scoremat_collapse_deletions){
                 
-                create_one_score_mat(profiles = mt_subsetted_profiles, 
-                                     recovered_ints = mt_recovered_ints, 
-                                     condense = collapse, 
-                                     urid = unique_run_id, 
-                                     savename_prefix = paste0(mt_combo_name, '_CD_', substr(collapse, 1, 1)),
-                                     mt_or_bc = 'mt',
-                                     binarize_score = binarize_mutation_scores,
-                                     allelic_fraction_thresh = mt_allelic_fraction_thresholds)
-              }
+                new_cosm_start <- Sys.time()
+                new_cosm_time <- system.time(
+                  new_create_one_score_mat(profiles = mt_subsetted_profiles, 
+                                           recovered_ints = mt_recovered_ints, 
+                                           condense = collapse, 
+                                           urid = unique_run_id, 
+                                           savename_prefix = paste0(mt_combo_name, '_CD_', substr(collapse, 1, 1)),
+                                           mt_or_bc = 'mt',
+                                           binarize_score = binarize_mutation_scores,
+                                           allelic_fraction_thresh = mt_allelic_fraction_thresholds)
+                )
+                new_cosm_end <- Sys.time()
                 
+              }
+              
               
             }
             
@@ -2503,6 +3405,7 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
           }
           
           
+          # }
         }
       }
       
@@ -2515,47 +3418,45 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
           # also only want to pair CD TRUE/TRUE or CD FALSE/FALSE
           
           mt_score_mat_paths <- list.files(path = file.path('output', 'score_mats', unique_run_id, 'matrices'),
-                                      pattern = '^proc_mt_',
-                                      full.names = TRUE)
+                                           pattern = '^proc_mt_',
+                                           full.names = TRUE)
           mt_score_mat_paths <- mt_score_mat_paths[grepl(timept_savename, mt_score_mat_paths)]
-
+          
           
           
           bc_score_mat_paths <- list.files(path = file.path('output', 'score_mats', unique_run_id, 'matrices'),
-                                      pattern = '^proc_bc_',
-                                      full.names = TRUE)
+                                           pattern = '^proc_bc_',
+                                           full.names = TRUE)
           bc_score_mat_paths <- bc_score_mat_paths[grepl(timept_savename, bc_score_mat_paths)]
           
-
+          
           
           for(mt_score_mat_path in mt_score_mat_paths){
             mt_score_mat <- readRDS(mt_score_mat_path)
             
             # check if deletions are condensed or not (only want to pair mt & bc with same condense status)
-            # mt_cd <- sub('.*_(CD_[^_]+)\\.rds$', '\\1', mt_score_mat_path)
             mt_cd <- str_extract(mt_score_mat_path, '(?<=CD_)\\w{1}(?=_)')
             
-
+            
             for(bc_score_mat_path in bc_score_mat_paths){
-              # bc_cd <- sub('.*_(CD_[^_]+)\\.rds$', '\\1', bc_score_mat_path)
               bc_cd <- str_extract(bc_score_mat_path, '(?<=CD_)\\w{1}(?=\\.)')
-
+              
               # if both these paths have the same condensed-deletion logic, join
               if(mt_cd == bc_cd){
                 trimmed_mt_name <- sub('.*\\/(.*).rds', '\\1', mt_score_mat_path)
                 trimmed_bc_name <- sub('.*\\/(.*).rds', '\\1', bc_score_mat_path)
                 joint_save_name <- paste0('J_', trimmed_mt_name, '_',
                                           trimmed_bc_name)
-               
+                
                 bc_score_mat <- readRDS(bc_score_mat_path)
                 combined_score_mat <- cbind(mt_score_mat, bc_score_mat)
                 saveRDS(combined_score_mat, file.path('output', 'score_mats', unique_run_id, 'matrices', 
-                                  paste0(joint_save_name, '.rds')))
-                score_mat_to_phylip(score_mat = combined_score_mat, 
-                                    output_phylip_path = file.path('output', 'score_mats', unique_run_id, 'phylips', paste0(joint_save_name, '.phy')))
+                                                      paste0(joint_save_name, '.rds')))
+                new_scoremat_to_fasta(scoremat = combined_score_mat, 
+                                      output_fasta_path = file.path('output', 'score_mats', unique_run_id, 'phylips', paste0(joint_save_name, '.fasta')))
               }  
             }
-              
+            
           }
           
           
@@ -2584,107 +3485,219 @@ all_processes_at_stopping_point <- function(timept_savename, relative_timepoint,
         }
         
         # write the reference seqs for each provided number of max ints/genomes:
-        for(max_num_bc_ints in poss_num_bc_integrations){
-          write_reference_fastas(bc_or_mt = 'bc',
-                                 reference_seq = baseline_seq_nucs_bc,
-                                 max_number_of_integrations = max_num_bc_ints,
-                                 run_id = unique_run_id)  
+        if('bc' %in% poss_recon_modals){
+          for(max_num_bc_ints in poss_num_bc_integrations){
+            write_reference_fastas(bc_or_mt = 'bc',
+                                   reference_seq = baseline_seq_nucs_bc,
+                                   max_number_of_integrations = max_num_bc_ints,
+                                   run_id = unique_run_id)  
+          }  
         }
-        for(max_num_mt_genomes in poss_num_mito_genomes){
+        
+        if('mt' %in% poss_recon_modals){
+          
           write_reference_fastas(bc_or_mt = 'mt',
                                  reference_seq = baseline_seq_nucs_mt,
                                  max_number_of_integrations = max_num_mt_genomes,
-                                 run_id = unique_run_id)  
+                                 run_id = unique_run_id)
+          
         }
         
         
+        
       }
+      
       
     }
   }
   
   for(recon_method in all_recon_methods){
-    create_modified_profile_lists(cell_population = cell_population,
-                                  bc_integrations = poss_num_bc_integrations,
-                                  mito_genomes = poss_num_mito_genomes,
-                                  mito_recovery_probs = poss_mt_genome_recovery_probs,
-                                  bc_recovery_probs = poss_bc_integration_recovery_probs,
-                                  poss_fasta_types = poss_fasta_types,
-                                  bc_umis = bc_int_umis,
-                                  writeout_type = recon_method)  
+    create_mod_profile_lists_start_time <- Sys.time()
+    cmpl_time <- system.time(
+      create_modified_profile_lists(cell_population = cell_population,
+                                    bc_integrations = poss_num_bc_integrations,
+                                    mito_genomes = poss_num_mito_genomes,
+                                    mito_recovery_probs = poss_mt_genome_recovery_probs,
+                                    bc_recovery_probs = poss_bc_integration_recovery_probs,
+                                    poss_fasta_types = poss_fasta_types,
+                                    bc_umis = bc_int_umis,
+                                    writeout_type = recon_method,
+                                    poss_recon_modals = poss_recon_modals)  
+    )
+    create_mod_profile_lists_end_time <- Sys.time()
+
   }
   
   
   
   
   
- 
+  
   
 }
 
 
+sim_arglist <- list(num_clusters = input_args$num_cores, 
+                    init_pop_size = input_args$num_init_cells,
+                    init_incoming_mt_profile = init_incoming_mt_profile,
+                    sim_length = max(sim_length_stopping_points),
+                    cell_type_cell_cycle_length = cell_type_cell_cycle_length,
+                    num_rows_mt = starting_mito_per_cell*average_genomes_per_mito,
+                    num_cols_mt = input_args$mito_genome_length,
+                    num_rows_bc = max(poss_num_bc_integrations),
+                    num_cols_bc = input_args$bc_length,
+                    time_inc = time_inc,
+                    cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs,
+                    cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs,
+                    cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs,
+                    cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
+                    cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs,
+                    cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs,
+                    cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs,
+                    cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs,
+                    cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs,
+                    cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs,
+                    cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs,
+                    cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
+                    cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat,
+                    cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat,
+                    cell_type_death_probs = cell_type_death_probs,
+                    uninduced_tm_list = uninduced_tm_list,
+                    induced_tm_list = induced_tm_list,
+                    differentiation_induction_timepoint = input_args$differentiation_induction$timepoint,
+                    differentiation_induction_num_cells = input_args$differentiation_induction$num_cells,
+                    differentiation_induction_frac_cells = input_args$differentiation_induction$frac_cells,
+                    editing_induction_timepoint = input_args$editing_induction$timepoint,
+                    editing_induction_num_cells = input_args$editing_induction$num_cells,
+                    editing_induction_frac_cells = input_args$editing_induction$frac_cells,
+                    forced_transversions = force_transversions,
+                    custom_savename = custom_savename, 
+                    sim_length_stopping_points = sim_length_stopping_points,
+                    poss_fasta_types = poss_fasta_types,
+                    include_var_pos_fasta = include_var_pos_fasta,
+                    founder_cell_type = founder_cell_type,
+                    interdeletion_dropout_radius = input_args$nuclease_targets$interdeletion_dropout_radius,
+                    interdeletion_dropout_prob = input_args$nuclease_targets$interdeletion_dropout_prob,
+                    poss_recon_modals = poss_recon_modals,
+                    mito_inheritance_pattern = mito_inheritance_pattern,
+                    mito_to_genome_map = mito_to_genome_map,
+                    fusion_events_per_mito_per_division = fusion_events_per_mito_per_division,
+                    split_events_per_mito_per_division = split_events_per_mito_per_division,
+                    post_mitotic_mt_deletion_frac = post_mitotic_mt_deletion_frac,
+                    heteroplasmy_severity_score_list = heteroplasmy_severity_score_list,
+                    heteroplasmy_variant_fractions = heteroplasmy_variant_fractions,
+                    init_heteroplasmy_survive_prob = init_heteroplasmy_survive_prob,
+                    initial_heteroplasmy_score = initial_heteroplasmy_score,
+                    hetero_sd = hetero_sd,
+                    positive_score_weight = positive_score_weight,
+                    init_num_mito_genomes = init_num_mito_genomes,
+                    ind_to_prime_seq_int_map = ind_to_prime_seq_int_map,
+                    ind_to_prime_seq_nuc_map = ind_to_prime_seq_nuc_map,
+                    prime_editing_system = prime_editing_system,
+                    close_nuc_window_after_edit = close_nuc_window_after_edit,
+                    close_transition_window_after_edit = close_transition_window_after_edit,
+                    close_transversion_window_after_edit = close_transversion_window_after_edit,
+                    be_target_to_window_ind_list = be_target_to_window_ind_list,
+                    nuc_target_to_window_ind_list = nuc_target_to_window_ind_list,
+                    be_window_to_target_ind_list = be_window_to_target_ind_list,
+                    nuc_window_to_target_ind_list = nuc_window_to_target_ind_list,
+                    consider_cell_heteroplasmy_scores = consider_cell_heteroplasmy_scores
+                    
+                    )
+cell_population <- do.call(setup_sim, sim_arglist)
 
-
-
+for(i in 1:length(sim_arglist)){
+  assign(names(sim_arglist)[i], sim_arglist[[i]], envir = .GlobalEnv)
+}
 
 # actually run the simulation
 for(t in 1:length(poss_times)){
   
   # has to be something like: for(t in 1:length(which.min(sim_lengths_with_breakpoints)))
-  # could also make this into a while loop
+  # could also make this into a while loop 
   
   if(poss_times[t] > 0){
     
     print(paste0('Now simulating timepoint t = ', poss_times[t], ' ... '))
     
-
-    cell_population <- multi_core_func(timepoint = poss_times[t], 
-                                       sim_length = sim_length,
-                                        cell_population = cell_population,
-                                        cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs, 
-                                        cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs, 
-                                        cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs, 
-                                        cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
-                                        cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs, 
-                                        cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs, 
-                                        cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs, 
-                                        cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs, 
-                                        cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs, 
-                                        cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs, 
-                                        cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs, 
-                                        cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
-                                        cell_type_death_probs = cell_type_death_probs,
-                                        cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat, 
-                                        cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat, 
-                                        cell_type_jitter_frac = cell_type_jitter_frac, 
-                                        uninduced_tm_list = uninduced_tm_list,
-                                        induced_tm_list = induced_tm_list,
-                                       differentiation_induction_timepoint = differentiation_induction_timepoint,
-                                       editing_induction_timepoint = editing_induction_timepoint,
-                                        unique_run_id = unique_run_id,
-                                       interdeletion_dropout_prob = interdeletion_dropout_prob,
-                                       interdeletion_dropout_radius = interdeletion_dropout_radius
-
-                                       )
-
+    mcf_start <- Sys.time()
+    
+    mcf_overall <- system.time(
+      
+      cell_population <- multi_core_func(timepoint = poss_times[t], 
+                                         sim_length = sim_length,
+                                          cell_population = cell_population,
+                                          cell_type_basepos_bc_nontarget_transition_probs = cell_type_basepos_bc_nontarget_transition_probs, 
+                                          cell_type_basepos_bc_nontarget_transversion_probs = cell_type_basepos_bc_nontarget_transversion_probs, 
+                                          cell_type_basepos_bc_nontarget_insertion_probs = cell_type_basepos_bc_nontarget_insertion_probs, 
+                                          cell_type_basepos_bc_nontarget_deletion_probs = cell_type_basepos_bc_nontarget_deletion_probs,
+                                          cell_type_basepos_mt_nontarget_transition_probs = cell_type_basepos_mt_nontarget_transition_probs, 
+                                          cell_type_basepos_mt_nontarget_transversion_probs = cell_type_basepos_mt_nontarget_transversion_probs, 
+                                          cell_type_basepos_mt_nontarget_insertion_probs = cell_type_basepos_mt_nontarget_insertion_probs, 
+                                          cell_type_basepos_mt_nontarget_deletion_probs = cell_type_basepos_mt_nontarget_deletion_probs, 
+                                          cell_type_basepos_bc_target_transition_probs = cell_type_basepos_bc_target_transition_probs, 
+                                          cell_type_basepos_bc_target_transversion_probs = cell_type_basepos_bc_target_transversion_probs, 
+                                          cell_type_basepos_bc_target_insertion_probs = cell_type_basepos_bc_target_insertion_probs, 
+                                          cell_type_basepos_bc_target_deletion_probs = cell_type_basepos_bc_target_deletion_probs,
+                                          cell_type_death_probs = cell_type_death_probs,
+                                          cell_type_mt_sub_prob_mat = cell_type_mt_sub_prob_mat, 
+                                          cell_type_bc_sub_prob_mat = cell_type_bc_sub_prob_mat, 
+                                          uninduced_tm_list = uninduced_tm_list,
+                                          induced_tm_list = induced_tm_list,
+                                         differentiation_induction_timepoint = differentiation_induction_timepoint,
+                                         editing_induction_timepoint = editing_induction_timepoint,
+                                         differentiation_induction_num_cells = differentiation_induction_num_cells,
+                                         editing_induction_num_cells = editing_induction_num_cells,
+                                         differentiation_induction_frac_cells = differentiation_induction_frac_cells,
+                                         editing_induction_frac_cells = editing_induction_frac_cells,
+                                         already_assigned_editing_induction = already_assigned_editing_induction,
+                                         already_assigned_diff_induction = already_assigned_diff_induction,
+                                          unique_run_id = unique_run_id,
+                                         interdeletion_dropout_prob = interdeletion_dropout_prob,
+                                         interdeletion_dropout_radius = interdeletion_dropout_radius,
+                                         poss_recon_modals = poss_recon_modals,
+                                         heteroplasmy_severity_score_list = heteroplasmy_severity_score_list,
+                                         fusion_events_per_mito_per_division = fusion_events_per_mito_per_division,
+                                         split_events_per_mito_per_division = split_events_per_mito_per_division,
+                                         post_mitotic_mt_deletion_frac = post_mitotic_mt_deletion_frac,
+                                         heteroplasmy_variant_fractions = heteroplasmy_variant_fractions,
+                                         positive_score_weight = positive_score_weight,
+                                         hetero_sd = hetero_sd,
+                                         mito_inheritance_pattern = mito_inheritance_pattern,
+                                         prime_editing_system = prime_editing_system,
+                                         ind_to_prime_seq_int_map = ind_to_prime_seq_int_map,
+                                         ind_to_prime_seq_nuc_map = ind_to_prime_seq_nuc_map,
+                                         close_nuc_window_after_edit = close_nuc_window_after_edit,
+                                         close_transition_window_after_edit = close_transition_window_after_edit,
+                                         close_transversion_window_after_edit = close_transversion_window_after_edit,
+                                         be_target_to_window_ind_list = be_target_to_window_ind_list,
+                                         nuc_target_to_window_ind_list = nuc_target_to_window_ind_list,
+                                         be_window_to_target_ind_list = be_window_to_target_ind_list,
+                                         nuc_window_to_target_ind_list = nuc_window_to_target_ind_list,
+                                         consider_cell_heteroplasmy_scores = consider_cell_heteroplasmy_scores,
+                                         poss_times = poss_times,
+                                         custom_savename = custom_savename,
+                                         sim_length_stopping_points = sim_length_stopping_points,
+                                         t = t
+  
+                                         )
+    #   }
+    )
+    
+    
+    mcf_end <- Sys.time()
+    
   }
   
-  
-
-  
   if(poss_times[t] %in% sim_length_stopping_points){
-    all_processes_at_stopping_point(timept_savename = paste0(custom_savename, '_time_', poss_times[t]), 
-                                    relative_timepoint = t, this_endpoint = poss_times[t]
-                                    )
-    
-    
-    
     if(t == length(poss_times)){
       stopCluster(one_cluster)
     }
-    
-    
   }
+  
+
+  
+  
 }
 
 
@@ -2706,7 +3719,7 @@ join_endpoint_results <- function(unique_run_id = unique_run_id){
 
 
 
-make_lineplot <- function(run_id, save_plots = TRUE){
+make_lineplot <- function(run_id, poss_recon_modals = poss_recon_modals, save_plots = TRUE){
   
   res <- read.csv(file.path('output', 'results', 'merged_results', run_id, paste0('merged_results_specs_', run_id, '_all_endpoints.csv')),
                   row.names = 1)
@@ -2715,7 +3728,7 @@ make_lineplot <- function(run_id, save_plots = TRUE){
   diletters_vec <- apply(diletters_grid, MARGIN = 1, function(x){return(paste0(x[1], x[2]))})
   letters_diletters <- append(LETTERS, diletters_vec)
   
-  for(modal in c('bc', 'mt', 'integrated')){
+  for(modal in poss_recon_modals){
     
     modality_df <- res %>%
       filter(modality == modal)

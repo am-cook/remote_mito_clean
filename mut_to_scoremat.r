@@ -6,15 +6,15 @@ group_deletions <- function(deletion_df){
     
     # if part of the same cell and integration AND
     # if the current mutation position is one greater than the previous
-    if((as.integer(deletion_df$cell_num[deletion_num]) == as.integer(deletion_df$cell_num[deletion_num - 1])) &
-       (as.integer(deletion_df$ints_mutated[deletion_num]) == as.integer(deletion_df$ints_mutated[deletion_num - 1])) &
-       (as.integer(deletion_df$positions_mutated[deletion_num]) == as.integer(deletion_df$positions_mutated[deletion_num - 1]) + 1)){
+    if((deletion_df$linstring[deletion_num] == deletion_df$linstring[deletion_num - 1]) &
+       (deletion_df$ints_mutated[deletion_num] == deletion_df$ints_mutated[deletion_num - 1]) &
+       (deletion_df$positions_mutated[deletion_num] == deletion_df$positions_mutated[deletion_num - 1]) + 1){
       streak <<- streak + 1
       
       # check if this deletion is the last one in the dataset
       if(deletion_num == nrow(deletion_df)){
         
-        return_vec <- c(deletion_df$cell_num[deletion_num],
+        return_vec <- c(deletion_df$linstring[deletion_num],
                         deletion_df$ints_mutated[deletion_num],
                         deletion_df$positions_mutated[deletion_num], 
                         paste0('d', streak))
@@ -25,14 +25,14 @@ group_deletions <- function(deletion_df){
       return(NULL)
     } else{
       
-      return_vec <- c(deletion_df$cell_num[deletion_num],
+      return_vec <- c(deletion_df$linstring[deletion_num],
                       deletion_df$ints_mutated[deletion_num],
                       deletion_df$positions_mutated[deletion_num], 
                       paste0('d', streak))
       streak <<- 1
       return(return_vec)
     }
-  })
+  }) 
   
   new_del_mat <- do.call(rbind, new_del_mat_list)                                      
   
@@ -55,33 +55,230 @@ score_mat_to_phylip <- function(score_mat, output_phylip_path) {
   close(phylip_f)
 }
 
+new_scoremat_to_fasta <- function(scoremat, output_fasta_path){
+  seq_vec <- apply(scoremat, 1, function(x){
+    
+    # write NAs as ? (for missing integrations, e.g.)
+    x_filt <- ifelse(is.na(x), '?', as.character(as.integer(x)))
+    return(paste0(x_filt, collapse = ''))
+  })
+  names(seq_vec) <- rownames(scoremat)
+  cat(paste0('>', names(seq_vec), '\n', seq_vec),
+      file = output_fasta_path,
+      sep = '\n')
+}
 
-create_one_score_mat <- function(profiles, recovered_ints, condense, urid, savename_prefix, mt_or_bc, binarize_score = FALSE, allelic_fraction_thresh = 0){
+new_create_one_score_mat <- function(profiles,
+                                     condense,
+                                     urid,
+                                     savename_prefix,
+                                     mt_or_bc,
+                                     recovered_ints = NULL,
+                                     binarize_score = FALSE,
+                                     allelic_fraction_thresh = 0,
+                                     return_af_fracs = FALSE){
   
-  # saveRDS(recovered_ints, 'recovered_ints.rds')
+  if(!dir.exists(file.path('output', 'score_mats', urid))){
+    dir.create(file.path('output', 'score_mats', urid, 'matrices', 'af'), recursive = TRUE)
+    dir.create(file.path('output', 'score_mats', urid, 'phylips', 'af'), recursive = TRUE)
+  }
   
-  # print('in create one score mat')
+  # print('prior to creating mut_combos_mat')
+  mut_combos_mat <- rbindlist(lapply(seq_along(profiles), function(cell_num){
+    
+    linstring <- names(profiles)[cell_num]
+    
+    mut_mat <- profiles[[linstring]]
+    
+    these_recovered_ints <- recovered_ints[[linstring]]
+    
+    mut_coords <- which(mut_mat != 0, arr.ind = TRUE) # new 3/11
+   
+    if(nrow(mut_coords) > 0){
+      dt <- data.table(
+        linstring = linstring,
+        ints_mutated = these_recovered_ints[mut_coords[, 1]],
+        positions_mutated = mut_coords[, 2],
+        mut_vals = mut_mat[mut_coords]
+        
+      )
+      return(dt)
+    }
+    
+  }), use.names = TRUE, fill = TRUE)
+  
+  # if mut_combos_mat is NULL, it means no mutations happened and we can/should exit early
+  if(is.null(nrow(mut_combos_mat)) || nrow(mut_combos_mat) == 0){
+    
+    # return an empty sparse matrix (one zero value hard-coded in)
+    af_mat <- sparseMatrix(i = 1,
+                           j = 1,
+                           x = 0,
+                           dims = c(length(profiles), 1))
+    
+    colnames(af_mat) <- 'control'
+    rownames(af_mat) <- names(profiles) 
+    return(af_mat) 
+    
+  }
+  
+  # if we want to encode deletions as a single mutation rather than a different deletion event at each deleted position:
+  if(condense){
+    
+    setkey(mut_combos_mat, linstring, ints_mutated, positions_mutated)
+    dels <- mut_combos_mat[mut_vals == -1]
+    nondels <- mut_combos_mat[mut_vals != -1]
+
+    if(nrow(dels) > 0){
+      dels[, run_id := releid(positions_mutated),
+           by = .(linstring, ints_mutated)]
+      grouped_dels <- dels[, .(ints_mutated = ints_mutated[1],
+                               positions_mutated = paste0(min(positions_mutated), '_', max(positions_mutated)),
+                               mut_vals = -1), by = .(linstring, run_id)]
+      mut_combos_mat <- rbindlist(list(grouped_dels, nondels), use.names = TRUE)
+    }
+  }
+    
+  
+  if(mt_or_bc == 'bc'){
+    unique_pos_muts <- unique(mut_combos_mat[, .(ints_mutated, positions_mutated, mut_vals)])
+    unique_pos_muts[, mut_idx := .I]
+    # name mutations right away:
+    unique_pos_muts[, mut_name := paste(ints_mutated, positions_mutated, mut_vals, sep = '_')]
+    setkey(mut_combos_mat, ints_mutated, positions_mutated, mut_vals)
+    join_dt <- mut_combos_mat[unique_pos_muts, .(linstring, mut_idx, mut_name), on = .(ints_mutated,
+                                                                    positions_mutated,
+                                                                    mut_vals)]
+  } else if(mt_or_bc == 'mt'){
+    unique_pos_muts <- unique(mut_combos_mat[, .(positions_mutated, mut_vals)])
+    unique_pos_muts[, mut_idx := .I]
+    # name mutations right away:
+    unique_pos_muts[, mut_name := paste(positions_mutated, mut_vals, sep = '_')]
+    setkey(mut_combos_mat, positions_mutated, mut_vals)
+    
+    join_dt <- mut_combos_mat[unique_pos_muts, .(linstring, mut_idx, mut_name), on = .(positions_mutated,
+                                                                             mut_vals)]
+  }
+  
+
+
+  counts_dt <- join_dt[, .N, by = .(linstring, mut_idx, mut_name)]
+  setnames(counts_dt, c('linstring', 'mut_idx', 'mut_name', 'raw_count'))
+  lin_to_profnum <- setNames(seq_along(names(profiles)), names(profiles))
+  counts_dt[, profnum := lin_to_profnum[linstring]]
+  
+  if(mt_or_bc == 'mt'){
+    
+    rec_ints_counts <- vapply(recovered_ints, function(x){
+      if(is.null(x) || length(x) == 0){
+        return(0)
+      } else{
+        return(length(x))
+      }},
+      FUN.VALUE = integer(1))
+    
+    counts_dt[,  tot_rec := rec_ints_counts[profnum]]
+    counts_dt[, af := ifelse(tot_rec > 0, raw_count/tot_rec, 0)]
+    counts_dt[, x := af]
+    
+    
+  } else{
+    counts_dt[, x := raw_count]
+    
+  }
+  
+  cellmut_mat <- sparseMatrix(i = counts_dt$profnum,
+                              j = counts_dt$mut_idx,
+                              x = counts_dt$x,
+                              dims = c(length(profiles), nrow(unique_pos_muts)))
+  
+  if(return_af_fracs){
+    
+    
+    res_list <- lapply(split(counts_dt, by = 'linstring'), function(linstring_data){
+      return(as.list(setNames(linstring_data$x, linstring_data$mut_name)))
+    })
+    
+    zero_mut_cells <- setdiff(names(profiles), unique(mut_combos_mat$linstring))
+    
+    if(length(zero_mut_cells) > 0){
+      
+      null_vec <- setNames(rep(0, length(unique_pos_muts$mut_name)), unique_pos_muts$mut_name)
+      zero_mut_list <- setNames(rep(list(null_vec), length(zero_mut_cells)), zero_mut_cells)
+      res_list <- c(res_list, zero_mut_list)[names(profiles)]
+    } else{
+      res_list <- res_list[names(profiles)]
+    }
+    return(res_list)
+    
+  }
+  
+  write_mat <- function(mat, suffix = ''){
+
+    colnames(mat) <- paste(mt_or_bc, unique_pos_muts$mut_name, sep = '_')
+    rownames(mat) <- names(profiles)
+    
+    rds_path <- file.path('output', 'score_mats', urid, 'matrices', paste0(savename_prefix, suffix, '.rds'))
+    saveRDS(mat, rds_path)
+    
+    fasta_path <- file.path('output', 'score_mats', urid, 'phylips', paste0(savename_prefix, suffix, '.fasta'))
+    new_scoremat_to_fasta(scoremat = mat, output_fasta_path = fasta_path)
+  }
+  
+  if(mt_or_bc == 'bc'){
+    write_mat(mat = cellmut_mat, suffix = '')
+    
+  } else{
+    for(af_thresh in allelic_fraction_thresh){
+      mat_af <- cellmut_mat
+      if(af_thresh > 0){
+        mat_af@x[mat_af@x < af_thresh] <- 0
+      }
+      for(binarize in binarize_score){
+        temp_mat_af <- mat_af
+        if(binarize){
+          temp_mat_af@x[temp_mat_af@x > 0] <- 1
+        }
+        suffix <- paste0('_AF_', af_thresh, '_B_', substr(binarize, 1, 1))
+        write_mat(temp_mat_af, suffix)
+      }
+    }
+  }
+
+}
+
+# additional functionality to facilitate heteroplasmy calculations:
+create_one_score_mat <- function(profiles,condense, urid, savename_prefix, mt_or_bc, 
+                                 recovered_ints = NULL, binarize_score = FALSE, allelic_fraction_thresh = 0,
+                                 return_af_fracs = FALSE){
   
   # create directories that will store score matrices and phy files
   if(!dir.exists(file.path('output', 'score_mats', urid))){
-    dir.create(file.path('output', 'score_mats', urid, 'matrices'), recursive = TRUE)
-    dir.create(file.path('output', 'score_mats', urid, 'phylips'), recursive = TRUE)
+    dir.create(file.path('output', 'score_mats', urid, 'matrices', 'af'), recursive = TRUE)
+    dir.create(file.path('output', 'score_mats', urid, 'phylips', 'af'), recursive = TRUE)
   }
   
   # get all combinations of cell x int x position x mutation
   all_mut_combos <- lapply(seq(1, length(profiles)), function(cell_num){
     
-    mut_mat <- profiles[[cell_num]]
-    these_recovered_ints <- recovered_ints[[cell_num]]
     
+    
+    
+    
+    linstring <- names(profiles)[cell_num]
+    
+    mut_mat <- profiles[[linstring]]
+    these_recovered_ints <- recovered_ints[[linstring]]
+
     mut_coords <- which(mut_mat != 0, arr.ind = TRUE) # new 3/11
     
+   
     # map the respective row num to the int that was captured
     # works because which_ints_recovered has already been sorted
-    
     ints_mutated <- sapply(mut_coords[,1], function(resp_int){
       these_recovered_ints[resp_int]
     })
+    
     positions_mutated <- mut_coords[, 2]
     
     if(nrow(mut_coords) > 0){ 
@@ -91,8 +288,10 @@ create_one_score_mat <- function(profiles, recovered_ints, condense, urid, saven
         return(mut_mat[row[1], row[2]])
       })
       
+      
       # final_mat will store the cell number, mutated integration and corresponding mutation positions, and the respective mutations themselves
-      final_mat <- cbind(cell_num, ints_mutated, positions_mutated, mut_vals)
+      # final_mat <- cbind(cell_num, ints_mutated, positions_mutated, mut_vals)
+      final_mat <- cbind(linstring, ints_mutated, positions_mutated, mut_vals)
       return(final_mat)
     }
   })
@@ -100,6 +299,7 @@ create_one_score_mat <- function(profiles, recovered_ints, condense, urid, saven
   # stack all list entries on top of one another to create matrix with same info
   mut_combos_mat <- do.call(rbind, all_mut_combos)
   
+
   # if mut_combos_mat is NULL, it means no mutations happened and we can/should exit early
   if(is.null(nrow(mut_combos_mat))){
     
@@ -122,7 +322,8 @@ create_one_score_mat <- function(profiles, recovered_ints, condense, urid, saven
     
     # deletions-only matrix that will be used for changing how deletions are labeled
     dels <- mut_combos_df %>%
-      arrange(cell_num, ints_mutated, positions_mutated) %>%
+      # arrange(cell_num, ints_mutated, positions_mutated) %>%
+      arrange(linstring, ints_mutated, positions_mutated) %>%
       filter(mut_vals == -1)
     
     # non-deletions-only matrix that will be concatted to the newly-formatted del matrix
@@ -130,7 +331,7 @@ create_one_score_mat <- function(profiles, recovered_ints, condense, urid, saven
       filter(mut_vals != -1)
     
     # null rownames
-
+    
     # if no deletions
     if(nrow(dels) == 0){
       mut_combos_mat <- matrix(sapply(nondels, as.character), ncol = length(old_colnames),
@@ -152,6 +353,7 @@ create_one_score_mat <- function(profiles, recovered_ints, condense, urid, saven
   }
   
   if(mt_or_bc == 'bc'){
+    
     # get unique combinations of integrations x positions x mutations
     unique_pos_muts <- unique(mut_combos_mat[, c('ints_mutated', 'positions_mutated', 'mut_vals')])
     
@@ -160,56 +362,14 @@ create_one_score_mat <- function(profiles, recovered_ints, condense, urid, saven
       colnames(unique_pos_muts) <- c('ints_mutated', 'positions_mutated', 'mut_vals')
     }
     
-
-
+    
+    
     mut_combos_mat <- data.table(mut_combos_mat)
     
-
     setkey(mut_combos_mat, ints_mutated, positions_mutated, mut_vals)
     
-    cell_nums_with_mut <- lapply(seq(1, nrow(unique_pos_muts)), function(rowvals_ind){ 
-      
-      # rowvals will have c(ints_mutated	positions_mutated	mut_vals)
-      rowvals <- unique_pos_muts[rowvals_ind, ]
-      
-      # match the entire cell number x position x mutation matrix to this specific unique int x position x mutation, keep cell number
-      cell_nums_with_mut <- mut_combos_mat[.(rowvals[1], rowvals[2], rowvals[3])]$cell_num
-      return(cell_nums_with_mut)
-      
-    })
-
-    # rows are cells
-    # columns are unique mutations 
-    # values are 1 if cell has that mutation
-    mutnames <- apply(unique_pos_muts, MARGIN = 1, function(rowvals){return(paste(mt_or_bc, paste(rowvals, collapse = '_'), sep = '_'))})
-    
-    # row indices are cell numbers
-    binmat_row_inds <- as.integer(unlist(cell_nums_with_mut))
-    # get the number of cells with this mutation, and rep the mutation number that many times (expanding cellnum x mut combos)
-    binmat_col_inds <- rep(seq_along(cell_nums_with_mut), times = lengths(cell_nums_with_mut))
-    # since we're making this binary, all vals will be 1 (or 0 if that mut is not in that cell)
-    binmat_vals <- rep(1, length(binmat_row_inds))
-    
-    binary_mutmat <- sparseMatrix(i = binmat_row_inds,
-                                  j = binmat_col_inds,
-                                  x = binmat_vals,
-                                  dims = c(length(profiles), length(mutnames)))
-    
-    binary_mutmat@x[binary_mutmat@x > 0] <- 1
-    
-    binary_mutmat <- matrix(binary_mutmat, nrow = dim(binary_mutmat)[1],
-                            ncol = dim(binary_mutmat)[2])
-    colnames(binary_mutmat) <- mutnames
-    rownames(binary_mutmat) <- names(profiles)
-    
-    saveRDS(binary_mutmat, file.path('output', 'score_mats', urid, 'matrices', paste0(savename_prefix, '.rds')))
-    score_mat_to_phylip(score_mat = binary_mutmat, 
-                        output_phylip_path = file.path('output', 'score_mats', urid, 'phylips', paste0(savename_prefix, '.phy')))
-  }
-  
-  else if(mt_or_bc == 'mt'){
-    
-    # if we want to filter by allelic fraction > 0, don't include integration number in detemrining unique combos 
+  } else if(mt_or_bc == 'mt'){
+    # if we want to filter by allelic fraction > 0, don't include integration number in determining unique combos 
     unique_pos_muts <- unique(mut_combos_mat[, c('positions_mutated', 'mut_vals')])
     
     # 1-row matrix gets coerced to a vector
@@ -218,317 +378,256 @@ create_one_score_mat <- function(profiles, recovered_ints, condense, urid, saven
       colnames(unique_pos_muts) <- c('positions_mutated', 'mut_vals')
     }
     
-
-
     mut_combos_mat <- data.table(mut_combos_mat)
     
-
+    
     setkey(mut_combos_mat, positions_mutated, mut_vals)
+  }
+  
+  cell_nums_with_mut <- lapply(seq(1, nrow(unique_pos_muts)), function(rowvals_ind){ 
     
-    cell_nums_with_mut <- lapply(seq(1, nrow(unique_pos_muts)), function(rowvals_ind){ 
-      
-      # rowvals will have c(ints_mutated	positions_mutated	mut_vals)
-      rowvals <- unique_pos_muts[rowvals_ind, ]
-      
-      # match the entire cell number x position x mutation matrix to this specific position x mutation, keep cell number and integration number
-      # this differs from the allelic fraction threshold, where we only care about the cell number
-      cell_nums_with_mut <- mut_combos_mat[.(rowvals[1], rowvals[2])]$cell_num
-      return(cell_nums_with_mut)
-      
-    })
+    # rowvals will have c(ints_mutated	positions_mutated	mut_vals)
+    rowvals <- unique_pos_muts[rowvals_ind, ]
+    
+    if(mt_or_bc == 'bc'){
+      # match the entire cell number x position x mutation matrix to this specific unique int x position x mutation, keep cell number
+      cell_nums_with_mut <- mut_combos_mat[.(rowvals[1], rowvals[2], rowvals[3])]$linstring
+    } else if(mt_or_bc == 'mt'){ # don't match on integration
+      cell_nums_with_mut <- mut_combos_mat[.(rowvals[1], rowvals[2])]$linstring
+    }
+    
+    return(cell_nums_with_mut)
+    
+  })
+  
+  # rows are cells
+  # columns are unique mutations 
+  # values are 1 if cell has that mutation
+  mutnames <- apply(unique_pos_muts, MARGIN = 1, function(rowvals){return(paste(mt_or_bc, paste(rowvals, collapse = '_'), sep = '_'))})
+  
+  if(return_af_fracs){
+    ##################### return a list that maps each cell to the RAW COUNTS of each heteroplasmy mutation in that cell across all genomes
 
-    # rows are cells
-    # columns are unique mutations 
-    # values are 1 if cell has that mutation
-    mutnames <- apply(unique_pos_muts, MARGIN = 1, function(rowvals){return(paste(mt_or_bc, paste(rowvals, collapse = '_'), sep = '_'))})
+    names(cell_nums_with_mut) <- mutnames
     
-    # row indices are cell numbers
-    row_inds <- as.integer(unlist(cell_nums_with_mut))
-    # get the number of cells with this mutation, and rep the mutation number that many times (expanding cellnum x mut combos)
-    col_inds <- rep(seq_along(cell_nums_with_mut), times = lengths(cell_nums_with_mut))
+    counts_df <- data.frame(
+      mut_id = rep(names(cell_nums_with_mut), lengths(cell_nums_with_mut)),
+      counts = unlist(cell_nums_with_mut)
+    )
     
-    afs <- lapply(seq(1, length(cell_nums_with_mut)), function(unique_mut_num){
-      
-      # get the number of occurrences of this mut in this cell (where occurrences == integrations)
-      num_mut_occur_per_cell <- lapply(unique(cell_nums_with_mut[[unique_mut_num]]), function(cell_num){
-
-        num_ints_per_mut_per_cell <- length(which(cell_nums_with_mut[[unique_mut_num]] == cell_num))
-        num_recovered_ints_per_cell <- length(recovered_ints[[as.integer(cell_num)]])
-        allelic_fraction <- num_ints_per_mut_per_cell/num_recovered_ints_per_cell
-        return(allelic_fraction)
-        
-      })
-      
-      return(num_mut_occur_per_cell)
-      
+    # Create a contingency table
+    counts_table <- table(counts_df$counts, counts_df$mut_id)
+    
+    # Convert back to list
+    result_list <- lapply(
+      seq_len(nrow(counts_table)),
+      function(i) {
+        as.numeric(counts_table[i, ])
+      }
+    )
+    
+    names(result_list) <- rownames(counts_table)
+    
+    # Add mut_id names to each element
+    result_list <- lapply(result_list, function(x) {
+      names(x) <- colnames(counts_table)
+      x
     })
+    
+    # get linstrings that have no mutations
+    linstrings_with_no_muts <- setdiff(names(profiles), names(result_list))
     
    
+    # create empty list of nulls with length == length(# missing linstrings)
+    null_list <- vector('list', length(linstrings_with_no_muts))
+    names(null_list) <- linstrings_with_no_muts
+    # combine nulls with mutation counts and preserve order
+    result_list <- c(result_list, null_list)[names(profiles)]
     
-    # now flatten the af list, and it should have length num_cells * num_unique_muts
-    flattened_afs <- as.numeric(unlist(afs))
+    return(result_list)
+  }
   
-    af_mutmat <- sparseMatrix(i = row_inds,
-                              j = col_inds,
-                              x = flattened_afs,
-                              dims = c(length(profiles), length(mutnames)))
+  linstring_to_rownum <- setNames(seq_along(names(profiles)), names(profiles))
+  ijx_triples <- lapply(seq_along(cell_nums_with_mut), function(col_idx){
+    cells_this_mut <- cell_nums_with_mut[[col_idx]]
+    cell_counts <- table(cells_this_mut)
     
-    for(af_thresh in allelic_fraction_thresh){
+    
+    ivals <- linstring_to_rownum[names(cell_counts)]
+    jvals <- rep(col_idx, length(cell_counts))
+    
+    raw_counts <- as.integer(cell_counts)
+    if(mt_or_bc == 'mt'){
       
-      # if there's an allelic fraction threshold, any fracs below the threshold are set to 0
-      af_mutmat@x[af_mutmat@x < af_thresh] <- 0
-      
-      for(binarize in binarize_score){
-        
-        if(binarize){
-          # if binarizing scores, set any non-zero element to 1
-          af_mutmat@x[af_mutmat@x > 0] <- 1
+      # if there are no ints associated with a given cell, return a zero
+      num_recovered_ints <- vapply(recovered_ints[names(cell_counts)], FUN = function(ints){
+        if(is.null(ints) || length(ints) == 0L){
+          return(0L)
         }
-        
-        colnames(af_mutmat) <- mutnames
-        rownames(af_mutmat) <- names(profiles)
-        
-        saveRDS(af_mutmat, file.path('output', 'score_mats', urid, 'matrices', paste0(savename_prefix, 
-                                                                                      '_AF_', af_thresh,
-                                                                                      '_B_', substr(binarize, 1, 1),
-                                                                                      '.rds')))
-        score_mat_to_phylip(score_mat = af_mutmat, 
-                            output_phylip_path = file.path('output', 'score_mats', urid, 'phylips', paste0(savename_prefix, '_AF_', af_thresh,
-                                                                                                           '_B_', substr(binarize, 1, 1), '.phy')))
-        
+        return(length(ints))
+      },
+      FUN.VALUE = integer(1))
+      afs_raw <- raw_counts / num_recovered_ints
+      afs <- ifelse(is.finite(afs_raw), afs_raw, 0)
+      
+    } else{
+      afs <- raw_counts
+    }
+    
+    
+    
+    return(list('ivals' = ivals,
+                'jvals' = jvals,
+                'xvals' = afs))
+  })
+  
+  i_vals <- unlist(lapply(ijx_triples, `[[`, 'ivals'))
+  j_vals <- unlist(lapply(ijx_triples, `[[`, 'jvals'))
+  af_vals <- unlist(lapply(ijx_triples, `[[`, 'xvals'))
+  cellmut_mat <- sparseMatrix(i = i_vals,
+                              j = j_vals,
+                              x = af_vals,
+                              dims = c(length(profiles), length(mutnames)))
+  
+  
+  if(mt_or_bc == 'bc'){
+    
+    cellmut_mat_cp1 <- as(cellmut_mat, class(cellmut_mat)[1]) # introducing in case further processing steps are introduced
+    
+    # for barcodes, we want to binarize (don't care about allelic fractions at positions)
+    cellmut_mat_cp1@x[cellmut_mat_cp1@x > 0] <- 1
+    
+    cellmut_mat_cp1 <- matrix(cellmut_mat_cp1, nrow = dim(cellmut_mat_cp1)[1],
+                              ncol = dim(cellmut_mat_cp1)[2])
+    colnames(cellmut_mat_cp1) <- mutnames
+    rownames(cellmut_mat_cp1) <- names(profiles)
+    
+    # CREATE A NA MASK FOR MUTATIONS OF CELLS LACKING RESP RECOVERED INTEGRATIONS IN BARCODE STEPS
+    # missing integrations should not be informative (which would be the case if ints encoded as missing were assigned 0s)
+    int_nums_in_muts <- as.integer(sub('^bc_([0-9]+)_.*$', '\\1', colnames(cellmut_mat_cp1)))
+    
+    for(cell in rownames(cellmut_mat_cp1)){
+      rec <- recovered_ints[[cell]]
+      if(is.null(recovered_ints)){
+        rec <- integer(0)
+      }
+      
+      missing_features <- which(!(int_nums_in_muts %in% rec))
+      if(length(missing_features) > 1){
+        cellmut_mat_cp1[cell, missing_features] <- NA
       }
     }
     
     
-     
+    saveRDS(cellmut_mat_cp1, file.path('output', 'score_mats', urid, 'matrices', paste0(savename_prefix, '.rds')))
+
+    new_scoremat_to_fasta(scoremat = cellmut_mat_cp1, 
+                          output_fasta_path = file.path('output', 'score_mats', urid, 'phylips', paste0(savename_prefix, '.fasta')))
     
+  } else if(mt_or_bc == 'mt'){
+    for(af_thresh in allelic_fraction_thresh){
       
-    
+      # copies so that filtering steps operate on original, not previously-filtered mats
+      cellmut_mat_cp1 <- as(cellmut_mat, class(cellmut_mat)[1])
+      
+      # if there's an allelic fraction threshold, any fracs below the threshold are set to 0
+      cellmut_mat_cp1@x[cellmut_mat_cp1@x < af_thresh] <- 0
+      
+      for(binarize in binarize_score){
+        
+        cellmut_mat_cp2 <- as(cellmut_mat_cp1, class(cellmut_mat_cp1)[1])
+        
+        if(binarize){
+          # if binarizing scores, set any non-zero element to 1
+          cellmut_mat_cp2@x[cellmut_mat_cp2@x > 0] <- 1
+          colnames(cellmut_mat_cp2) <- mutnames
+          rownames(cellmut_mat_cp2) <- names(profiles)
+          
+          saveRDS(cellmut_mat_cp2, file.path('output', 'score_mats', urid, 'matrices', paste0(savename_prefix, 
+                                                                                              '_AF_', af_thresh,
+                                                                                              '_B_', substr(binarize, 1, 1),
+                                                                                              '.rds')))
+  
+          new_scoremat_to_fasta(scoremat = cellmut_mat_cp2, 
+                                output_fasta_path = file.path('output', 'score_mats', urid, 'phylips', paste0(savename_prefix, '_AF_', af_thresh,
+                                                                                                              '_B_', substr(binarize, 1, 1), '.fasta')))
+          
+        } else{
+          colnames(cellmut_mat_cp2) <- mutnames
+          rownames(cellmut_mat_cp2) <- names(profiles)
+          
+          saveRDS(cellmut_mat_cp2, file.path('output', 'score_mats', urid, 'matrices', 'af', paste0(savename_prefix, 
+                                                                                                    '_AF_', af_thresh,
+                                                                                                    '_B_', substr(binarize, 1, 1),
+                                                                                                    '.rds')))
+         
+          new_scoremat_to_fasta(scoremat = cellmut_mat_cp2, 
+                                output_fasta_path = file.path('output', 'score_mats', urid, 'phylips', 'af', paste0(savename_prefix, '_AF_', af_thresh,
+                                                                                                                    '_B_', substr(binarize, 1, 1), '.fasta')))
+        }
+        
+        
+        
+      }
+    }
   }
 }
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+get_norm_cell_heteroplasmy_scores <- function(cell_mut_counts,
+                                          heteroplasmy_severity_score_list,
+                                          positive_score_weight,
+                                          hetero_sd,
+                                          cell_population,
+                                          cell_to_num_mito_genomes_list = NULL,
+                                          normalize_cell_mut_counts = FALSE){
+  
+  # get all unique mutation names by accessing the first cell's data
+  # since counts for all unique mutations are calculated for each cell
+  mutnames <- names(cell_mut_counts[[names(cell_mut_counts[1])]])
   
   
-# # since we're making this binary, all vals will be 1 (or 0 if that mut is not in that cell)
-# binmat_vals <- rep(1, length(binmat_row_inds))
-# 
-# binary_mutmat <- sparseMatrix(i = binmat_row_inds,
-#                               j = binmat_col_inds,
-#                               x = binmat_vals,
-#                               dims = c(length(profiles), length(mutnames)))
-# 
-# binary_mutmat <- matrix(binary_mutmat, nrow = dim(binary_mutmat)[1],
-#                         ncol = dim(binary_mutmat)[2])
-# colnames(binary_mutmat) <- mutnames
-# rownames(binary_mutmat) <- names(profiles)
-# 
-# saveRDS(binary_mutmat, file.path('output', 'score_mats', urid, 'matrices', paste0(savename_prefix, '.rds')))
-# score_mat_to_phylip(score_mat = binary_mutmat, 
-#                     output_phylip_path = file.path('output', 'score_mats', urid, 'phylips', paste0(savename_prefix, '.phy')))
-# 
-# return(binary_mutmat)
-
-# } else if(allelic_fraction_thresh == 0){
-#   # get unique combinations of integrations x positions x mutations
-#   unique_pos_muts <- unique(mut_combos_mat[, c('ints_mutated', 'positions_mutated', 'mut_vals')])
-#   
-#   # 1-row matrix gets coerced to a vector
-#   if(!is.matrix(unique_pos_muts)){
-#     unique_pos_muts <- matrix(unique_pos_muts, nrow = 1)
-#     colnames(unique_pos_muts) <- c('ints_mutated', 'positions_mutated', 'mut_vals')
-#   }
-#   
-#   saveRDS(unique_pos_muts, './unique_pos_muts.rds')
-#   
-#   saveRDS(mut_combos_mat, './pre_data_table_mut_combos_mat.rds')
-#   
-#   mut_combos_mat <- data.table(mut_combos_mat)
-#   
-#   saveRDS(mut_combos_mat, './data_table_mut_combos_mat.rds')
-#   
-#   setkey(mut_combos_mat, ints_mutated, positions_mutated, mut_vals)
-#   
-#   cell_nums_with_mut <- lapply(seq(1, nrow(unique_pos_muts)), function(rowvals_ind){ 
-#     
-#     # rowvals will have c(ints_mutated	positions_mutated	mut_vals)
-#     rowvals <- unique_pos_muts[rowvals_ind, ]
-#     
-#     # match the entire cell number x position x mutation matrix to this specific unique int x position x mutation, keep cell number
-#     cell_nums_with_mut <- mut_combos_mat[.(rowvals[1], rowvals[2], rowvals[3])]$cell_num
-#     return(cell_nums_with_mut)
-#     
-#   })
-#   
-#   # rows are cells
-#   # columns are unique mutations 
-#   # values are 1 if cell has that mutation
-#   mutnames <- apply(unique_pos_muts, MARGIN = 1, function(rowvals){return(paste(mt_or_bc, paste(rowvals, collapse = '_'), sep = '_'))})
-#   
-#   # row indices are cell numbers
-#   row_inds <- as.integer(unlist(cell_nums_with_mut))
-#   # get the number of cells with this mutation, and rep the mutation number that many times (expanding cellnum x mut combos)
-#   col_inds <- rep(seq_along(cell_nums_with_mut), times = lengths(cell_nums_with_mut))
-#   # since we're making this binary, all vals will be 1 (or 0 if that mut is not in that cell)
-#   
-#   # if(binarize_score){
-#   #   binmat_vals <- rep(1, length(row_inds))  
-#   #   
-#   #   binary_mutmat <- sparseMatrix(i = row_inds,
-#   #                                 j = col_inds,
-#   #                                 x = binmat_vals,
-#   #                                 dims = c(length(profiles), length(mutnames)))
-#   #   # cap any value greater than 1 to 1 since binary
-#   #   binary_mutmat@x[binary_mutmat@x > 1] <- 1
-#   #   
-#   #   score_mutmat <- matrix(binary_mutmat, nrow = dim(binary_mutmat)[1],
-#   #                          ncol = dim(binary_mutmat)[2])
-#   #   
-#   #   
-#   #   
-#   # } else if(!binarize_score){
-#     
-#   # find fraction of each cell's recovered integrations that have this mut
-#   # create list of lists where outer list is unique mutation number, inner list is cells x allelic fractions
-#   # iterate through each mutation in the list (where vals associated with mutation are cell numbers with that mutation)
-#   afs <- lapply(seq(1, length(cell_nums_with_mut)), function(unique_mut_num){
-#     
-#     # get the number of occurrences of this mut in this cell (where occurrences == integrations)
-#     num_mut_occur_per_cell <- lapply(unique(cell_nums_with_mut[[unique_mut_num]]), function(cell_num){
-#       
-#       num_ints_per_mut_per_cell <- length(which(cell_nums_with_mut[[unique_mut_num]] == cell_num))
-#       num_recovered_ints_per_cell <- recovered_ints[[cell_num]]
-#       allelic_fraction <- num_ints_per_mut_per_cell/num_recovered_ints_per_cell
-#       return(allelic_fraction)
-#       
-#     })
-#     
-#     return(num_mut_occur_per_cell)
-#     
-#     
-#     
-#   })
-#   
-#   # now flatten the af list, and it should have length num_cells * num_unique_muts
-#   flattened_afs <- as.numeric(unlist(afs))
-#   
-#   af_mutmat <- sparseMatrix(i = row_inds,
-#                                 j = col_inds,
-#                                 x = flattened_afs,
-#                                 dims = c(length(profiles), length(mutnames)))
-#   
-#   # only allow for allelic fraction thresholding for mt
-#   # bc should always be binarized I believe
-#   if(mt_or_bc == 'mt'){
-#     if(allelic_fraction_thresh > 0){
-#       
-#       # if there's an allelic fraction threshold, any fracs below the threshold are set to 0
-#       af_mutmat@x[af_mutmat@x < allelic_fraction_thresh] <- 0
-#     }
-#     
-#     if(binarize_score){
-#       # if binarizing scores, set any non-zero element to 1
-#       af_mutmat@x[af_mutmat@x > 0] <- 1
-#     }  
-#   } else if(mt_or_bc == 'bc'){
-#     # force binarization of 
-#     af_mutmat@x[af_mutmat@x > 0] <- 1
-#   }
-#   
-#   
-#     
-#     
-#   
-#   score_mutmat <- matrix(af_mutmat, nrow = dim(af_mutmat)[1],
-#                           ncol = dim(af_mutmat)[2])
-#     
-#     
-#   }
-#   
-#   score_mutmat <- matrix(score_mutmat, nrow = dim(score_mutmat)[1],
-#                           ncol = dim(score_mutmat)[2])
-#   
-#   
-#   
-#   colnames(score_mutmat) <- mutnames
-#   rownames(score_mutmat) <- names(profiles)
-#   
-#   saveRDS(score_mutmat, file.path('output', 'score_mats', urid, 'matrices', paste0(savename_prefix, 
-#                                                                                    'AF_', allelic_fraction_thresh,
-#                                                                                    'B_', binarize_score,
-#                                                                                    '.rds')))
-#   score_mat_to_phylip(score_mat = score_mutmat, 
-#                       output_phylip_path = file.path('output', 'score_mats', urid, 'phylips', paste0(savename_prefix, '.phy')))
-#   
-#   return(score_mutmat)
-#   
-#   
-#   
-#   
-# }
+  # if cell_mut_counts 
+  if(normalize_cell_mut_counts){
+    
+    common_names <- intersect(names(cell_mut_counts), names(cell_to_num_mito_genomes_list))
+    
+    
+    norm_af <- setNames(Map('/', cell_mut_counts[common_names],
+                            cell_to_num_mito_genomes_list[common_names]),
+                        common_names)
+  }
+    
+  # generate heteroplasmy severity score for each newly observed variant, and globally update the heteroplasmy serverity score list
+  new_muts <- setdiff(mutnames, names(heteroplasmy_severity_score_list))
+  invisible(
+    sapply(new_muts, function(mut){
+      heteroplasmy_severity_score_list[[mut]] <<- draw_severity_scores(num_draws = 1, 
+                                                                       mean2_weight = positive_score_weight, 
+                                                                       mean1 = -1, 
+                                                                       mean2 = 1, 
+                                                                       sigma = hetero_sd)
+    })
+  )
+  
+  # for each cell, find dot product between that cell's AFs and the AF severity scores
+  # ensure compatible order between normalized allelic fractions and severity scores before computing dot product
+  cell_hetero_scores <- lapply(cell_mut_counts, function(cell){
+    
+    # ensure consistent order between normalized allelic fractions and severity scores
+    ordered_muts <- intersect(names(cell), names(heteroplasmy_severity_score_list))
+    af_scores <- as.numeric(cell[ordered_muts])
+    severity_scores <- as.numeric(heteroplasmy_severity_score_list[ordered_muts])
+    weighted_score <- as.numeric(af_scores %*% severity_scores)
+    return(weighted_score)
+    
+  })
+  
+  return(cell_hetero_scores)
+  
+  
+}
 
 
-
-
-# }
-
-
-
-# create_all_score_mats <- function(urid, savename_prefix, processed_bc_profiles = NULL, recovered_processed_mt_profiles = NULL, 
-#                                   which_ints_recovered_bc = NULL, which_genomes_recovered_mt = NULL,
-#                                   concat_mt_bc = FALSE, condense_deletions = FALSE){
-#   # processed_bc_profiles is a list of barcode mutation sparse matrices that have been processed according to int/cell recovery rates, etc.
-#   # processed_mt_profiles is the same but for mt profiles 
-#   # which_ints_recovered_bc must be provided if processed_bc_profiles is provided. it is a list of length == length(processed_bc_profiles)
-#   # which_ints_recovered_bc denotes the integrations recovered from the respective recovered cell (which led to the subsetting of rows in the mutation matrix)
-#   # same logic for which_genomes_recovered_mt, but for the mt equivalent
-#   # if concat_mt_bc, then both processed_bc_profiles and processed_mt_profiles must be supplied, and cells will ALSO be characterized according to joint bc/mt muts
-#   # if concat_mt_bc, individual bc and mt analyses will still also be performed
-#   
-#   if(!dir.exists(file.path('output', 'score_mats', urid))){
-#     dir.create(file.path('output', 'score_mats', urid, 'matrices'), recursive = TRUE)
-#     dir.create(file.path('output', 'score_mats', urid, 'phylips'), recursive = TRUE)
-#   }
-#   
-#   if(!is.null(processed_bc_profiles)){
-#     bc_score_mat <- create_one_score_mat(profiles = processed_bc_profiles, 
-#                                          recovered_ints = which_ints_recovered_bc, 
-#                                          condense = condense_deletions)
-#     saveRDS(file.path('output', 'score_mats', urid, 'matrices', 'bc_binary_score_mat.rds'))
-#     score_mat_to_phylip(score_mat = bc_score_mat, 
-#                         output_phylip_path = file.path('output', 'score_mats', urid, 'phylips', paste0('bc_binary_score_', savename_prefix, '.phy')))
-#   }
-#   if(!is.null(processed_mt_profiles)){
-#     mt_score_mat <- create_one_score_mat(profiles = processed_mt_profiles, 
-#                                          recovered_ints = which_ints_recovered_mt, 
-#                                          condense = condense_deletions)
-#     saveRDS(file.path('output', 'score_mats', urid, 'matrices', 'mt_binary_score_mat.rds'))
-#     score_mat_to_phylip(score_mat = mt_score_mat, 
-#                         output_phylip_path = file.path('output', 'score_mats', urid, 'phylips', paste0('mt_binary_score_', savename_prefix, '.phy')))
-#   }
-#    
-#   if((!is.null(processed_bc_profiles)) & (!is.null(processed_mt_profiles))){
-#     if(concat_mt_bc){
-#       joint_score_mat <- cbind(mt_score_mat, bc_score_mat)
-#       saveRDS(file.path('output', 'score_mats', urid, 'matrices', 'joint_binary_score_mat.rds'))
-#       score_mat_to_phylip(score_mat = joint_score_mat, 
-#                           output_phylip_path = file.path('output', 'score_mats', urid, 'phylips', 'joint_binary_score_phylip.phy'))
-#     }
-#   }
-#   
-#   
-#   
-# }

@@ -5,7 +5,6 @@ suppressPackageStartupMessages({
 
 
 working_vals <- read.csv('./imported_heatmap_plotval_dat.csv') 
-# working_vals <- working_vals[complete.cases(working_vals),]
 working_vals[, 1:7] <- sapply(working_vals[, 1:7], as.numeric)
 
 y_curve <- loess(working_vals$y ~ working_vals$num_cells, span = 0.8)

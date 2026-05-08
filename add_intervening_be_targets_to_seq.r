@@ -20,10 +20,7 @@ generate_non_be_target_sequence <- function(barcode_length, nuc_fracs, target_fr
   # if there are no BE targets, we can randomly generate the entire barcode sequence
   # # note that this assumes there is no base-specific nuclease target
   if(be_target_count == 0){
-    # non_target_sequence <- sample(non_target_sequence, size = length(non_target_sequence), replace = FALSE)
     return(sample(c('A', 'G', 'C', 'T'), size = barcode_length, replace = TRUE))
-    # return(non_target_sequence)
-    # return()
   }
   
   # find number of nucleotides in the barcode that are NOT BE targets
@@ -47,7 +44,6 @@ generate_non_be_target_sequence <- function(barcode_length, nuc_fracs, target_fr
   # repeat this process for each of the four possible BE targets
   if(target_from == 'A'){
     
-    # cat('\nin target from A\n', file = 'no_strings.txt', append = TRUE)
     num_required_as <- num_required_as - be_target_count
     # if there are more BE targets of a specific nuc than allotted, we'll have to take away from other bases' counts
     if(num_required_as < 0){ 
@@ -55,23 +51,19 @@ generate_non_be_target_sequence <- function(barcode_length, nuc_fracs, target_fr
       num_required_as <- 0
     }
   } else if(target_from == 'G'){
-    # cat('\nin target from G\n', file = 'no_strings.txt', append = TRUE)
     num_required_gs <- num_required_gs - be_target_count
     if(num_required_gs < 0){ 
       leftover_bases <- abs(num_required_gs)
       num_required_gs <- 0
     }
   } else if(target_from == 'C'){
-    # cat('\nin target from C\n', file = 'no_strings.txt', append = TRUE)
     num_required_cs <- num_required_cs - be_target_count
     if(num_required_cs < 0){ 
       leftover_bases <- abs(num_required_cs)
       num_required_cs <- 0
     }
-    # cat(paste0('\nnum_required_cs == ', num_required_cs, '\n'), file = 'no_strings.txt', append = TRUE)
-    # cat(paste0('\nleftover_bases == ', leftover_bases, '\n'), file = 'no_strings.txt', append = TRUE)
+    
   } else if(target_from == 'T'){
-    # cat('\nin target from T\n', file = 'no_strings.txt', append = TRUE)
     num_required_ts <- num_required_ts - be_target_count
     if(num_required_ts < 0){ 
       leftover_bases <- abs(num_required_ts)
@@ -229,6 +221,7 @@ add_intervening_be_targets <- function(target_pos_config, target_from, be_target
   # find number of non-BE-target bases using provided non-target sequence generated above
   num_non_be_targets <- length(non_target_sequence)
   bc_length <- num_non_be_targets + be_target_count
+  
   
   all_inds <- generate_target_indices(config = target_pos_config, 
                                       num_targets = be_target_count, 

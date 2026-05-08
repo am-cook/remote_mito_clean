@@ -7,9 +7,11 @@ suppressPackageStartupMessages({
 })
 
 entering_dir <- getwd()
+
+# this is great --v
 output_dir_stem <- file.path('..', '..', '..', '..', 'output')
 
-  
+   
 option_list <- list(
   make_option(c('-R', '--recon_tree_path'), type = 'character', default = NULL,
               help = 'path to reconstructed tree from iqtree'),
@@ -29,7 +31,6 @@ option_list <- list(
 opt_parser <- OptionParser(option_list = option_list, add_help_option = FALSE)
 input_args <- parse_args(opt_parser)
 
-# input_args$savename_prefix <- str_split(string = input_args$savename_prefix, pattern = '/')[[1]][2]
 
 # if there is not a ground truth tree path provided, we need to find the corresponding ground truth tree
 # for the provided recon tree path. to find the correct tree, we need the timepoint
@@ -41,7 +42,6 @@ if(!input_args$ground_truth_tree_path == ''){ # if a ground truth tree path is p
   ground_truth_tree <- read.tree(input_args$ground_truth_tree_path)
 } else{ # manually match to groundt truth tree at this timepoint
   
-  # timept <- sub('.*time_?([0-9]+\\.?[0-9]*).*', '\\1', input_args$recon_tree_path)
   timept <- str_extract(input_args$recon_tree_path, '(?<=time_)\\d+(\\.\\d+)?')
 
   ground_truth_trees <- list.files(file.path(output_dir_stem, 'processed_newicks', input_args$run_id))
@@ -131,7 +131,9 @@ plot_tree_with_color <- function(path_to_tree,
   
   pdf(file.path(output_dir_stem, 'tree_images', input_args$run_id, paste0(image_savename, '.pdf')), height = 25)
   # Plot tree with colored nodes
-  plot(tree, show.tip.label = TRUE, tip.color = tip_colors,
+  # plot(tree, show.tip.label = TRUE, tip.color = tip_colors, 
+  #      edge.color = "black", cex = 0.3, show.node.label = FALSE)
+  plot(tree, show.tip.label = TRUE, tip.color = tip_colors, type = 'fan',
        edge.color = "black", cex = 0.3, show.node.label = FALSE)
   if(recon_or_gt == 'recon'){
     edgelabels(text = round(tree$edge.length, 3), frame = "n", cex = 0.2, col = 'orange')

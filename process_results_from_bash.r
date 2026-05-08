@@ -11,7 +11,9 @@ output_dir_stem <- file.path('output')
 
 option_list <- list(
   make_option(c('-I', '--run_id'), type = 'character', default = NULL,
-              help = 'run id (numeric string)')
+              help = 'run id (numeric string)'), 
+  make_option(c('-J', '--json_path'), type = 'character', default = NULL,
+              help = 'path to json param file')
 )
 
 opt_parser <- OptionParser(option_list = option_list, add_help_option = FALSE)
@@ -81,8 +83,6 @@ extract_subrun_details <- function(file_name, bc_or_mt, mat_colnames, recon_meth
     }
   }
   
-  # return_vec <- append(return_vec)
-  
   return(return_vec)
   
 }
@@ -143,10 +143,9 @@ make_results_df <- function(urid){
     dir.create(file.path(output_dir_stem, 'param_results_files', urid), recursive = TRUE)
   }
   
-  # growing_list_of_dfs <- list()
-  
+
   all_rf_files <- list.files(file.path(output_dir_stem, 'rf_dist_files', urid))
-  
+
   const_subrun_params <- c('timept',
                            'recon_method')
   mt_only_subrun_params <- c('af_threshold',
@@ -162,8 +161,7 @@ make_results_df <- function(urid){
                      paste('mt', shared_subrun_params, sep = '_'),
                      paste('bc', shared_subrun_params, sep = '_'))
   
-  # saveRDS(full_colnames, 'full_colnames.rds')
-  
+
   # subrun_details_mat <- matrix(NA, nrow = length(all_rf_files), ncol = length(full_colnames)+3)
   subrun_details_list <- list()
   
@@ -173,14 +171,7 @@ make_results_df <- function(urid){
     file_name <- all_rf_files[i]
     
     path_to_file <- file.path(output_dir_stem, 'rf_dist_files', urid, file_name)
-    
-    # current_timepoint <- str_extract(file_name, 
-    #                                  '(?<=_time_?)[0-9.]+')
-    
-    
-    
-    
-    
+  
     if((startsWith(x = file_name, prefix = 'fasta_proc')) |
        (startsWith(x = file_name, prefix = 'score_proc'))){
       bc_or_mt <- str_extract(string = file_name,
@@ -223,10 +214,13 @@ make_results_df <- function(urid){
     rf_dist <- as.numeric(first_two_lines[1])
     accuracy <- 1-rf_dist
     json_path <- first_two_lines[2]
+    if(json_path == '.json'){
+      json_path <- input_args$json_path
+    }
+    
 
     subrun_details <- append(subrun_details, c(json_path, rf_dist, accuracy))
     subrun_details <- t(as.data.frame(subrun_details))
-    # saveRDS(subrun_details, 'subrun_details.rds')
     colnames(subrun_details) <- c(full_colnames, 'json_path', 'rf_dist', 'accuracy')
     
     # concat these subrun details to the run-specific details
@@ -248,94 +242,14 @@ make_results_df <- function(urid){
   subrun_details_df <- as.data.frame(subrun_details_mat, row.names = NULL)
   
   
-  write.csv(subrun_details_df, file.path(output_dir_stem, 'param_results_files', urid, 'stacked_results.csv'), row.names = FALSE)
+  full_output_path <- file.path(output_dir_stem, 'param_results_files', urid, 'stacked_results.csv')
+  
+  write.csv(subrun_details_df, full_output_path, row.names = FALSE)
+  
+  print(paste0('wrote results to ', full_output_path))
   
 }
   
-#   # some downstream processing/formatting ... 
-#   
-#   # break bc bg indel probs into separate cols:
-#   bc_bg_indel_splits <- lapply(stacked_results_df$bc_bg_indel_probs, function(x){
-#     split_vals(x, 'numeric')
-#   })
-#   bc_bg_insertion_prob <- sapply(bc_bg_indel_splits, function(x){return(x[1])})  
-#   bc_bg_deletion_prob <- sapply(bc_bg_indel_splits, function(x){return(x[2])}) 
-#   stacked_results_df$bc_bg_insertion_prob <- bc_bg_insertion_prob
-#   stacked_results_df$bc_bg_deletion_prob <- bc_bg_deletion_prob
-#   
-#   # break mt bg indel probs into separate cols:
-#   mt_bg_indel_splits <- lapply(stacked_results_df$mt_bg_indel_probs, function(x){
-#     split_vals(x, 'numeric')
-#   })
-#   mt_bg_insertion_prob <- sapply(mt_bg_indel_splits, function(x){return(x[1])})  
-#   mt_bg_deletion_prob <- sapply(mt_bg_indel_splits, function(x){return(x[2])}) 
-#   stacked_results_df$mt_bg_insertion_prob <- mt_bg_insertion_prob
-#   stacked_results_df$mt_bg_deletion_prob <- mt_bg_deletion_prob
-#   
-#   # break nuclease target spec into different columns, if necessary:
-#   # 'nuclease_targets' will not be in df if no targets were specified
-#   if('nuclease_targets' %in% colnames(stacked_results_df)){
-#     
-#     # HAVE TO ACCOUNT FOR ALTERNATIVE SPECIFICATION SCHEMES LATER
-#     if(grepl(pattern = ';', x = stacked_results_df$nuclease_targets[1])){
-#       
-#       nuc_targets_splits <- lapply(stacked_results_df$nuclease_targets, function(x){
-#         split_vals(x, 'numeric')
-#       })
-#       num_nuc_targets <- sapply(nuc_targets_splits, function(x){return(x[1])})  
-#       frac_nuc_targets_h <- sapply(nuc_targets_splits, function(x){return(x[2])}) 
-#       frac_nuc_targets_m <- sapply(nuc_targets_splits, function(x){return(x[3])}) 
-#       frac_nuc_targets_l <- sapply(nuc_targets_splits, function(x){return(x[4])}) 
-#       stacked_results_df$num_nuc_targets <- num_nuc_targets
-#       stacked_results_df$frac_nuc_targets_h <- frac_nuc_targets_h
-#       stacked_results_df$frac_nuc_targets_m <- frac_nuc_targets_m
-#       stacked_results_df$frac_nuc_targets_l <- frac_nuc_targets_l
-#     }
-#   }
-#   
-#   
-#   # break BE target spec into different columns, if necessary:
-#   # 'be_targets' will not be in df if no targets were specified
-#   if('be_targets' %in% colnames(stacked_results_df)){
-#     
-#     # HAVE TO ACCOUNT FOR ALTERNATIVE SPECIFICATION SCHEMES LATER
-#     if(grepl(pattern = ';', x = stacked_results_df$be_targets[1])){
-#       
-#       be_targets_splits <- lapply(stacked_results_df$be_targets, function(x){
-#         split_vals(x, 'numeric')
-#       })
-#       num_be_targets <- sapply(be_targets_splits, function(x){return(x[1])})  
-#       frac_be_targets_h <- sapply(be_targets_splits, function(x){return(x[2])}) 
-#       frac_be_targets_m <- sapply(be_targets_splits, function(x){return(x[3])}) 
-#       frac_be_targets_l <- sapply(be_targets_splits, function(x){return(x[4])}) 
-#       stacked_results_df$num_be_targets <- num_be_targets
-#       stacked_results_df$frac_be_targets_h <- frac_be_targets_h
-#       stacked_results_df$frac_be_targets_m <- frac_be_targets_m
-#       stacked_results_df$frac_be_targets_l <- frac_be_targets_l
-#     }
-#   }
-#   
-#   # convert appropriate cols to numeric if they are present
-#   numeric_cols <- c('timepoint', 'num_ints', 'cell_rec_rate', 'int_recovery_prob',
-#                     'be_editing_window',
-#                     'be_mutations_per_target_per_division', 'nuc_insertions_per_target_per_division',
-#                     'nuc_deletions_per_target_per_division', 'mt_invariant_sites', 'bc_invariant_sites', 'jitter_fraction',
-#                     'cell_cycle_length', 
-#                     'bc_bg_insertion_prob', 'mt_bg_insertion_prob', 'bc_bg_deletion_prob', 'bc_bg_deletion_prob',
-#                     'num_nuc_targets', 'frac_nuc_targets_h', 'frac_nuc_targets_m', 'frac_nuc_targets_l',
-#                     'num_be_targets', 'frac_be_targets_h', 'frac_be_targets_m', 'frac_be_targets_l')
-#   
-#   for(col in numeric_cols){
-#     if(col %in% colnames(stacked_results_df)){
-#       stacked_results_df[, col] <- sapply(stacked_results_df[, col], as.numeric)
-#     }
-#   }
-#   
-#   write.csv(stacked_results_df, file.path(output_dir_stem, 'param_results_files', urid, 'stacked_results.csv'))
-#   
-#   return(stacked_results_df)
-# }
-
 
 
 make_results_df(input_args$run_id)

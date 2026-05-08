@@ -1,14 +1,29 @@
 #!/bin/bash
-
+ 
 base_path=$(pwd)
 
-# first accept a path to the json parameter files of interest
-read -p 'Enter path to directory with json param files: ' param_dir
+# initialize param_dir that will be filled
+param_dir=""
+
+# if the user provides a path to the param directory with the d flag:
+if [[ "$1" == "-d" ]]; then
+  param_dir="${2:-}"
+fi
+
+# if param_dir string is still empty (ie user did not provide param dir at execution)
+if [[ -z "$param_dir" ]]; then
+  read -p 'Enter path to directory with json param files: ' param_dir
+fi
+
+
 for filename in "$param_dir"/*; do
+  SECONDS=0
 
 #  counter=$((counter + 1))
   echo "Now simulating with parameter file: $filename"
   Rscript sim5_code.R -P "$filename"
+
+  echo "Simulation alone took $SECONDS seconds"
   
  #  num_param_files=$(ls | wc -l)
   # sleep 10s
@@ -71,7 +86,7 @@ for filename in "$param_dir"/*; do
       #  iqtree -s "$aligned_fasta" -m MFP -bb 1000 -alrt 1000 -bcor 0.9 -nstep 80
       #  iqtree -s "$full_fasta" -m MFP -bb 1000 -alrt 1000 -bcor 0.9 -nstep 80
       #  iqtree -s "$full_fasta" -m HKY -bb 1000 -alrt 1000 -nstep 80 -ntmax 20
-      iqtree -s "$msa_fasta_name" -m HKY -bb 1000 -alrt 1000 -nstep 80 -ntmax 20 -pre $treefile_name
+      iqtree -s "$msa_fasta_name" -m HKY -bb 1000 -alrt 1000 -nstep 80 -nt 40 -pre $treefile_name
 
 
   
@@ -97,7 +112,8 @@ for filename in "$param_dir"/*; do
     # if there's no fasta present after three searches, check to see if score mats exist
     while [[ $phylips_present = false ]] && [[ $num_times_searched -lt $max_searches ]]; do
       ((num_times_searched++))
-      if [[ $(find . -maxdepth 1 -name "*.phy" | wc -l) -gt 0 ]]; then
+      # if [[ $(find . -maxdepth 1 -name "*.phy" | wc -l) -gt 0 ]]; then
+      if [[ $(find . -maxdepth 1 -name "*.fasta" | wc -l) -gt 0 ]]; then # temporary solution of saving fastas to phylip dir
         phylips_present=true
       else
         echo "waiting for the first phylip file to appear ... (Search ${num_times_searched}/${max_searches})"
@@ -114,16 +130,32 @@ for filename in "$param_dir"/*; do
 
     echo "pwd here == $(pwd)"
 
-    all_phylips=$(ls *.phy)
+    # all_phylips=$(ls *.phy)
+    # temporary solution of saving fastas to phylip dir
+    all_phylips=$(ls *.fasta)
 
     for phy_path in $all_phylips; do
       echo "phy_path = ${phy_path}"
-      treedir="${base_path}/output/recon_trees/${most_recent_runid}/score_${phy_path%.phy}/"
+      # treedir="${base_path}/output/recon_trees/${most_recent_runid}/score_${phy_path%.phy}/"
+      treedir="${base_path}/output/recon_trees/${most_recent_runid}/score_${phy_path%.fasta}/"
       mkdir -p $treedir
 
       treefile_name="${treedir}score_${phy_path%.phy}"
       
-      iqtree -s ${phy_path} -bb 1000 -alrt 1000 -nstep 80 -ntmax 20 -pre $treefile_name
+      # # don't need this conversion anymore since score mats are saved to fastas and not phylips
+      # # testing conversion from .phy to .fasta:
+      # fasta_path="${base_path}/output/processed_fastas/${most_recent_runid}/${phy_path%.phy}.fasta"
+
+      # python "${base_path}/phy_to_fasta.py" --phylip_path "$phy_path" --fasta_path "$fasta_path"
+      # # don't need this conversion anymore since score mats are saved to fastas and not phylips
+
+      
+      # msa_fasta_path="${fasta_path%.fasta}_msa.fasta" # REMOVING THIS FOR NOW AS I AM ONLY WORKING WITH SCORE MATS
+      # REINTRODUCE IF USING NUCLEOTIDE SEQUENCES
+      # muscle -align "$fasta_path" -output "$msa_fasta_path"
+      # iqtree -s ${msa_fasta_path} -bb 1000 -alrt 1000 -nstep 80 -nt 40 -pre $treefile_name
+      iqtree -s ${phy_path} -st BIN -m MF -pre $treefile_name
+
     done
 
   fi
@@ -133,8 +165,15 @@ for filename in "$param_dir"/*; do
   echo "pwd here below == $(pwd)"
 
   # now iterate through each directory in the urid subdir of recon_trees, read in the treefile in each subdir, and compare to ground truth
-  
-  all_recon_dirs=$(ls -d */)
+  # skip the
+  all_recon_dirs=$(ls -d */ 2>/dev/null || true)
+  # all_recon_dirs=$(ls -d */)
+
+  # if no recon dirs were found, can continue to processing for next param file
+  if [[ -z $all_recon_dirs ]]; then
+    echo "No tree reconstruction directories found. Param processing complete."
+    echo "Total sim param file took $SECONDS seconds"
+  fi
   for recon_tree_dir in $all_recon_dirs; do
     # it's possible that iqtree makes a results dir but not a treefile due to an error (e.g. too few sequences)
     # only try to copmare a treefile if it exists
@@ -151,8 +190,13 @@ for filename in "$param_dir"/*; do
   done
 
 
+
   cd $base_path
 
   Rscript process_results_from_bash.r -I "$most_recent_runid" 
+
+  Rscript convert_scoremats_to_csvs.r --urid "$most_recent_runid" --score_mat_path "${base_path}/output/score_mats/${most_recent_runid}/matrices/"
+
+  echo "Total sim param file took $SECONDS seconds"
 
 done
