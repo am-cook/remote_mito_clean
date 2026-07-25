@@ -1,0 +1,496 @@
+{
+	"num_init_cells": 1,
+	"sim_length": [8, 9, 10, 11, 12],
+	"num_cores": 40,
+	"time_inc": 0.5,
+	"average_genomes_per_mito": 5,
+	"starting_mito_per_cell": 50,
+	"max_mito_per_cell": 500,
+	"mito_genome_length": 16600,
+	"mito_inheritance_pattern": "bottleneck",
+	"mito_bias_prob": null,
+	"mito_bottleneck_size": null,
+	"mito_cluster_count": null,
+	"baseline_heteroplasmy_sites_frac": 0.0006,
+	"consider_cell_heteroplasmy_scores": false,
+	"baseline_heteroplasmy_variant_frac_dist": [0.25, 1],
+	"heteroplasmy_standard_deviation": 0.25,
+	"heteroplasmy_variant_transition_prob": 0.95,
+	"fraction_deleterious_heteroplasmy_variants": 0.0,
+	"init_heteroplasmy_survive_prob": 0.99,
+	"fusion_events_per_mito_per_division": 0.25,
+	"split_events_per_mito_per_division": 0.25,
+	"mito_fusion_fission_mode": "sequential",
+	"post_mitotic_mt_deletion_frac": 0,
+	"bc_length": 1435,
+	"max_bc_ints_per_cell": [20],
+	"include_bc_umis": true,
+	"force_transversions": true,
+	"random_seed": 2,
+	"fixed_sampling_fracs": [1],
+	"nuclease_targets": {
+		"num_targets": null,
+		"edit_rate_class_fractions": {
+			"high": 0.33,
+			"medium": 0.33,
+			"low": 0.34
+		},
+		"editing_window": {
+			"size": 0,
+			"decaying": true,
+			"close_after_edit": false
+		},
+		"config": "S:15:20",
+		"interdeletion_dropout_radius": 10000000,
+		"interdeletion_dropout_prob": 1,
+		"prime_editing_system": false,
+		"num_unique_prime_editing_guides": 15,
+		"prime_editing_guide_length": 30
+	},
+	"be_targets": {
+		"num_targets": 50,
+		"edit_rate_class_fractions": {
+			"high": 0.4,
+			"medium": 0,
+			"low": 0.6
+		},
+		"editing_window": {
+			"size": 7,
+			"decaying": true,
+			"close_after_edit": false
+		},
+		"config": "S:15:12"
+	},
+	"differentiation_induction": {
+		"timepoint": 0,
+		"num_cells": null,
+		"frac_cells": null,
+		"simultaneous_tms": true
+	},
+	"editing_induction": {
+		"timepoint": 0,
+		"num_cells": 1,
+		"frac_cells": null
+	},
+	"scoremat_collapse_deletions": [true],
+	"binarize_mutation_scores": [true],
+	"mt_allelic_fraction_thresholds": [0, 0.01, 0.05, 0.1],
+	"savename": "K_progressive_bottleneck_percelltype_ff_del0_rep2",
+	"reconstruction_method": ["score"],
+	"include_var_pos_fasta": false,
+	"fasta_type": ["terminal"],
+	"mt_genome_recovery_prob": [0.85, 1.0],
+	"bc_integration_recovery_prob": [1],
+	"recon_modality": ["mt"],
+	"combine_mt_bc": false,
+	"barcode_sequence": null,
+	"plot_heatmaps": false,
+	"be_conversion_pattern": "A --> G",
+	"bc_nuc_composition": {
+		"frac_a": 0.25,
+		"frac_g": 0.25,
+		"frac_c": 0.3,
+		"frac_t": 0.2
+	},
+	"cell_type_dict": {
+		"founder_cell_type": "LT",
+		"cell_type_params": {
+			"LT": {
+				"cell_cycle_length": 1,
+				"fixed_cell_cycle_length": true,
+				"death_per_cell_cycle_prob": 0,
+				"sampling_fractions": null,
+				"mt_invariant_sites": 0,
+				"bc_invariant_sites": 0,
+				"induced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.00952,
+					"nuc_insertions_per_target_per_division": 0.01,
+					"nuc_deletions_per_target_per_division": 0.1,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"uninduced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.0001,
+					"nuc_insertions_per_target_per_division": 0.0001,
+					"nuc_deletions_per_target_per_division": 0.0003,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"mito_inheritance_params": {
+					"inheritance_pattern": "bottleneck",
+					"bias_prob": null,
+					"bottleneck_size": 5,
+					"cluster_count": null,
+					"cluster_persistence_prob": null,
+					"fusion_events_per_mito_per_division": 0.05,
+					"split_events_per_mito_per_division": 0.1
+				}
+			},
+			"ST": {
+				"cell_cycle_length": 1,
+				"fixed_cell_cycle_length": true,
+				"death_per_cell_cycle_prob": 0,
+				"sampling_fractions": null,
+				"mt_invariant_sites": 0,
+				"bc_invariant_sites": 0,
+				"induced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.00952,
+					"nuc_insertions_per_target_per_division": 0.01,
+					"nuc_deletions_per_target_per_division": 0.1,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"uninduced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.0001,
+					"nuc_insertions_per_target_per_division": 0.0001,
+					"nuc_deletions_per_target_per_division": 0.0003,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"mito_inheritance_params": {
+					"inheritance_pattern": "bottleneck",
+					"bias_prob": null,
+					"bottleneck_size": 10,
+					"cluster_count": null,
+					"cluster_persistence_prob": null,
+					"fusion_events_per_mito_per_division": 0.1,
+					"split_events_per_mito_per_division": 0.15
+				}
+			},
+			"MyMPP": {
+				"cell_cycle_length": 1,
+				"fixed_cell_cycle_length": true,
+				"death_per_cell_cycle_prob": 0,
+				"sampling_fractions": null,
+				"mt_invariant_sites": 0,
+				"bc_invariant_sites": 0,
+				"induced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.00952,
+					"nuc_insertions_per_target_per_division": 0.01,
+					"nuc_deletions_per_target_per_division": 0.1,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"uninduced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.0001,
+					"nuc_insertions_per_target_per_division": 0.0001,
+					"nuc_deletions_per_target_per_division": 0.0003,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"mito_inheritance_params": {
+					"inheritance_pattern": "bottleneck",
+					"bias_prob": null,
+					"bottleneck_size": 15,
+					"cluster_count": null,
+					"cluster_persistence_prob": null,
+					"fusion_events_per_mito_per_division": 0.25,
+					"split_events_per_mito_per_division": 0.25
+				}
+			},
+			"LyMPP": {
+				"cell_cycle_length": 1,
+				"fixed_cell_cycle_length": true,
+				"death_per_cell_cycle_prob": 0,
+				"sampling_fractions": null,
+				"mt_invariant_sites": 0,
+				"bc_invariant_sites": 0,
+				"induced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.00952,
+					"nuc_insertions_per_target_per_division": 0.01,
+					"nuc_deletions_per_target_per_division": 0.1,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"uninduced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.0001,
+					"nuc_insertions_per_target_per_division": 0.0001,
+					"nuc_deletions_per_target_per_division": 0.0003,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"mito_inheritance_params": {
+					"inheritance_pattern": "bottleneck",
+					"bias_prob": null,
+					"bottleneck_size": 15,
+					"cluster_count": null,
+					"cluster_persistence_prob": null,
+					"fusion_events_per_mito_per_division": 0.25,
+					"split_events_per_mito_per_division": 0.25
+				}
+			},
+			"Mye": {
+				"cell_cycle_length": 1,
+				"fixed_cell_cycle_length": true,
+				"death_per_cell_cycle_prob": 0,
+				"sampling_fractions": null,
+				"mt_invariant_sites": 0,
+				"bc_invariant_sites": 0,
+				"induced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.00952,
+					"nuc_insertions_per_target_per_division": 0.01,
+					"nuc_deletions_per_target_per_division": 0.1,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"uninduced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.0001,
+					"nuc_insertions_per_target_per_division": 0.0001,
+					"nuc_deletions_per_target_per_division": 0.0003,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"mito_inheritance_params": {
+					"inheritance_pattern": "bottleneck",
+					"bias_prob": null,
+					"bottleneck_size": 25,
+					"cluster_count": null,
+					"cluster_persistence_prob": null,
+					"fusion_events_per_mito_per_division": 0.3,
+					"split_events_per_mito_per_division": 0.15
+				}
+			},
+			"Lym": {
+				"cell_cycle_length": 1,
+				"fixed_cell_cycle_length": true,
+				"death_per_cell_cycle_prob": 0,
+				"sampling_fractions": null,
+				"mt_invariant_sites": 0,
+				"bc_invariant_sites": 0,
+				"induced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.00952,
+					"nuc_insertions_per_target_per_division": 0.01,
+					"nuc_deletions_per_target_per_division": 0.1,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"uninduced_editing_params": {
+					"mt_substitution_model": "HKY",
+					"mt_sub_model_params": [20, 5e-07, 2e-08],
+					"bc_substitution_model": "HKY",
+					"bc_sub_model_params": [3, 3e-11, 1e-11],
+					"bc_bg_insertion_prob_per_division": 1e-11,
+					"bc_bg_deletion_prob_per_division": 1e-11,
+					"mt_bg_insertion_prob_per_division": 5e-09,
+					"mt_bg_deletion_prob_per_division": 5e-09,
+					"be_mutations_per_target_per_division": 0.0001,
+					"nuc_insertions_per_target_per_division": 0.0001,
+					"nuc_deletions_per_target_per_division": 0.0003,
+					"mt_nontarget_heterogeneity_gamma": {
+						"shape_param": 0,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					},
+					"bc_nontarget_heterogeneity_gamma": {
+						"shape_param": 0.5,
+						"num_bins": 1,
+						"agg_metric": "mean"
+					}
+				},
+				"mito_inheritance_params": {
+					"inheritance_pattern": "bottleneck",
+					"bias_prob": null,
+					"bottleneck_size": 25,
+					"cluster_count": null,
+					"cluster_persistence_prob": null,
+					"fusion_events_per_mito_per_division": 0.3,
+					"split_events_per_mito_per_division": 0.15
+				}
+			}
+		},
+		"uninduced_transition_matrix": [
+			[0.935, 0.035, 0.015, 0.015, 0.0, 0.0],
+			[0.03, 0.87, 0.05, 0.05, 0.0, 0.0],
+			[0.01, 0.01, 0.78, 0.02, 0.17, 0.01],
+			[0.01, 0.01, 0.02, 0.78, 0.01, 0.17],
+			[0.01, 0.0, 0.01, 0.0, 0.96, 0.02],
+			[0.01, 0.0, 0.0, 0.01, 0.02, 0.96]
+		],
+		"induced_transition_matrix": [
+			[0.935, 0.035, 0.015, 0.015, 0.0, 0.0],
+			[0.03, 0.87, 0.05, 0.05, 0.0, 0.0],
+			[0.01, 0.01, 0.78, 0.02, 0.01, 0.17],
+			[0.01, 0.01, 0.02, 0.78, 0.17, 0.01],
+			[0.01, 0.0, 0.01, 0.0, 0.96, 0.02],
+			[0.01, 0.0, 0.0, 0.01, 0.02, 0.96]
+		]
+	},
+	"heteroplasmy_fitness_threshold": 0.65,
+	"mito_cluster_persistence_prob": null
+}

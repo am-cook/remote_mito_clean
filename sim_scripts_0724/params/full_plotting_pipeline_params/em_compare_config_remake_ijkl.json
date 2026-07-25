@@ -1,0 +1,41 @@
+{
+  "clade_path": "remake_ijkl_clade_assignments.csv",
+  "all_urid_txt_path": "remake_ijkl_params_urids.txt",
+  "output_fig_dir": "remake_ijkl_final_figs",
+  "output_dataset_dir": "remake_ijkl_final_data_output",
+  "em_mod_dict_path": "remake_ijkl_joblibs/remake_ijkl_model_dict_FINAL.joblib",
+  "em_metrics_df_path": null,
+  "combine_em_metrics_paths": [],
+  "base_path": "output",
+
+  "model_regex_pattern": "^([IJKL])_",
+  "ff_regex_pattern": ".*_(ff\\d+)_.*",
+  "del_regex_pattern": ".*_(del\\d+)",
+  "het_regex_pattern": "(?:^|_)(lohet|bio|hihet)(?:_|$)",
+
+  "ff_map": {"ff0": "zero", "ff2": "moderate", "ff4": "mixed"},
+  "del_map": {"del0": "none", "del50": "negative"},
+  "het_map": {"lohet": "low", "bio": "intermediate", "hihet": "high"},
+
+  "ff_markers": {"zero": "o", "moderate": "s", "mixed": "^"},
+  "del_fills": {"none": "white", "negative": null},
+  "het_colors": {"low": "blue", "intermediate": "black", "high": "red"},
+
+  "compare_clades_grid": [
+    {
+      "param_combo_id1": "treedist_gt",
+      "param_combo_id2": "scoremat_mt",
+      "param_combo_includes1": "topological_treedist_gt",
+      "param_combo_includes2": "scoremat_min5_mt_250ints_1.0RP_0.0AF"
+    },
+    {
+      "param_combo_id1": "treedist_gt",
+      "param_combo_id2": "treedist_mt",
+      "param_combo_includes1": "topological_treedist_gt",
+      "param_combo_includes2": "topological_treedist_mt"
+    }
+  ],
+
+  "num_gt_topological_clades": [5, 20],
+  "all_timepoints": [8, 9, 10, 11, 12]
+}

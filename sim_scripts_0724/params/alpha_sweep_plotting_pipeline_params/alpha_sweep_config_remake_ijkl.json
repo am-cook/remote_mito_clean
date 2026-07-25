@@ -1,0 +1,37 @@
+{
+  "alpha_sweep_csv_path": "alpha_sweep_results_722.csv",
+  "output_dir": "output",
+  "fig_root": "FINAL_722_ALL_FIGS",
+
+  "condition_to_urid_map": {
+    "I_null_baseline_percelltype_ff_del0": [3466963405706],
+    "J_biograded_normalized_biased_percelltype_ff_del0": [5431691972451],
+    "K_progressive_bottleneck_percelltype_ff_del0": [3578166838675],
+    "L_extended_persistent_clustered_percelltype_ff_del0": [1059866531831]
+  },
+
+  "combo_labels": {
+    "5clade_topological_treedist_gt": "gt5",
+    "20clade_topological_treedist_gt": "gt20",
+    "scoremat_min5_mt_250ints_1.0RP_0.0AF_TB_1-1-1-1-1-1": "scoremat_min5"
+  },
+  "condition_short": {
+    "I_null_baseline_percelltype_ff_del0": "I",
+    "J_biograded_normalized_biased_percelltype_ff_del0": "J",
+    "K_progressive_bottleneck_percelltype_ff_del0": "K",
+    "L_extended_persistent_clustered_percelltype_ff_del0": "L"
+  },
+
+  "combo_order": ["gt5", "scoremat_min5"],
+  "combo_colors": {"gt5": "#2563EB", "scoremat_min5": "#DC2626"},
+  "cond_order": ["I", "J", "K", "L"],
+  "cond_colors": {"I": "#4C72B0", "J": "#DD8452", "K": "#55A868", "L": "#C44E52"},
+
+  "example_urids": {
+    "I": 3466963405706,
+    "J": 5431691972451,
+    "K": 3578166838675,
+    "L": 1059866531831
+  },
+  "transition_matrix_condition": "I"
+}

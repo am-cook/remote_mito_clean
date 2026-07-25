@@ -1,0 +1,122 @@
+================================================================================
+FINAL_722-style pipeline -- order of operations for a new dataset
+================================================================================
+
+PREREQUISITES (already done before any of this; nothing below runs a simulation
+or EM clustering -- everything here only reads already-computed results)
+--------------------------------------------------------------------------------
+  - Simulation run + EM clustering already completed for every urid you want
+    to analyze.
+  - You have in hand: a long-format clade-assignments CSV, a urid .txt list
+    (one urid per line), and a joblib directory containing the EM model dict.
+  - Simulation output for every one of those urids already exists under
+    output/<urid>/ (run_specs, score_mats, etc.).
+
+
+================================================================================
+STEP 1 -- purity / ARI / EM-classification plotting pipeline
+================================================================================
+Run once, single command:
+
+  python plotting/run_full_plotting_pipeline.py \
+      --config params/full_plotting_pipeline_params/em_compare_config_<name>.json \
+      --het intermediate
+
+Internally this runs, in this exact order (you can also run each of these by
+hand if you need to redo just one step):
+
+  1a. python plotting/run_em_compare.py \
+          --config params/full_plotting_pipeline_params/em_compare_config_<name>.json
+
+  1b. Rscript plotting/purity_plots_per_entry.r \
+          --dataset-dir <output_dataset_dir>/<id1>_vs_<id2> \
+          --fig-dir <output_fig_dir> \
+          --het intermediate
+      (run once per entry in compare_clades_grid -- currently 2 entries:
+      treedist_gt_vs_scoremat_mt and treedist_gt_vs_treedist_mt)
+
+  1c. python plotting/compute_purity_ari_summary.py \
+          --clade-path <clade_path> \
+          --ann-path <output_dataset_dir>/treedist_gt_vs_scoremat_mt/ann_purity.csv \
+          --out-dir <output_dataset_dir>/treedist_gt_vs_scoremat_mt
+      (scoremat_mt entry only -- needs 1a's ann_purity.csv, so must run after it)
+
+  1d. Rscript plotting/plot_purity_ari_five.R \
+          --dataset_dir <output_dataset_dir>/treedist_gt_vs_scoremat_mt \
+          --fig_dir <output_fig_dir>
+      (scoremat_mt entry only -- needs 1c's urid_purity_summary.csv)
+
+Parameter file: params/full_plotting_pipeline_params/em_compare_config_<name>.json
+
+  MUST change every run:
+    clade_path            -- this dataset's clade-assignments CSV
+    all_urid_txt_path     -- this dataset's urid .txt list
+    em_mod_dict_path      -- this dataset's joblib model dict
+                             (or leave null and set em_metrics_df_path /
+                             combine_em_metrics_paths instead, if starting from
+                             precomputed metric CSVs rather than a joblib)
+    output_fig_dir        -- new fig-root name. Don't reuse another dataset's --
+                             filenames are entry-tagged (scoremat_mt__/
+                             treedist_mt__) but NOT dataset-tagged, so reusing a
+                             fig-root will silently overwrite same-named files.
+    output_dataset_dir    -- new CSV-output root name
+
+  Only change if this dataset's model set / savename convention differs from
+  the existing I/J/K/L convention:
+    model_regex_pattern, ff_regex_pattern, del_regex_pattern, het_regex_pattern
+    ff_map, del_map, het_map, ff_markers, del_fills, het_colors
+    compare_clades_grid   -- only if the scoremat/treedist param_combo string
+                             naming itself differs
+    num_gt_topological_clades, all_timepoints -- only if this run used
+                             different clade-count resolutions or timepoints
+
+
+================================================================================
+STEP 2 (optional, separate) -- alpha-sweep plotting
+================================================================================
+Needs its own alpha_sweep_results_*.csv. This is NOT produced by step 1 -- it
+comes from a separate alpha-sweep script (e.g. em/tm_sensitivity_sweep.py), which
+must already have been run for this dataset.
+
+  python plotting/run_alpha_sweep_plotting.py \
+      --config params/alpha_sweep_plotting_pipeline_params/alpha_sweep_config_<name>.json
+
+Parameter file: params/alpha_sweep_plotting_pipeline_params/alpha_sweep_config_<name>.json
+
+  MUST change every run (these are tied to this specific run's urids, not just
+  to the naming convention, so they need updating even if the model set is the
+  same I/J/K/L set as before):
+    alpha_sweep_csv_path      -- this run's alpha-sweep results CSV
+    condition_to_urid_map     -- values are literal urids belonging to this run
+    example_urids             -- values are literal urids belonging to this run
+                                  (used to pull one representative transition
+                                  matrix per condition)
+    fig_root                  -- new fig-root name
+    output_dir                -- only if this run's simulation output isn't
+                                  under ./output
+
+  Only change if the model set / savename convention differs from I/J/K/L:
+    combo_labels, condition_short, combo_order, combo_colors, cond_order,
+    cond_colors, transition_matrix_condition
+
+
+================================================================================
+STEP 3 (optional, separate) -- tree figures
+================================================================================
+No config file -- pure CLI args, called once per urid/timepoint/color-by
+combination you want a tree image for:
+
+  python plotting/plot_tree.py \
+      --urid <urid> --timepoint <timepoint> \
+      --color-by <clade attribute, e.g. clade_celltype> \
+      --output-dir <fig_root>/trees
+
+
+================================================================================
+NOT YET AUTOMATED (gaps -- only relevant if you want these specific plots)
+================================================================================
+purity_plots_per_entry.r (step 1b) silently skips three optional plot sections
+if their input CSVs are missing, rather than failing:
+  mt_mutation_counts.csv        -- has its own script: plotting/build_mt_mutation_counts.py
+  cell_counts_by_timepoint.csv  -- computed with one-off code previously, not
+  mito_count_per_cell.csv          yet a reusable script
